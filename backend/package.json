@@ -1,0 +1,105 @@
+{
+  "name": "jenkins-nas-backend",
+  "version": "1.0.0",
+  "description": "Jenkins NAS 배포 이력 관리 - 백엔드 API 서버",
+  "main": "src/app.js",
+  "private": true,
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "build": "echo 'Backend build completed'",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/**/*.js",
+    "lint:fix": "eslint src/**/*.js --fix",
+    "typecheck": "echo 'No TypeScript in backend'",
+    "clean": "rm -rf node_modules dist coverage logs/*.log",
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed": "node scripts/seed.js",
+    "db:reset": "node scripts/reset.js",
+    "health": "node healthcheck.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "dotenv": "^16.3.1",
+    "pg": "^8.11.3",
+    "pg-pool": "^3.6.1",
+    "jsonwebtoken": "^9.0.2",
+    "bcrypt": "^5.1.1",
+    "ldapjs": "^2.3.3",
+    "passport": "^0.7.0",
+    "passport-ldapauth": "^3.0.1",
+    "express-session": "^1.17.3",
+    "express-rate-limit": "^7.1.5",
+    "joi": "^17.11.0",
+    "winston": "^3.11.0",
+    "morgan": "^1.10.0",
+    "ws": "^8.14.2",
+    "socket.io": "^4.7.4",
+    "chokidar": "^3.5.3",
+    "node-cron": "^3.0.3",
+    "multer": "^1.4.5-lts.1",
+    "compression": "^1.7.4",
+    "express-validator": "^7.0.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0",
+    "node-cache": "^5.1.2",
+    "crypto": "^1.0.1",
+    "fs-extra": "^11.2.0",
+    "path": "^0.12.7",
+    "moment": "^2.29.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "eslint": "^8.55.0",
+    "@eslint/js": "^8.55.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-security": "^1.7.1"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "api",
+    "jenkins",
+    "nas",
+    "deployment",
+    "ldap",
+    "websocket",
+    "postgresql"
+  ],
+  "author": "Development Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/config/**",
+      "!src/**/*.test.js"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": ["text", "lcov", "html"],
+    "testMatch": [
+      "**/__tests__/**/*.js",
+      "**/?(*.)+(spec|test).js"
+    ],
+    "verbose": true
+  },
+  "nodemonConfig": {
+    "ignore": ["logs/*", "*.log", "coverage/*"],
+    "env": {
+      "NODE_ENV": "development"
+    },
+    "ext": "js,json",
+    "watch": ["src/"]
+  }
+}

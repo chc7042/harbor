@@ -1,0 +1,134 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 데이터베이스 (프로덕션)
+  postgres:
+    image: postgres:14
+    container_name: jenkins-nas-postgres-prod
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - jenkins-nas-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # 백엔드 API 서버 (프로덕션)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: production
+    container_name: jenkins-nas-backend-prod
+    env_file:
+      - .env.prod
+    ports:
+      - "3001:3001"
+    volumes:
+      - ${NAS_MOUNT_PATH}:/mnt/nas:ro
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - jenkins-nas-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 프론트엔드 (프로덕션 - Nginx)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: production
+    container_name: jenkins-nas-frontend-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro  # SSL 인증서 (옵션)
+    depends_on:
+      - backend
+    networks:
+      - jenkins-nas-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  # Redis (세션 저장용 - 프로덕션)
+  redis:
+    image: redis:7-alpine
+    container_name: jenkins-nas-redis-prod
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_prod_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - jenkins-nas-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Nginx 리버스 프록시 (로드 밸런서)
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: jenkins-nas-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - jenkins-nas-prod-network
+    restart: always
+
+# 볼륨 정의 (프로덕션)
+volumes:
+  postgres_prod_data:
+    driver: local
+  redis_prod_data:
+    driver: local
+
+# 네트워크 정의 (프로덕션)
+networks:
+  jenkins-nas-prod-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

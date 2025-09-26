@@ -1,0 +1,46 @@
+# 개발 환경용 Dockerfile
+FROM node:18-alpine as development
+
+WORKDIR /app
+
+# 패키지 파일들을 먼저 복사 (캐시 최적화)
+COPY backend/package*.json ./
+
+# 의존성 설치
+RUN npm ci
+
+# 소스 코드 복사
+COPY backend/ ./
+
+# 개발 서버 실행
+EXPOSE 3001
+CMD ["npm", "run", "dev"]
+
+# 프로덕션 빌드용 멀티스테이지
+FROM node:18-alpine as production
+
+WORKDIR /app
+
+# 패키지 파일들을 먼저 복사
+COPY backend/package*.json ./
+
+# 프로덕션 의존성만 설치
+RUN npm ci --only=production && npm cache clean --force
+
+# 소스 코드 복사
+COPY backend/ ./
+
+# 비root 사용자 생성
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# 소유권 변경
+RUN chown -R nodejs:nodejs /app
+USER nodejs
+
+# 헬스체크 추가
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node healthcheck.js || exit 1
+
+EXPOSE 3001
+CMD ["npm", "start"]
