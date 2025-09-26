@@ -60,13 +60,13 @@
   - [x] 2.5 Docker 개발 환경 구성 (docker-compose.yml)
   - [x] 2.6 환경변수 설정 파일 구성
 
-- [ ] 3.0 데이터베이스 스키마 설계 및 구축
-  - [ ] 3.1 PostgreSQL 데이터베이스 스키마 설계 (deployments, users, sessions 테이블)
-  - [ ] 3.2 deployments 테이블 생성 스크립트 작성
-  - [ ] 3.3 users 및 sessions 테이블 생성 스크립트 작성
-  - [ ] 3.4 인덱스 및 제약조건 설정
-  - [ ] 3.5 데이터베이스 연결 모듈 구현
-  - [ ] 3.6 마이그레이션 시스템 구축
+- [x] 3.0 데이터베이스 스키마 설계 및 구축
+  - [x] 3.1 PostgreSQL 데이터베이스 스키마 설계 (deployments, users, sessions 테이블)
+  - [x] 3.2 deployments 테이블 생성 스크립트 작성
+  - [x] 3.3 users 및 sessions 테이블 생성 스크립트 작성
+  - [x] 3.4 인덱스 및 제약조건 설정
+  - [x] 3.5 데이터베이스 연결 모듈 구현
+  - [x] 3.6 마이그레이션 시스템 구축
 
 - [ ] 4.0 LDAP 인증 시스템 구현
   - [ ] 4.1 LDAP 연동 라이브러리 설치 및 설정
