@@ -10,11 +10,13 @@ const authRoutes = require('./routes/auth');
 const deploymentRoutes = require('./routes/deployments');
 const dashboardRoutes = require('./routes/dashboard');
 const webhookRoutes = require('./routes/webhooks');
+const websocketRoutes = require('./routes/websocket');
 // const nasRoutes = require('./routes/nas'); // 임시 비활성화
 const { errorHandler } = require('./middleware/error');
 const { initializeDatabase } = require('./config/database');
 const logger = require('./config/logger');
 const { setupSwagger } = require('./config/swagger');
+const websocketManager = require('./services/websocketManager');
 // const { getNASScanner } = require('./services/nasScanner'); // 임시 비활성화
 
 const app = express();
@@ -115,6 +117,7 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/deployments', deploymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/ws', websocketRoutes);
 // app.use('/api/nas', nasRoutes); // 임시 비활성화
 
 // 404 핸들러
@@ -171,12 +174,20 @@ async function startServer() {
     }
 
     // 서버 시작
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       logger.info(`Jenkins NAS 배포 이력 서버 시작`);
       logger.info(`포트: ${PORT}`);
       logger.info(`환경: ${process.env.NODE_ENV || 'development'}`);
       logger.info(`프론트엔드 URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
     });
+
+    // WebSocket 서버 초기화
+    try {
+      websocketManager.initialize(server);
+      logger.info('WebSocket server initialized successfully');
+    } catch (error) {
+      logger.error('Failed to initialize WebSocket server:', error);
+    }
   } catch (error) {
     logger.error('서버 시작 실패:', error);
     process.exit(1);
@@ -186,6 +197,14 @@ async function startServer() {
 // Graceful shutdown
 function gracefulShutdown(signal) {
   logger.info(`${signal} 수신, 서버 종료 중...`);
+
+  // WebSocket 서버 정리
+  try {
+    websocketManager.shutdown();
+    logger.info('WebSocket server cleanup completed');
+  } catch (error) {
+    logger.error('WebSocket server cleanup failed:', error.message);
+  }
 
   if (process.env.NODE_ENV !== 'development') {
     try {

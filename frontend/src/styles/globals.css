@@ -174,22 +174,111 @@
     text-wrap: pretty;
   }
 
-  /* 그리드 시스템 */
+  /* 뉴욕 스타일 반응형 그리드 시스템 */
   .grid-dashboard {
     @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6;
   }
 
   .grid-cards {
-    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4;
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4;
   }
 
-  /* 레이아웃 유틸리티 */
+  .grid-stats {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4;
+  }
+
+  .grid-main {
+    @apply grid grid-cols-1 lg:grid-cols-3 gap-6;
+  }
+
+  .grid-sidebar {
+    @apply grid grid-cols-1 xl:grid-cols-4 gap-6;
+  }
+
+  .grid-timeline {
+    @apply grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6;
+  }
+
+  /* 컬럼 스패닝 */
+  .col-span-full {
+    @apply col-span-full;
+  }
+
+  .col-span-2-lg {
+    @apply col-span-1 lg:col-span-2;
+  }
+
+  .col-span-3-lg {
+    @apply col-span-1 lg:col-span-3;
+  }
+
+  /* 뉴욕 스타일 레이아웃 유틸리티 */
   .container-max {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
   }
 
+  .container-narrow {
+    @apply max-w-4xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .container-wide {
+    @apply max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
   .section-padding {
     @apply py-8 sm:py-12;
+  }
+
+  .section-padding-sm {
+    @apply py-4 sm:py-6;
+  }
+
+  .section-padding-lg {
+    @apply py-12 sm:py-16 lg:py-20;
+  }
+
+  /* 반응형 스페이싱 */
+  .space-responsive {
+    @apply space-y-4 lg:space-y-6;
+  }
+
+  .gap-responsive {
+    @apply gap-4 lg:gap-6 xl:gap-8;
+  }
+
+  /* 뉴욕 스타일 카드 레이아웃 */
+  .card-minimal {
+    @apply bg-white border-0 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300;
+  }
+
+  .card-elevated {
+    @apply bg-white border-0 rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-300;
+  }
+
+  /* 반응형 플렉스 유틸리티 */
+  .flex-responsive {
+    @apply flex flex-col lg:flex-row;
+  }
+
+  .flex-responsive-reverse {
+    @apply flex flex-col-reverse lg:flex-row;
+  }
+
+  /* 반응형 히든 */
+  .hidden-mobile {
+    @apply hidden sm:block;
+  }
+
+  .hidden-desktop {
+    @apply block sm:hidden;
+  }
+
+  .show-lg {
+    @apply hidden lg:block;
+  }
+
+  .show-xl {
+    @apply hidden xl:block;
   }
 
   /* 애니메이션 */

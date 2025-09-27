@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Calendar, User, GitBranch, AlertCircle, CheckCircle, XCircle, Info } from 'lucide-react';
+import { useDeploymentUpdates } from '../hooks/useWebSocket';
 import api from '../services/api';
 
 const DeploymentTimeline = ({ className = '' }) => {
-  const [deployments, setDeployments] = useState([]);
+  const [initialDeployments, setInitialDeployments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [timeRange, setTimeRange] = useState('24h');
+
+  // 실시간 업데이트 적용된 배포 데이터
+  const deployments = useDeploymentUpdates(initialDeployments);
 
   useEffect(() => {
     fetchRecentDeployments();
@@ -19,7 +23,7 @@ const DeploymentTimeline = ({ className = '' }) => {
       const response = await api.get(`/deployments/recent?hours=${hours}&limit=20`);
 
       if (response.data.success) {
-        setDeployments(response.data.data || []);
+        setInitialDeployments(response.data.data || []);
       } else {
         throw new Error(response.data.error?.message || '배포 이력 조회 실패');
       }
@@ -27,7 +31,7 @@ const DeploymentTimeline = ({ className = '' }) => {
       console.error('Failed to fetch deployments:', err);
       setError(err.message);
       // 개발환경에서 mock 데이터 사용
-      setDeployments(generateMockDeployments());
+      setInitialDeployments(generateMockDeployments());
     } finally {
       setLoading(false);
     }

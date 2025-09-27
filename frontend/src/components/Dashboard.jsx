@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useWebSocket, useSystemNotifications } from '../hooks/useWebSocket';
 import Header from './Header';
 import ProjectStatusCard from './ProjectStatusCard';
 import DeploymentChart from './DeploymentChart';
@@ -8,6 +10,12 @@ import toast from 'react-hot-toast';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { isConnected, connectionState } = useWebSocket();
+
+  // 시스템 알림 활성화
+  useSystemNotifications();
+
   const [stats, setStats] = useState({
     totalProjects: 0,
     totalDeployments: 0,
@@ -116,29 +124,43 @@ const Dashboard = () => {
   };
 
   const StatCard = ({ title, value, suffix = '', trend, icon }) => (
-    <div className="card">
-      <div className="card-body">
-        <div className="flex items-center">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-primary-600">{title}</p>
-            <p className="text-2xl font-bold text-primary-900">
+    <div className="card-minimal p-6 hover:scale-[1.02] transition-transform duration-200">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <p className="text-sm font-medium text-primary-500 mb-2">{title}</p>
+          <div className="flex items-baseline space-x-1">
+            <p className="text-3xl font-bold text-primary-900 tracking-tight">
               {value}
-              {suffix && <span className="text-lg text-primary-600">{suffix}</span>}
             </p>
-            {trend && (
-              <p className={`text-xs ${trend > 0 ? 'text-success-600' : 'text-error-600'}`}>
-                {trend > 0 ? '+' : ''}{trend}% from last month
-              </p>
+            {suffix && (
+              <span className="text-lg font-medium text-primary-500">{suffix}</span>
             )}
           </div>
-          {icon && (
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center">
-                {icon}
+          {trend !== undefined && (
+            <div className="flex items-center mt-3">
+              <div className={`flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                trend > 0
+                  ? 'bg-success-100 text-success-700'
+                  : trend < 0
+                    ? 'bg-error-100 text-error-700'
+                    : 'bg-primary-100 text-primary-700'
+              }`}>
+                {trend > 0 ? '↗' : trend < 0 ? '↘' : '→'}
+                <span className="ml-1">
+                  {trend > 0 ? '+' : ''}{trend}%
+                </span>
               </div>
+              <span className="text-xs text-primary-400 ml-2">vs last month</span>
             </div>
           )}
         </div>
+        {icon && (
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
+              {icon}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -161,7 +183,7 @@ const Dashboard = () => {
     <div className="min-h-screen bg-primary-50">
       <Header />
 
-      <main className="container-max section-padding">
+      <main className="container-max section-padding space-responsive">
         {/* 환영 메시지 */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-primary-900 mb-2">
@@ -173,7 +195,7 @@ const Dashboard = () => {
         </div>
 
         {/* 통계 카드 */}
-        <div className="grid-cards mb-8">
+        <div className="grid-stats mb-8">
           <StatCard
             title="전체 프로젝트"
             value={stats.totalProjects}
@@ -218,7 +240,7 @@ const Dashboard = () => {
         </div>
 
         {/* 최근 배포 활동 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid-timeline mb-8">
           {/* 배포 타임라인 */}
           <DeploymentTimeline />
 
@@ -227,41 +249,53 @@ const Dashboard = () => {
             projects={projects}
             isLoading={isLoading}
           />
+
+          {/* 배포 차트 - 큰 화면에서만 표시 */}
+          <div className="show-xl">
+            <DeploymentChart />
+          </div>
         </div>
 
         {/* 빠른 액션 */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-lg font-semibold text-primary-900">빠른 액션</h3>
-          </div>
-          <div className="card-body">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <button className="btn-secondary p-4 h-auto flex-col space-y-2">
-                <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="card-minimal p-6">
+          <h3 className="text-lg font-semibold text-primary-900 mb-6">빠른 액션</h3>
+          <div className="grid-stats gap-responsive">
+            <button
+              onClick={() => navigate('/deployments')}
+              className="btn-secondary p-6 h-auto flex-col space-y-3 hover:scale-[1.02] transition-all duration-200 group"
+            >
+              <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center group-hover:bg-primary-200 transition-colors">
+                <svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <span>배포 검색</span>
-              </button>
-              <button className="btn-secondary p-4 h-auto flex-col space-y-2">
-                <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              </div>
+              <span className="text-sm font-medium">배포 검색</span>
+            </button>
+            <button className="btn-secondary p-6 h-auto flex-col space-y-3 hover:scale-[1.02] transition-all duration-200 group">
+              <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center group-hover:bg-primary-200 transition-colors">
+                <svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                <span>통계 보기</span>
-              </button>
-              <button className="btn-secondary p-4 h-auto flex-col space-y-2">
-                <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              </div>
+              <span className="text-sm font-medium">통계 보기</span>
+            </button>
+            <button className="btn-secondary p-6 h-auto flex-col space-y-3 hover:scale-[1.02] transition-all duration-200 group">
+              <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center group-hover:bg-primary-200 transition-colors">
+                <svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                <span>파일 다운로드</span>
-              </button>
-              <button className="btn-secondary p-4 h-auto flex-col space-y-2">
-                <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              </div>
+              <span className="text-sm font-medium">파일 다운로드</span>
+            </button>
+            <button className="btn-secondary p-6 h-auto flex-col space-y-3 hover:scale-[1.02] transition-all duration-200 group">
+              <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center group-hover:bg-primary-200 transition-colors">
+                <svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                <span>설정</span>
-              </button>
-            </div>
+              </div>
+              <span className="text-sm font-medium">설정</span>
+            </button>
           </div>
         </div>
       </main>
