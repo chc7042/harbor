@@ -11,6 +11,7 @@ const deploymentRoutes = require('./routes/deployments');
 const dashboardRoutes = require('./routes/dashboard');
 const webhookRoutes = require('./routes/webhooks');
 const websocketRoutes = require('./routes/websocket');
+const healthRoutes = require('./routes/health');
 // const nasRoutes = require('./routes/nas'); // 임시 비활성화
 const { errorHandler } = require('./middleware/error');
 const { initializeDatabase } = require('./config/database');
@@ -111,6 +112,9 @@ app.get('/health', (req, res) => {
     environment: process.env.NODE_ENV
   });
 });
+
+// Health check routes (before other routes for faster response)
+app.use('/api/health', healthRoutes);
 
 // API 라우트
 app.use('/api/auth', authLimiter, authRoutes);

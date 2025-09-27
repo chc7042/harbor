@@ -1,12 +1,17 @@
-# 개발 환경용 Dockerfile
-FROM node:18-alpine as development
+# 멀티 스테이지 빌드를 사용한 프로덕션 프론트엔드 이미지
+
+# Development stage
+FROM node:18-alpine AS development
 
 WORKDIR /app
+
+# 개발에 필요한 시스템 패키지 설치
+RUN apk add --no-cache curl
 
 # 패키지 파일들을 먼저 복사 (캐시 최적화)
 COPY frontend/package*.json ./
 
-# 의존성 설치
+# 의존성 설치 (개발 의존성 포함)
 RUN npm ci
 
 # 소스 코드 복사
@@ -16,39 +21,148 @@ COPY frontend/ ./
 EXPOSE 5173
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
-# 프로덕션 빌드용 멀티스테이지
-FROM node:18-alpine as build
+# Build stage
+FROM node:18-alpine AS build
 
 WORKDIR /app
+
+# 빌드에 필요한 시스템 패키지 설치
+RUN apk add --no-cache python3 make g++
 
 # 패키지 파일들을 먼저 복사
 COPY frontend/package*.json ./
 
 # 의존성 설치
-RUN npm ci
+RUN npm ci --only=production
 
-# 소스 코드 복사 및 빌드
+# 소스 코드 복사
 COPY frontend/ ./
+
+# 환경 변수 설정 (빌드 타임)
+ARG VITE_API_URL=http://localhost:3002
+ENV VITE_API_URL=$VITE_API_URL
+
+# 프로덕션 빌드
 RUN npm run build
 
-# 프로덕션 서빙용 Nginx
-FROM nginx:alpine as production
+# Production stage with Nginx
+FROM nginx:1.25-alpine AS production
+
+# 보안을 위한 non-root 사용자 생성
+RUN addgroup -g 1001 -S nginxgroup
+RUN adduser -S nginxuser -u 1001 -G nginxgroup
+
+# 필요한 패키지 설치
+RUN apk add --no-cache curl
 
 # 빌드된 파일들을 Nginx로 복사
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Nginx 설정 복사
-COPY frontend/nginx.conf /etc/nginx/nginx.conf
+# 커스텀 Nginx 설정 생성
+RUN cat > /etc/nginx/nginx.conf << 'EOF'
+user nginxuser;
+worker_processes auto;
+error_log /var/log/nginx/error.log notice;
+pid /tmp/nginx.pid;
 
-# 비root 사용자로 실행
-RUN addgroup -g 1001 -S nginx && \
-    adduser -S nginx -u 1001 -G nginx
+events {
+    worker_connections 1024;
+}
 
-# 포트 설정
-EXPOSE 80
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
 
-# 헬스체크 추가
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log /var/log/nginx/access.log main;
+
+    sendfile on;
+    tcp_nopush on;
+    keepalive_timeout 65;
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+
+    server {
+        listen 8080;
+        server_name localhost;
+        root /usr/share/nginx/html;
+        index index.html index.htm;
+
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "no-referrer-when-downgrade" always;
+        add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+
+        # Handle client-side routing
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # API proxy to backend
+        location /api/ {
+            proxy_pass http://backend:3002;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade;
+        }
+
+        # WebSocket proxy
+        location /ws {
+            proxy_pass http://backend:3002;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # Static assets caching
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+
+        # Health check endpoint
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+    }
+}
+EOF
+
+# Nginx 디렉토리 권한 설정
+RUN chown -R nginxuser:nginxgroup /var/cache/nginx && \
+    chown -R nginxuser:nginxgroup /var/log/nginx && \
+    chown -R nginxuser:nginxgroup /etc/nginx/conf.d && \
+    touch /var/run/nginx.pid && \
+    chown -R nginxuser:nginxgroup /var/run/nginx.pid && \
+    chown -R nginxuser:nginxgroup /usr/share/nginx/html
+
+# non-root 사용자로 전환
+USER nginxuser
+
+# 포트 설정 (non-root 사용자이므로 8080 사용)
+EXPOSE 8080
+
+# 헬스체크 설정
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
+# Nginx 시작
 CMD ["nginx", "-g", "daemon off;"]

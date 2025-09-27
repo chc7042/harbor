@@ -1,46 +1,93 @@
-# 개발 환경용 Dockerfile
-FROM node:18-alpine as development
+# 멀티 스테이지 빌드를 사용한 프로덕션 백엔드 이미지
+
+# Development stage
+FROM node:18-alpine AS development
 
 WORKDIR /app
+
+# 개발에 필요한 시스템 패키지 설치
+RUN apk add --no-cache \
+    openldap-dev \
+    postgresql-client \
+    curl
 
 # 패키지 파일들을 먼저 복사 (캐시 최적화)
 COPY backend/package*.json ./
 
-# 의존성 설치
+# 의존성 설치 (개발 의존성 포함)
 RUN npm ci
 
 # 소스 코드 복사
 COPY backend/ ./
 
 # 개발 서버 실행
-EXPOSE 3001
+EXPOSE 3002
 CMD ["npm", "run", "dev"]
 
-# 프로덕션 빌드용 멀티스테이지
-FROM node:18-alpine as production
+# Production base stage
+FROM node:18-alpine AS base
+
+# 보안을 위한 non-root 사용자 생성
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodeuser -u 1001
+
+# 필요한 시스템 패키지 설치 (LDAP 및 PostgreSQL 클라이언트)
+RUN apk add --no-cache \
+    openldap-dev \
+    postgresql-client \
+    curl \
+    dumb-init
 
 WORKDIR /app
 
-# 패키지 파일들을 먼저 복사
+# 패키지 파일 복사 및 프로덕션 의존성만 설치
 COPY backend/package*.json ./
-
-# 프로덕션 의존성만 설치
 RUN npm ci --only=production && npm cache clean --force
 
 # 소스 코드 복사
-COPY backend/ ./
+COPY backend/src ./src
 
-# 비root 사용자 생성
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+# Production stage
+FROM node:18-alpine AS production
 
-# 소유권 변경
-RUN chown -R nodejs:nodejs /app
-USER nodejs
+# 보안을 위한 non-root 사용자 생성
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodeuser -u 1001
 
-# 헬스체크 추가
+# 필요한 시스템 패키지 설치
+RUN apk add --no-cache \
+    openldap-dev \
+    postgresql-client \
+    curl \
+    dumb-init
+
+WORKDIR /app
+
+# base 스테이지에서 필요한 파일 복사
+COPY --from=base --chown=nodeuser:nodejs /app/node_modules ./node_modules
+COPY --from=base --chown=nodeuser:nodejs /app/src ./src
+COPY --from=base --chown=nodeuser:nodejs /app/package*.json ./
+
+# 로그 디렉토리 생성
+RUN mkdir -p /app/logs && chown nodeuser:nodejs /app/logs
+
+# 헬스체크 스크립트 생성
+RUN echo '#!/bin/sh\ncurl -f http://localhost:${PORT:-3002}/api/health || exit 1' > /app/healthcheck.sh && \
+    chmod +x /app/healthcheck.sh && \
+    chown nodeuser:nodejs /app/healthcheck.sh
+
+# non-root 사용자로 전환
+USER nodeuser
+
+# 포트 노출
+EXPOSE 3002
+
+# 헬스체크 설정
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node healthcheck.js || exit 1
+    CMD /app/healthcheck.sh
 
-EXPOSE 3001
-CMD ["npm", "start"]
+# dumb-init를 사용한 프로세스 관리
+ENTRYPOINT ["dumb-init", "--"]
+
+# 애플리케이션 시작
+CMD ["node", "src/app.js"]
