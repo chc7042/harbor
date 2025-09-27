@@ -51,7 +51,7 @@ class UserModel {
     try {
       const result = await query(
         'SELECT * FROM users WHERE id = $1',
-        [userId]
+        [userId],
       );
 
       return result.rows.length > 0 ? result.rows[0] : null;
@@ -69,7 +69,7 @@ class UserModel {
     try {
       const result = await query(
         'SELECT * FROM users WHERE username = $1',
-        [username]
+        [username],
       );
 
       return result.rows.length > 0 ? result.rows[0] : null;
@@ -106,7 +106,7 @@ class UserModel {
     }
 
     // updated_at 자동 갱신
-    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    updates.push('updated_at = CURRENT_TIMESTAMP');
     values.push(userId);
 
     try {
@@ -148,7 +148,7 @@ class UserModel {
     try {
       await query(
         'UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-        [userId]
+        [userId],
       );
     } catch (error) {
       console.error('Failed to update last login:', error.message);
@@ -312,7 +312,7 @@ class UserModel {
       // 사용자 비활성화
       const userResult = await client.query(
         'UPDATE users SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
-        [userId]
+        [userId],
       );
 
       if (userResult.rows.length === 0) {

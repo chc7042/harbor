@@ -62,7 +62,7 @@ function createPool() {
       pool.on('connect', (client) => {
         console.log('New database client connected');
         // 세션별 설정
-        client.query("SET timezone='UTC'");
+        client.query('SET timezone=\'UTC\'');
       });
 
       pool.on('remove', () => {

@@ -1,4 +1,3 @@
-const ldap = require('ldapjs');
 const { promisify } = require('util');
 const { getLDAPConfig } = require('../config/ldap');
 const { query } = require('../config/database');
@@ -57,8 +56,27 @@ class LDAPService {
         }
       }
 
-      // 사용자 정보 업데이트/생성
-      const user = await this.syncUserToDatabase(userInfo);
+      // 사용자 정보 업데이트/생성 (개발환경에서는 DB 오류 무시)
+      let user;
+      try {
+        user = await this.syncUserToDatabase(userInfo);
+      } catch (dbError) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('데이터베이스 사용자 동기화 실패 (개발환경에서 무시):', dbError.message);
+          // 임시 사용자 객체 생성
+          user = {
+            id: 1,
+            username: userInfo.username,
+            email: userInfo.email,
+            full_name: userInfo.fullName,
+            department: userInfo.department,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+        } else {
+          throw dbError;
+        }
+      }
 
       const authDuration = Date.now() - startTime;
       console.log(`User ${username} authenticated successfully in ${authDuration}ms`);
@@ -95,7 +113,7 @@ class LDAPService {
       const bindAsync = promisify(client.bind).bind(client);
       await bindAsync(
         this.config.getConfig().bindDN,
-        this.config.getConfig().bindCredentials
+        this.config.getConfig().bindCredentials,
       );
 
       // 사용자 검색
@@ -163,7 +181,7 @@ class LDAPService {
    * @returns {Promise<boolean>} - 접근 권한 여부
    */
   async checkUserGroups(userDN) {
-    const allowedGroups = this.config.getConfig().allowedGroups;
+    const {allowedGroups} = this.config.getConfig();
     if (allowedGroups.length === 0) {
       return true; // 그룹 제한이 없으면 허용
     }
@@ -174,7 +192,7 @@ class LDAPService {
       const bindAsync = promisify(client.bind).bind(client);
       await bindAsync(
         this.config.getConfig().bindDN,
-        this.config.getConfig().bindCredentials
+        this.config.getConfig().bindCredentials,
       );
 
       const searchAsync = promisify(client.search).bind(client);
@@ -228,7 +246,7 @@ class LDAPService {
     try {
       const existingUserResult = await query(
         'SELECT * FROM users WHERE username = $1',
-        [ldapUser.username]
+        [ldapUser.username],
       );
 
       let user;

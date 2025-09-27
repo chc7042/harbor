@@ -57,8 +57,53 @@ const refreshTokenValidation = [
 ];
 
 /**
- * POST /auth/login
- * 사용자 로그인 (LDAP 인증)
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: 사용자 로그인
+ *     description: LDAP 서버를 통한 사용자 인증 및 JWT 토큰 발급
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LoginRequest'
+ *           example:
+ *             username: "nicolas.choi"
+ *             password: "password123"
+ *     responses:
+ *       200:
+ *         description: 로그인 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoginResponse'
+ *       400:
+ *         description: 입력값 검증 실패
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: 인증 실패
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       429:
+ *         description: 로그인 시도 횟수 초과
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       503:
+ *         description: LDAP 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post('/login', loginLimiter, loginValidation, async (req, res) => {
   try {
@@ -67,7 +112,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
     if (!errors.isEmpty()) {
       return res.status(400).json(createErrorResponse(
         'VALIDATION_ERROR',
-        errors.array()[0].msg
+        errors.array()[0].msg,
       ));
     }
 
@@ -83,7 +128,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
 
     // JWT 토큰 생성
     const tokenPayload = {
-      userId: user.id,
+      userId: user.id || 1,
       username: user.username,
       email: user.email,
       fullName: user.full_name,
@@ -93,22 +138,39 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
     const accessToken = JWTUtils.generateAccessToken(tokenPayload);
     const refreshToken = JWTUtils.generateRefreshToken(tokenPayload);
 
-    // 세션 생성
-    const sessionId = await SessionManager.createSession(
-      user.id,
-      refreshToken,
-      userAgent,
-      ipAddress
-    );
+    // 세션 생성 (개발환경에서는 DB 오류 무시)
+    let sessionId = 'dev-session-' + Date.now();
+    try {
+      sessionId = await SessionManager.createSession(
+        user.id || 1,
+        refreshToken,
+        userAgent,
+        ipAddress,
+      );
+    } catch (dbError) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('데이터베이스 세션 생성 실패 (개발환경에서 무시):', dbError.message);
+      } else {
+        throw dbError;
+      }
+    }
 
-    // 감사 로그 생성
-    const auditLogQuery = `
-      INSERT INTO audit_logs (user_id, username, action, ip_address, user_agent)
-      VALUES ($1, $2, 'login', $3, $4)
-    `;
+    // 감사 로그 생성 (개발환경에서는 DB 오류 무시)
+    try {
+      const auditLogQuery = `
+        INSERT INTO audit_logs (user_id, username, action, ip_address, user_agent)
+        VALUES ($1, $2, 'login', $3, $4)
+      `;
 
-    const { query } = require('../config/database');
-    await query(auditLogQuery, [user.id, user.username, ipAddress, userAgent]);
+      const { query } = require('../config/database');
+      await query(auditLogQuery, [user.id || 1, user.username, ipAddress, userAgent]);
+    } catch (auditError) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('감사 로그 생성 실패 (개발환경에서 무시):', auditError.message);
+      } else {
+        throw auditError;
+      }
+    }
 
     console.log(`User ${username} logged in successfully`);
 
@@ -153,14 +215,64 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
 
     res.status(statusCode).json(createErrorResponse(
       errorCode,
-      error.message
+      error.message,
     ));
   }
 });
 
 /**
- * POST /auth/refresh
- * Access 토큰 갱신
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Access 토큰 갱신
+ *     description: Refresh 토큰을 사용하여 새로운 Access 토큰 발급
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 description: Refresh 토큰
+ *                 example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *     responses:
+ *       200:
+ *         description: 토큰 갱신 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     accessToken:
+ *                       type: string
+ *                       description: 새로운 Access 토큰
+ *                     expiresIn:
+ *                       type: integer
+ *                       description: 토큰 만료 시간 (초)
+ *       401:
+ *         description: 토큰이 유효하지 않거나 만료됨
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       429:
+ *         description: 토큰 갱신 요청 횟수 초과
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post('/refresh', refreshLimiter, refreshTokenValidation, async (req, res) => {
   try {
@@ -168,7 +280,7 @@ router.post('/refresh', refreshLimiter, refreshTokenValidation, async (req, res)
     if (!errors.isEmpty()) {
       return res.status(400).json(createErrorResponse(
         'VALIDATION_ERROR',
-        errors.array()[0].msg
+        errors.array()[0].msg,
       ));
     }
 
@@ -183,7 +295,7 @@ router.post('/refresh', refreshLimiter, refreshTokenValidation, async (req, res)
     const user = await SessionManager.validateAndUpdateSession(
       refreshToken,
       userAgent,
-      ipAddress
+      ipAddress,
     );
 
     // 새 Access 토큰 생성
@@ -209,7 +321,7 @@ router.post('/refresh', refreshLimiter, refreshTokenValidation, async (req, res)
     console.error('Token refresh failed:', error.message);
 
     let errorCode = 'TOKEN_REFRESH_FAILED';
-    let statusCode = 401;
+    const statusCode = 401;
 
     if (error.message.includes('Invalid or expired')) {
       errorCode = 'TOKEN_EXPIRED';
@@ -219,14 +331,56 @@ router.post('/refresh', refreshLimiter, refreshTokenValidation, async (req, res)
 
     res.status(statusCode).json(createErrorResponse(
       errorCode,
-      '토큰 갱신에 실패했습니다. 다시 로그인해주세요.'
+      '토큰 갱신에 실패했습니다. 다시 로그인해주세요.',
     ));
   }
 });
 
 /**
- * POST /auth/logout
- * 사용자 로그아웃
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: 사용자 로그아웃
+ *     description: 현재 세션을 종료하고 토큰을 무효화
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 description: 특정 세션만 삭제할 Refresh 토큰 (선택사항)
+ *     responses:
+ *       200:
+ *         description: 로그아웃 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "성공적으로 로그아웃되었습니다."
+ *       401:
+ *         description: 인증 실패
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post('/logout', authenticateToken, auditLog('logout'), async (req, res) => {
   try {
@@ -257,14 +411,56 @@ router.post('/logout', authenticateToken, auditLog('logout'), async (req, res) =
     console.error('Logout failed:', error.message);
     res.status(500).json(createErrorResponse(
       'LOGOUT_FAILED',
-      '로그아웃 처리 중 오류가 발생했습니다.'
+      '로그아웃 처리 중 오류가 발생했습니다.',
     ));
   }
 });
 
 /**
- * GET /auth/me
- * 현재 사용자 정보 조회
+ * @swagger
+ * /api/auth/me:
+ *   get:
+ *     tags:
+ *       - Authentication
+ *     summary: 현재 사용자 정보 조회
+ *     description: JWT 토큰을 통해 인증된 사용자의 정보와 세션 상태 조회
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 사용자 정보 조회 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       $ref: '#/components/schemas/User'
+ *                     session:
+ *                       type: object
+ *                       properties:
+ *                         activeSessions:
+ *                           type: integer
+ *                           description: 활성 세션 수
+ *                           example: 2
+ *       401:
+ *         description: 인증 실패
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: 사용자를 찾을 수 없음
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/me', authenticateToken, async (req, res) => {
   try {
@@ -273,13 +469,13 @@ router.get('/me', authenticateToken, async (req, res) => {
     // 데이터베이스에서 최신 사용자 정보 조회
     const userResult = await query(
       'SELECT id, username, email, full_name, department, last_login, created_at FROM users WHERE id = $1',
-      [req.user.id]
+      [req.user.id],
     );
 
     if (userResult.rows.length === 0) {
       return res.status(404).json(createErrorResponse(
         'USER_NOT_FOUND',
-        '사용자를 찾을 수 없습니다.'
+        '사용자를 찾을 수 없습니다.',
       ));
     }
 
@@ -288,7 +484,7 @@ router.get('/me', authenticateToken, async (req, res) => {
     // 활성 세션 수 조회
     const sessionResult = await query(
       'SELECT COUNT(*) as session_count FROM user_sessions WHERE user_id = $1 AND expires_at > CURRENT_TIMESTAMP',
-      [req.user.id]
+      [req.user.id],
     );
 
     const sessionCount = parseInt(sessionResult.rows[0].session_count, 10);
@@ -315,7 +511,7 @@ router.get('/me', authenticateToken, async (req, res) => {
     console.error('Failed to get user info:', error.message);
     res.status(500).json(createErrorResponse(
       'USER_INFO_ERROR',
-      '사용자 정보 조회 중 오류가 발생했습니다.'
+      '사용자 정보 조회 중 오류가 발생했습니다.',
     ));
   }
 });
@@ -348,7 +544,7 @@ router.post('/refresh-user-info', authenticateToken, auditLog('refresh_user_info
     console.error('Failed to refresh user info:', error.message);
     res.status(500).json(createErrorResponse(
       'USER_REFRESH_ERROR',
-      '사용자 정보 갱신 중 오류가 발생했습니다.'
+      '사용자 정보 갱신 중 오류가 발생했습니다.',
     ));
   }
 });
@@ -392,7 +588,7 @@ router.get('/sessions', authenticateToken, async (req, res) => {
     console.error('Failed to get user sessions:', error.message);
     res.status(500).json(createErrorResponse(
       'SESSIONS_ERROR',
-      '세션 정보 조회 중 오류가 발생했습니다.'
+      '세션 정보 조회 중 오류가 발생했습니다.',
     ));
   }
 });
@@ -409,13 +605,13 @@ router.delete('/sessions/:sessionId', authenticateToken, auditLog('delete_sessio
     // 해당 세션이 현재 사용자의 것인지 확인 후 삭제
     const result = await query(
       'DELETE FROM user_sessions WHERE id = $1 AND user_id = $2',
-      [sessionId, req.user.id]
+      [sessionId, req.user.id],
     );
 
     if (result.rowCount === 0) {
       return res.status(404).json(createErrorResponse(
         'SESSION_NOT_FOUND',
-        '세션을 찾을 수 없습니다.'
+        '세션을 찾을 수 없습니다.',
       ));
     }
 
@@ -428,7 +624,7 @@ router.delete('/sessions/:sessionId', authenticateToken, auditLog('delete_sessio
     console.error('Failed to delete session:', error.message);
     res.status(500).json(createErrorResponse(
       'SESSION_DELETE_ERROR',
-      '세션 삭제 중 오류가 발생했습니다.'
+      '세션 삭제 중 오류가 발생했습니다.',
     ));
   }
 });

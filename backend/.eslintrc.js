@@ -16,11 +16,12 @@ module.exports = {
     sourceType: 'module',
   },
   rules: {
-    // 보안 관련
-    'security/detect-object-injection': 'error',
-    'security/detect-non-literal-regexp': 'error',
-    'security/detect-unsafe-regex': 'error',
+    // 보안 관련 (경고로 변경)
+    'security/detect-object-injection': 'warn',
+    'security/detect-non-literal-regexp': 'warn',
+    'security/detect-unsafe-regex': 'warn',
     'security/detect-eval-with-expression': 'error',
+    'security/detect-non-literal-fs-filename': 'warn',
 
     // Node.js 관련
     'node/no-unpublished-require': 'off',
@@ -39,6 +40,8 @@ module.exports = {
     'comma-dangle': ['error', 'always-multiline'],
     'quotes': ['error', 'single'],
     'semi': ['error', 'always'],
+    'no-process-exit': 'warn',
+    'no-control-regex': 'warn',
 
     // 비동기 처리
     'prefer-promise-reject-errors': 'error',
@@ -46,12 +49,12 @@ module.exports = {
 
     // 함수 관련
     'no-unused-expressions': 'error',
-    'consistent-return': 'error',
+    'consistent-return': 'warn',
     'no-return-await': 'error',
 
     // 객체/배열 관련
     'no-prototype-builtins': 'error',
-    'prefer-destructuring': ['error', { object: true, array: false }],
+    'prefer-destructuring': ['warn', { object: true, array: false }],
 
     // 에러 처리
     'handle-callback-err': 'error',

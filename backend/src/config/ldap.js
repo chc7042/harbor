@@ -148,7 +148,7 @@ class LDAPConfig {
     if (!entry.attributes) return undefined;
 
     const attribute = entry.attributes.find(attr =>
-      attr.type.toLowerCase() === attributeName.toLowerCase()
+      attr.type.toLowerCase() === attributeName.toLowerCase(),
     );
 
     if (!attribute || !attribute.values || attribute.values.length === 0) {

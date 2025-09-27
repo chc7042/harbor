@@ -38,7 +38,7 @@ class JWTUtils {
         iat: Math.floor(Date.now() / 1000),
       },
       accessSecret,
-      { expiresIn }
+      { expiresIn },
     );
   }
 
@@ -57,7 +57,7 @@ class JWTUtils {
         jti: crypto.randomUUID(), // JWT ID for revocation
       },
       refreshSecret,
-      { expiresIn }
+      { expiresIn },
     );
   }
 
@@ -172,13 +172,13 @@ class SessionManager {
     // 세션 정보 업데이트
     await query(
       'UPDATE user_sessions SET last_accessed = CURRENT_TIMESTAMP WHERE id = $1',
-      [session.id]
+      [session.id],
     );
 
     // 사용자 최종 로그인 시간 업데이트
     await query(
       'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
-      [session.user_id]
+      [session.user_id],
     );
 
     return {
@@ -201,7 +201,7 @@ class SessionManager {
 
     const result = await query(
       'DELETE FROM user_sessions WHERE refresh_token_hash = $1',
-      [refreshTokenHash]
+      [refreshTokenHash],
     );
 
     return result.rowCount > 0;
@@ -213,7 +213,7 @@ class SessionManager {
   static async deleteAllUserSessions(userId) {
     const result = await query(
       'DELETE FROM user_sessions WHERE user_id = $1',
-      [userId]
+      [userId],
     );
 
     return result.rowCount;
@@ -224,7 +224,7 @@ class SessionManager {
    */
   static async cleanupExpiredSessions() {
     const result = await query(
-      'DELETE FROM user_sessions WHERE expires_at < CURRENT_TIMESTAMP'
+      'DELETE FROM user_sessions WHERE expires_at < CURRENT_TIMESTAMP',
     );
 
     console.log(`Cleaned up ${result.rowCount} expired sessions`);
@@ -349,7 +349,7 @@ function auditLog(action, resourceType = null) {
                 logData.resource_id,
                 logData.ip_address,
                 logData.user_agent,
-              ]
+              ],
             );
           } catch (error) {
             console.error('Failed to create audit log:', error.message);

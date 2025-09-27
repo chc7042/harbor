@@ -1,0 +1,251 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 뉴욕 스타일 글로벌 CSS */
+
+/* 기본 스타일 설정 */
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  body {
+    @apply text-primary-900 bg-white antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* 스크롤바 스타일링 (Webkit) */
+  ::-webkit-scrollbar {
+    @apply w-1;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-primary-50;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-primary-300 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary-400;
+  }
+}
+
+/* 뉴욕 스타일 컴포넌트 */
+@layer components {
+  /* 버튼 스타일 */
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-900 border border-transparent rounded-lg hover:bg-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-primary-700 bg-white border border-primary-300 rounded-lg hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-primary-600 bg-transparent border border-transparent rounded-lg hover:bg-primary-100 hover:text-primary-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200;
+  }
+
+  /* 입력 필드 스타일 */
+  .input-primary {
+    @apply block w-full px-3 py-2 text-sm border border-primary-300 rounded-lg bg-white placeholder-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-900 focus:border-transparent disabled:bg-primary-50 disabled:cursor-not-allowed transition-colors duration-200;
+  }
+
+  /* 카드 스타일 */
+  .card {
+    @apply bg-white border border-primary-200 rounded-xl shadow-card;
+  }
+
+  .card-header {
+    @apply px-6 py-4 border-b border-primary-200;
+  }
+
+  .card-body {
+    @apply px-6 py-4;
+  }
+
+  .card-footer {
+    @apply px-6 py-4 border-t border-primary-200 bg-primary-50/50;
+  }
+
+  /* 상태 배지 */
+  .badge-success {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-800;
+  }
+
+  .badge-error {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-error-100 text-error-800;
+  }
+
+  .badge-warning {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning-100 text-warning-800;
+  }
+
+  .badge-default {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800;
+  }
+
+  /* 테이블 스타일 */
+  .table-minimal {
+    @apply w-full text-sm text-left text-primary-600;
+  }
+
+  .table-minimal thead {
+    @apply text-xs text-primary-700 uppercase bg-primary-50 border-b border-primary-200;
+  }
+
+  .table-minimal th {
+    @apply px-6 py-3 font-medium;
+  }
+
+  .table-minimal tbody tr {
+    @apply bg-white border-b border-primary-100 hover:bg-primary-50 transition-colors duration-150;
+  }
+
+  .table-minimal td {
+    @apply px-6 py-4;
+  }
+
+  /* 로딩 스피너 */
+  .spinner {
+    @apply inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin;
+  }
+
+  /* 미니멀한 검색바 */
+  .search-bar {
+    @apply relative;
+  }
+
+  .search-input {
+    @apply w-full pl-10 pr-4 py-2 text-sm border border-primary-300 rounded-lg bg-white placeholder-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-900 focus:border-transparent transition-colors duration-200;
+  }
+
+  .search-icon {
+    @apply absolute left-3 top-1/2 transform -translate-y-1/2 text-primary-400 w-4 h-4;
+  }
+
+  /* 드롭다운 메뉴 */
+  .dropdown-menu {
+    @apply absolute right-0 z-50 mt-2 w-48 bg-white border border-primary-200 rounded-lg shadow-elevation py-1;
+  }
+
+  .dropdown-item {
+    @apply block w-full px-4 py-2 text-sm text-left text-primary-700 hover:bg-primary-50 hover:text-primary-900 transition-colors duration-150;
+  }
+
+  /* 모달 오버레이 */
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm;
+  }
+
+  .modal-content {
+    @apply bg-white rounded-xl shadow-elevation max-w-lg w-full mx-4;
+  }
+
+  /* 알림 스타일 */
+  .alert-success {
+    @apply p-4 rounded-lg bg-success-50 border border-success-200 text-success-800;
+  }
+
+  .alert-error {
+    @apply p-4 rounded-lg bg-error-50 border border-error-200 text-error-800;
+  }
+
+  .alert-warning {
+    @apply p-4 rounded-lg bg-warning-50 border border-warning-200 text-warning-800;
+  }
+
+  .alert-info {
+    @apply p-4 rounded-lg bg-accent-50 border border-accent-200 text-accent-800;
+  }
+}
+
+/* 유틸리티 클래스 */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* 그리드 시스템 */
+  .grid-dashboard {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6;
+  }
+
+  .grid-cards {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4;
+  }
+
+  /* 레이아웃 유틸리티 */
+  .container-max {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .section-padding {
+    @apply py-8 sm:py-12;
+  }
+
+  /* 애니메이션 */
+  .fade-in {
+    @apply animate-fade-in;
+  }
+
+  .slide-in {
+    @apply animate-slide-in;
+  }
+
+  /* 포커스 스타일 개선 */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-900;
+  }
+
+  /* 반응형 텍스트 크기 */
+  .text-responsive-lg {
+    @apply text-lg sm:text-xl lg:text-2xl;
+  }
+
+  .text-responsive-xl {
+    @apply text-xl sm:text-2xl lg:text-3xl;
+  }
+
+  /* 상태별 색상 */
+  .text-success {
+    @apply text-success-600;
+  }
+
+  .text-error {
+    @apply text-error-600;
+  }
+
+  .text-warning {
+    @apply text-warning-600;
+  }
+
+  .bg-success {
+    @apply bg-success-500;
+  }
+
+  .bg-error {
+    @apply bg-error-500;
+  }
+
+  .bg-warning {
+    @apply bg-warning-500;
+  }
+}
+
+/* 다크 모드 지원 (추후 확장) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+
+  /* 다크 모드 스타일은 향후 구현 */
+}
