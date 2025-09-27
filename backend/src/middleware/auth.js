@@ -8,7 +8,7 @@ const crypto = require('crypto');
 class JWTUtils {
   static getSecrets() {
     const accessSecret = process.env.JWT_SECRET;
-    const refreshSecret = process.env.REFRESH_TOKEN_SECRET;
+    const refreshSecret = process.env.JWT_REFRESH_SECRET;
 
     if (!accessSecret || !refreshSecret) {
       throw new Error('JWT secrets are not configured');
@@ -20,7 +20,7 @@ class JWTUtils {
   static getExpirationTimes() {
     return {
       accessToken: process.env.JWT_EXPIRES_IN || '1h',
-      refreshToken: process.env.REFRESH_TOKEN_EXPIRES_IN || '8h',
+      refreshToken: process.env.JWT_REFRESH_EXPIRES_IN || '8h',
     };
   }
 
@@ -235,7 +235,7 @@ class SessionManager {
    * 토큰 만료 시간 계산
    */
   static calculateExpirationTime() {
-    const expiresIn = process.env.REFRESH_TOKEN_EXPIRES_IN || '8h';
+    const expiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '8h';
     let milliseconds;
 
     if (expiresIn.endsWith('h')) {

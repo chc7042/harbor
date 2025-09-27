@@ -10,12 +10,12 @@ const authRoutes = require('./routes/auth');
 const deploymentRoutes = require('./routes/deployments');
 const dashboardRoutes = require('./routes/dashboard');
 const webhookRoutes = require('./routes/webhooks');
-const nasRoutes = require('./routes/nas');
+// const nasRoutes = require('./routes/nas'); // 임시 비활성화
 const { errorHandler } = require('./middleware/error');
 const { initializeDatabase } = require('./config/database');
 const logger = require('./config/logger');
 const { setupSwagger } = require('./config/swagger');
-const { getNASScanner } = require('./services/nasScanner');
+// const { getNASScanner } = require('./services/nasScanner'); // 임시 비활성화
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -115,7 +115,7 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/deployments', deploymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/webhooks', webhookRoutes);
-app.use('/api/nas', nasRoutes);
+// app.use('/api/nas', nasRoutes); // 임시 비활성화
 
 // 404 핸들러
 app.use('*', (req, res) => {
@@ -146,23 +146,28 @@ async function startServer() {
       }
     }
 
-    // NAS 스캐너 초기화
-    try {
-      const nasScanner = getNASScanner();
+    // NAS 스캐너 초기화 (개발환경에서는 비활성화)
+    if (process.env.NODE_ENV !== 'development') {
+      try {
+        const { getNASScanner } = require('./services/nasScanner');
+        const nasScanner = getNASScanner();
 
-      // 파일 감시 시작
-      if (process.env.NAS_WATCH_ENABLED !== 'false') {
-        nasScanner.startFileWatcher();
-        logger.info('NAS file watcher started');
-      }
+        // 파일 감시 시작
+        if (process.env.NAS_WATCH_ENABLED !== 'false') {
+          nasScanner.startFileWatcher();
+          logger.info('NAS file watcher started');
+        }
 
-      // 스케줄러 시작
-      if (process.env.NAS_SCHEDULER_ENABLED !== 'false') {
-        nasScanner.startScheduler();
-        logger.info('NAS scan scheduler started');
+        // 스케줄러 시작
+        if (process.env.NAS_SCHEDULER_ENABLED !== 'false') {
+          nasScanner.startScheduler();
+          logger.info('NAS scan scheduler started');
+        }
+      } catch (error) {
+        logger.warn('NAS scanner initialization failed:', error.message);
       }
-    } catch (error) {
-      logger.warn('NAS scanner initialization failed:', error.message);
+    } else {
+      logger.info('NAS scanner disabled in development mode');
     }
 
     // 서버 시작
@@ -182,13 +187,16 @@ async function startServer() {
 function gracefulShutdown(signal) {
   logger.info(`${signal} 수신, 서버 종료 중...`);
 
-  try {
-    // NAS 스캐너 정리
-    const nasScanner = getNASScanner();
-    nasScanner.cleanup();
-    logger.info('NAS scanner cleanup completed');
-  } catch (error) {
-    logger.error('NAS scanner cleanup failed:', error.message);
+  if (process.env.NODE_ENV !== 'development') {
+    try {
+      // NAS 스캐너 정리
+      const { getNASScanner } = require('./services/nasScanner');
+      const nasScanner = getNASScanner();
+      nasScanner.cleanup();
+      logger.info('NAS scanner cleanup completed');
+    } catch (error) {
+      logger.error('NAS scanner cleanup failed:', error.message);
+    }
   }
 
   process.exit(0);

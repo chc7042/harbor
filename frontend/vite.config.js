@@ -23,12 +23,12 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:3002',
         changeOrigin: true,
         secure: false,
       },
       '/ws': {
-        target: 'ws://localhost:3001',
+        target: 'ws://localhost:3002',
         ws: true,
         changeOrigin: true,
       },
@@ -57,10 +57,10 @@ export default defineConfig({
   },
   define: {
     'import.meta.env.VITE_API_URL': JSON.stringify(
-      process.env.VITE_API_URL || 'http://localhost:3001'
+      process.env.VITE_API_URL || 'http://localhost:3002'
     ),
     'import.meta.env.VITE_WS_URL': JSON.stringify(
-      process.env.VITE_WS_URL || 'ws://localhost:3001'
+      process.env.VITE_WS_URL || 'ws://localhost:3002'
     ),
   },
 });

@@ -13,7 +13,10 @@ const { query } = require('../config/database');
 class NASScanner {
   constructor() {
     this.nasBasePath = process.env.NAS_BASE_PATH || '/nas/deployments';
-    this.scanInterval = process.env.NAS_SCAN_INTERVAL || '0 */15 * * * *'; // 15분마다
+    // 개발환경에서는 간단한 스케줄 사용 (실제로는 비활성화됨)
+    this.scanInterval = process.env.NODE_ENV === 'development'
+      ? '0 0 * * *'  // 매일 자정 (개발환경에서는 실행되지 않음)
+      : process.env.NAS_SCAN_INTERVAL || '*/15 * * * *'; // 15분마다
     this.watchEnabled = process.env.NAS_WATCH_ENABLED !== 'false';
     this.maxFileSize = parseInt(process.env.NAS_MAX_FILE_SIZE, 10) || 1024 * 1024 * 1024; // 1GB
     this.allowedExtensions = (process.env.NAS_ALLOWED_EXTENSIONS || '.tar.gz,.zip,.jar,.war,.tgz').split(',');
@@ -337,6 +340,12 @@ class NASScanner {
    * 스케줄러 시작
    */
   startScheduler() {
+    // 개발환경에서는 스케줄러 비활성화
+    if (process.env.NODE_ENV === 'development') {
+      logger.info('NAS scanner scheduler disabled in development mode');
+      return;
+    }
+
     if (!cron.validate(this.scanInterval)) {
       throw new AppError(`Invalid cron expression: ${this.scanInterval}`, 400);
     }

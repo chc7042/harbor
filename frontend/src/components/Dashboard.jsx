@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Header from './Header';
 import ProjectStatusCard from './ProjectStatusCard';
 import DeploymentChart from './DeploymentChart';
+import DeploymentTimeline from './DeploymentTimeline';
 import toast from 'react-hot-toast';
 
 const Dashboard = () => {
@@ -218,46 +219,8 @@ const Dashboard = () => {
 
         {/* 최근 배포 활동 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* 최근 배포 목록 */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="text-lg font-semibold text-primary-900">최근 배포</h3>
-            </div>
-            <div className="card-body">
-              <div className="space-y-4">
-                {/* TODO: 실제 데이터로 교체 */}
-                {[
-                  { project: 'web-frontend', build: 246, status: 'success', time: '2분 전' },
-                  { project: 'api-backend', build: 89, status: 'success', time: '15분 전' },
-                  { project: 'mobile-app', build: 34, status: 'failed', time: '1시간 전' },
-                  { project: 'data-pipeline', build: 67, status: 'success', time: '3시간 전' },
-                ].map((deployment, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-3 h-3 rounded-full ${
-                        deployment.status === 'success' ? 'bg-success-500' : 'bg-error-500'
-                      }`}></div>
-                      <div>
-                        <p className="font-medium text-primary-900">{deployment.project}</p>
-                        <p className="text-sm text-primary-600">빌드 #{deployment.build}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className={`badge-${deployment.status === 'success' ? 'success' : 'error'}`}>
-                        {deployment.status === 'success' ? '성공' : '실패'}
-                      </span>
-                      <p className="text-xs text-primary-500 mt-1">{deployment.time}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="card-footer">
-              <button className="btn-ghost text-sm">
-                모든 배포 보기 →
-              </button>
-            </div>
-          </div>
+          {/* 배포 타임라인 */}
+          <DeploymentTimeline />
 
           {/* 프로젝트 상태 카드 */}
           <ProjectStatusCard
