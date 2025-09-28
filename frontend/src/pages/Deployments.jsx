@@ -52,22 +52,14 @@ const Deployments = () => {
 
   const fetchProjects = async () => {
     try {
-      // const response = await api.get('/projects');
-      // if (response.data.success) {
-      //   setProjects(response.data.data || []);
-      // }
-
-      // 임시 mock 데이터
-      setProjects([
-        { id: 1, name: 'harbor-frontend' },
-        { id: 2, name: 'harbor-backend' },
-        { id: 3, name: 'mobile-app' },
-        { id: 4, name: 'api-gateway' },
-        { id: 5, name: 'data-pipeline' },
-        { id: 6, name: 'microservice-auth' }
-      ]);
+      const response = await api.get('/projects');
+      if (response.data.success) {
+        setProjects(response.data.data || []);
+      }
     } catch (error) {
       console.error('Failed to fetch projects:', error);
+      // 에러 발생 시 빈 배열로 설정
+      setProjects([]);
     }
   };
 
@@ -108,25 +100,44 @@ const Deployments = () => {
         }
       }
 
-      // const response = await api.get(`/deployments?${params}`);
-      // if (response.data.success) {
-      //   setDeployments(response.data.data.deployments || []);
-      //   setTotalItems(response.data.data.total || 0);
-      //   setTotalPages(response.data.data.totalPages || 1);
-      // }
+      // Jenkins 최근 배포 데이터 가져오기 (더 긴 시간 범위 사용)
+      params.append('hours', '720'); // 30일 범위로 설정
+      
+      const response = await api.get(`/deployments/recent?${params}`);
+      if (response.data.success) {
+        const deploymentData = response.data.data || [];
+        
+        // 프론트엔드 형식에 맞게 데이터 변환
+        const transformedData = deploymentData.map(deployment => ({
+          id: deployment.id,
+          project_name: deployment.projectName,
+          build_number: deployment.buildNumber,
+          status: deployment.status,
+          environment: deployment.environment || 'development',
+          deployed_by: deployment.deployedBy || 'Jenkins',
+          branch: deployment.branch || 'main',
+          created_at: deployment.deployedAt,
+          duration: deployment.duration,
+          description: deployment.commitMessage || `Build ${deployment.buildNumber} deployment`,
+          jenkins_url: deployment.jenkinsUrl
+        }));
 
-      // 임시 mock 데이터
-      const mockDeployments = generateMockDeployments();
-      const filteredDeployments = filterMockData(mockDeployments);
-      const sortedDeployments = sortMockData(filteredDeployments);
+        // 프론트엔드에서 필터링 적용
+        const filteredDeployments = filterMockData(transformedData);
+        const sortedDeployments = sortMockData(filteredDeployments);
 
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const endIndex = startIndex + itemsPerPage;
-      const paginatedData = sortedDeployments.slice(startIndex, endIndex);
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const paginatedData = sortedDeployments.slice(startIndex, endIndex);
 
-      setDeployments(paginatedData);
-      setTotalItems(sortedDeployments.length);
-      setTotalPages(Math.ceil(sortedDeployments.length / itemsPerPage));
+        setDeployments(paginatedData);
+        setTotalItems(sortedDeployments.length);
+        setTotalPages(Math.ceil(sortedDeployments.length / itemsPerPage));
+      } else {
+        setDeployments([]);
+        setTotalItems(0);
+        setTotalPages(1);
+      }
 
     } catch (error) {
       console.error('Failed to fetch deployments:', error);
