@@ -33,15 +33,38 @@ class JenkinsService {
 
   async getJobs() {
     try {
-      // projects 폴더의 작업들만 조회
-      const url = '/job/projects/api/json?tree=jobs[name,url,buildable,lastBuild[number,url,result,timestamp,duration,displayName]]';
-      logger.debug(`Fetching Jenkins jobs from URL: ${url}`);
+      // projects 폴더의 하위 폴더들 조회
+      const url = '/job/projects/api/json?tree=jobs[name,url]';
+      logger.debug(`Fetching Jenkins project folders from URL: ${url}`);
 
       const response = await this.client.get(url);
-      const jobs = response.data.jobs || [];
+      const projectFolders = response.data.jobs || [];
 
-      logger.info(`Found ${jobs.length} jobs in projects folder:`, jobs.map(job => job.name));
-      return jobs;
+      logger.info(`Found ${projectFolders.length} project folders:`, projectFolders.map(folder => folder.name));
+
+      // 각 프로젝트 폴더에서 실제 작업들 조회
+      const allJobs = [];
+      for (const folder of projectFolders) {
+        try {
+          const folderUrl = `/job/projects/job/${encodeURIComponent(folder.name)}/api/json?tree=jobs[name,url,buildable,lastBuild[number,url,result,timestamp,duration,displayName]]`;
+          const folderResponse = await this.client.get(folderUrl);
+          const folderJobs = folderResponse.data.jobs || [];
+          
+          // 프로젝트 폴더 이름을 각 작업에 추가
+          folderJobs.forEach(job => {
+            job.projectFolder = folder.name;
+            job.fullJobName = `${folder.name}/${job.name}`;
+          });
+          
+          allJobs.push(...folderJobs);
+          logger.info(`Found ${folderJobs.length} jobs in ${folder.name} folder`);
+        } catch (folderError) {
+          logger.warn(`Failed to fetch jobs from folder ${folder.name}:`, folderError.message);
+        }
+      }
+
+      logger.info(`Total jobs found: ${allJobs.length}`);
+      return allJobs;
     } catch (error) {
       logger.error('Failed to fetch Jenkins jobs from projects folder:', error.message);
       logger.error(`Error status: ${error.response?.status}, URL: /job/projects/api/json`);
@@ -51,23 +74,40 @@ class JenkinsService {
 
   async getJobBuilds(jobName, limit = 20) {
     try {
+      // jobName이 "projectFolder/jobName" 형태인지 확인
+      let projectFolder, actualJobName;
+      if (jobName.includes('/')) {
+        [projectFolder, actualJobName] = jobName.split('/');
+      } else {
+        // 기존 jobName이 단순한 경우, 모든 프로젝트 폴더에서 검색
+        const jobs = await this.getJobs();
+        const matchingJob = jobs.find(job => job.name === jobName);
+        if (matchingJob) {
+          projectFolder = matchingJob.projectFolder;
+          actualJobName = matchingJob.name;
+        } else {
+          logger.warn(`Job ${jobName} not found in any project folder`);
+          return [];
+        }
+      }
+
       // projects 폴더 하위의 작업 빌드 조회
-      const url = `/job/projects/job/${encodeURIComponent(jobName)}/api/json?tree=builds[number,url,result,timestamp,duration,displayName,actions[parameters[name,value]],changeSet[items[commitId,msg,author[fullName]]]]&depth=2`;
-      logger.debug(`Fetching builds for job ${jobName} from URL: ${url}`);
+      const url = `/job/projects/job/${encodeURIComponent(projectFolder)}/job/${encodeURIComponent(actualJobName)}/api/json?tree=builds[number,url,result,timestamp,duration,displayName,actions[parameters[name,value]],changeSet[items[commitId,msg,author[fullName]]]]&depth=2`;
+      logger.debug(`Fetching builds for job ${projectFolder}/${actualJobName} from URL: ${url}`);
 
       const response = await this.client.get(url);
 
       if (!response.data || !response.data.builds) {
-        logger.warn(`No builds found for job ${jobName}`);
+        logger.warn(`No builds found for job ${projectFolder}/${actualJobName}`);
         return [];
       }
 
       const builds = response.data.builds.slice(0, limit);
-      logger.info(`Found ${builds.length} builds for job ${jobName}`);
+      logger.info(`Found ${builds.length} builds for job ${projectFolder}/${actualJobName}`);
 
       return builds.map(build => ({
         id: build.number,
-        projectName: jobName,
+        projectName: `${projectFolder}/${actualJobName}`,
         buildNumber: build.number,
         status: this.mapJenkinsStatus(build.result),
         timestamp: new Date(build.timestamp),
@@ -79,11 +119,11 @@ class JenkinsService {
       }));
     } catch (error) {
       logger.error(`Failed to fetch builds for job ${jobName}:`, error.message);
-      logger.error(`Error status: ${error.response?.status}, URL: /job/projects/job/${encodeURIComponent(jobName)}/api/json`);
+      logger.error(`Error status: ${error.response?.status}`);
 
       // 404나 특정 에러의 경우 빈 배열 반환하여 다른 작업 조회에 영향주지 않음
       if (error.response?.status === 404) {
-        logger.warn(`Job ${jobName} not found in projects folder, returning empty builds`);
+        logger.warn(`Job ${jobName} not found, returning empty builds`);
         return [];
       }
 
@@ -217,18 +257,18 @@ class JenkinsService {
 
       for (const job of jobs) {
         try {
-          const builds = await this.getJobBuilds(job.name, 10);
+          const builds = await this.getJobBuilds(job.fullJobName, 10);
 
           if (builds.length === 0) {
             // 빌드가 없는 경우 프로젝트 기본 정보 생성
             const projectEntry = {
-              id: `${job.name}-no-builds`,
-              projectName: job.name,
+              id: `${job.fullJobName}-no-builds`,
+              projectName: job.fullJobName,
               buildNumber: null,
               status: 'no_builds',
               timestamp: new Date(),
               duration: null,
-              displayName: `${job.name} (빌드 없음)`,
+              displayName: `${job.fullJobName} (빌드 없음)`,
               url: job.url,
               parameters: {},
               changes: []
@@ -239,17 +279,17 @@ class JenkinsService {
             allBuilds.push(...recentBuilds);
           }
         } catch (error) {
-          logger.warn(`Failed to fetch builds for job ${job.name}:`, error.message);
+          logger.warn(`Failed to fetch builds for job ${job.fullJobName}:`, error.message);
 
           // 에러가 발생한 경우에도 프로젝트 정보 표시
           const errorEntry = {
-            id: `${job.name}-error`,
-            projectName: job.name,
+            id: `${job.fullJobName}-error`,
+            projectName: job.fullJobName,
             buildNumber: null,
             status: 'error',
             timestamp: new Date(),
             duration: null,
-            displayName: `${job.name} (오류)`,
+            displayName: `${job.fullJobName} (오류)`,
             url: job.url,
             parameters: {},
             changes: []

@@ -29,6 +29,42 @@ class LDAPService {
     let client = null;
 
     try {
+      // 개발 환경에서 모의 인증 사용
+      if (process.env.NODE_ENV === 'development' && process.env.ENABLE_MOCK_AUTH === 'true') {
+        console.log(`Using mock authentication for development - user: ${username}`);
+        
+        // 모의 사용자 정보 생성
+        const mockUserInfo = {
+          dn: `uid=${username},ou=users,dc=dev,dc=com`,
+          username: username,
+          email: `${username}@dev.com`,
+          fullName: username.split('.').map(name => 
+            name.charAt(0).toUpperCase() + name.slice(1)
+          ).join(' '),
+          department: 'Development'
+        };
+
+        // 모의 사용자 정보로 사용자 동기화
+        let user;
+        try {
+          user = await this.syncUserToDatabase(mockUserInfo);
+        } catch (dbError) {
+          console.warn('데이터베이스 사용자 동기화 실패 (개발환경에서 무시):', dbError.message);
+          // 사용자 정보 없이는 인증 실패 처리
+          throw new Error('Failed to create or retrieve user from database');
+        }
+
+        const authDuration = Date.now() - startTime;
+        console.log(`Mock user ${username} authenticated successfully in ${authDuration}ms`);
+
+        return {
+          ...user,
+          ldapDN: mockUserInfo.dn,
+          authenticationTime: authDuration,
+        };
+      }
+
+      // 실제 LDAP 인증
       // 사용자 검색
       const userInfo = await this.findUser(username);
       if (!userInfo) {
@@ -63,16 +99,8 @@ class LDAPService {
       } catch (dbError) {
         if (process.env.NODE_ENV === 'development') {
           console.warn('데이터베이스 사용자 동기화 실패 (개발환경에서 무시):', dbError.message);
-          // 임시 사용자 객체 생성
-          user = {
-            id: 1,
-            username: userInfo.username,
-            email: userInfo.email,
-            full_name: userInfo.fullName,
-            department: userInfo.department,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
+          // 데이터베이스 동기화 실패 시 인증 실패
+          throw dbError;
         } else {
           throw dbError;
         }

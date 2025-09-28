@@ -44,6 +44,12 @@ class LDAPConfig {
   }
 
   validateConfig() {
+    // 개발 환경에서 모의 인증이 활성화된 경우 검증 건너뛰기
+    if (process.env.NODE_ENV === 'development' && process.env.ENABLE_MOCK_AUTH === 'true') {
+      console.log('LDAP configuration validation skipped for mock authentication');
+      return;
+    }
+
     const requiredFields = ['url', 'bindDN', 'bindCredentials', 'searchBase'];
     const missingFields = requiredFields.filter(field => !this.config[field]);
 

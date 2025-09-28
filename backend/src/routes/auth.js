@@ -128,7 +128,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
 
     // JWT 토큰 생성
     const tokenPayload = {
-      userId: user.id || 1,
+      userId: user.id,
       username: user.username,
       email: user.email,
       fullName: user.full_name,
@@ -142,7 +142,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
     let sessionId = 'dev-session-' + Date.now();
     try {
       sessionId = await SessionManager.createSession(
-        user.id || 1,
+        user.id,
         refreshToken,
         userAgent,
         ipAddress,
@@ -163,7 +163,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
       `;
 
       const { query } = require('../config/database');
-      await query(auditLogQuery, [user.id || 1, user.username, ipAddress, userAgent]);
+      await query(auditLogQuery, [user.id, user.username, ipAddress, userAgent]);
     } catch (auditError) {
       if (process.env.NODE_ENV === 'development') {
         console.warn('감사 로그 생성 실패 (개발환경에서 무시):', auditError.message);
