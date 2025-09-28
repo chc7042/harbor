@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   CheckCircle,
@@ -25,6 +25,61 @@ const DeploymentDetailModal = ({
 }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [copySuccess, setCopySuccess] = useState('');
+  const [artifacts, setArtifacts] = useState([]);
+  const [loadingArtifacts, setLoadingArtifacts] = useState(false);
+
+  // 실제 NAS에서 아티팩트 가져오기
+  const fetchArtifacts = async () => {
+    if (!deployment) return;
+    
+    setLoadingArtifacts(true);
+    try {
+      const projectParts = deployment.project_name.split('/');
+      const versionFolder = projectParts[0] || '1.2.0';
+      
+      const response = await fetch(`/api/files/list?path=${encodeURIComponent(versionFolder)}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          const artifactFiles = data.data.files
+            .filter(file => file.isFile && (file.name.endsWith('.tar.gz') || file.name.endsWith('.zip')))
+            .map(file => ({
+              name: file.name,
+              size: formatFileSize(file.size),
+              type: file.name.endsWith('.tar.gz') ? 'Release Package' : 'Archive',
+              url: `/nas/release_version/${versionFolder}/${file.name}`,
+              modified: file.modified
+            }));
+          setArtifacts(artifactFiles);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch artifacts:', error);
+      // 에러 시 fallback으로 mock 아티팩트 사용
+      setArtifacts([]);
+    } finally {
+      setLoadingArtifacts(false);
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  useEffect(() => {
+    if (isOpen && deployment) {
+      fetchArtifacts();
+    }
+  }, [isOpen, deployment]);
 
   if (!isOpen || !deployment) return null;
 
@@ -112,11 +167,6 @@ const DeploymentDetailModal = ({
     { timestamp: '2025-01-27 14:33:40', level: 'SUCCESS', message: 'Deployment completed successfully' }
   ];
 
-  const mockArtifacts = [
-    { name: 'harbor-frontend-v1.2.3.tar.gz', size: '25.4 MB', type: 'Application Bundle' },
-    { name: 'config.json', size: '2.1 KB', type: 'Configuration' },
-    { name: 'deployment-report.pdf', size: '156 KB', type: 'Report' }
-  ];
 
   const mockEnvironmentVars = [
     { key: 'NODE_ENV', value: 'production' },
@@ -169,11 +219,27 @@ const DeploymentDetailModal = ({
               </div>
             </div>
             <div className="flex items-center space-x-2">
-              <button className="btn-secondary text-sm">
+              <button 
+                className="btn-secondary text-sm opacity-50 cursor-not-allowed" 
+                disabled
+                title="재배포 기능은 현재 비활성화되어 있습니다"
+              >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 재배포
               </button>
-              <button className="btn-secondary text-sm">
+              <button 
+                className="btn-secondary text-sm"
+                onClick={() => {
+                  if (deployment.jenkins_url) {
+                    window.open(deployment.jenkins_url, '_blank');
+                  } else {
+                    // Jenkins URL이 없는 경우 기본 Jenkins 빌드 URL 생성
+                    const baseUrl = process.env.REACT_APP_JENKINS_URL || 'https://jenkins.roboetech.com';
+                    const jenkinsUrl = `${baseUrl}/job/projects/job/${deployment.project_name.split('/')[0]}/job/${deployment.project_name.split('/')[1]}/${deployment.build_number}/`;
+                    window.open(jenkinsUrl, '_blank');
+                  }
+                }}
+              >
                 <ExternalLink className="w-4 h-4 mr-2" />
                 Jenkins 보기
               </button>
@@ -333,23 +399,64 @@ const DeploymentDetailModal = ({
 
           {activeTab === 'artifacts' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-primary-900">배포 아티팩트</h3>
+              <h3 className="text-lg font-medium text-primary-900">릴리즈 아티팩트</h3>
 
               <div className="space-y-3">
-                {mockArtifacts.map((artifact, index) => (
+                {loadingArtifacts ? (
+                  <div className="text-center py-8">
+                    <div className="text-gray-500">아티팩트 로딩 중...</div>
+                  </div>
+                ) : artifacts.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Download className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                    <p>사용 가능한 아티팩트가 없습니다.</p>
+                  </div>
+                ) : (
+                  artifacts.map((artifact, index) => (
                   <div key={index} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <Download className="w-5 h-5 text-gray-400" />
                       <div>
                         <p className="font-medium text-primary-900">{artifact.name}</p>
                         <p className="text-sm text-gray-500">{artifact.type} • {artifact.size}</p>
+                        <p className="text-xs text-gray-400 font-mono">{artifact.url}</p>
                       </div>
                     </div>
-                    <button className="btn-secondary text-sm">
+                    <button 
+                      className="btn-secondary text-sm"
+                      onClick={async () => {
+                        try {
+                          // 백엔드 API를 통해 NAS 파일 다운로드
+                          const response = await fetch(`/api/files/download?path=${encodeURIComponent(artifact.url)}`, {
+                            headers: {
+                              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+                            }
+                          });
+                          
+                          if (response.ok) {
+                            const blob = await response.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = artifact.name;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+                          } else {
+                            throw new Error('Download failed');
+                          }
+                        } catch (error) {
+                          console.error('Download error:', error);
+                          alert('다운로드에 실패했습니다. 파일이 존재하지 않거나 접근 권한이 없습니다.');
+                        }
+                      }}
+                    >
                       다운로드
                     </button>
                   </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           )}

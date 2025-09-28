@@ -50,14 +50,22 @@ class JenkinsService {
           const folderResponse = await this.client.get(folderUrl);
           const folderJobs = folderResponse.data.jobs || [];
           
+          // mr 또는 fs로 시작하고 버전 형식과 _release 접미사를 가진 작업들만 필터링 (예: mr1.0.0_release, fs1.1.0_release)
+          const filteredJobs = folderJobs.filter(job => {
+            const jobName = job.name.toLowerCase();
+            // mr 또는 fs로 시작하고 숫자.숫자.숫자_release 형식의 job만 허용
+            const releasePattern = /^(mr|fs)\d+\.\d+\.\d+_release$/;
+            return releasePattern.test(jobName);
+          });
+          
           // 프로젝트 폴더 이름을 각 작업에 추가
-          folderJobs.forEach(job => {
+          filteredJobs.forEach(job => {
             job.projectFolder = folder.name;
             job.fullJobName = `${folder.name}/${job.name}`;
           });
           
-          allJobs.push(...folderJobs);
-          logger.info(`Found ${folderJobs.length} jobs in ${folder.name} folder`);
+          allJobs.push(...filteredJobs);
+          logger.info(`Found ${filteredJobs.length} release jobs (mr/fs x.x.x_release format) out of ${folderJobs.length} total jobs in ${folder.name} folder`);
         } catch (folderError) {
           logger.warn(`Failed to fetch jobs from folder ${folder.name}:`, folderError.message);
         }
@@ -349,6 +357,15 @@ class JenkinsService {
     if (upperLine.includes('WARN')) return 'WARN';
     if (upperLine.includes('SUCCESS') || upperLine.includes('FINISHED')) return 'SUCCESS';
     return 'INFO';
+  }
+
+  // Alias for backward compatibility
+  async getRecentDeployments(hours = 24, limit = 50) {
+    return await this.getRecentBuilds(hours, limit);
+  }
+
+  async getSystemInfo() {
+    return await this.healthCheck();
   }
 
   async healthCheck() {

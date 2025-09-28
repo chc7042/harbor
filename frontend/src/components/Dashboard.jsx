@@ -32,90 +32,84 @@ const Dashboard = () => {
 
   const fetchDashboardStats = async () => {
     try {
-      // TODO: API 호출로 실제 데이터 가져오기
-      // const response = await api.get('/dashboard/stats');
-      // setStats(response.data.data.overview);
+      const response = await fetch('/api/dashboard', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-      // 임시 더미 데이터
-      setTimeout(() => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // 요약 통계 설정
         setStats({
-          totalProjects: 6,
-          totalDeployments: 247,
-          successRate: 94.3,
-          failureRate: 5.7,
+          totalProjects: data.data.projectStats.length,
+          totalDeployments: data.data.summary.totalDeployments,
+          successRate: data.data.summary.successRate,
+          failureRate: Math.round((100 - data.data.summary.successRate) * 10) / 10,
         });
 
-        setProjects([
-          {
-            id: 1,
-            name: 'web-frontend',
-            environment: 'Production',
-            status: 'healthy',
-            deployments: 156,
-            successRate: 94.2,
-            trend: 2.3,
-            lastDeployment: '2분 전',
-            recentBuilds: ['success', 'success', 'success', 'success', 'failed']
-          },
-          {
-            id: 2,
-            name: 'api-backend',
-            environment: 'Production',
-            status: 'healthy',
-            deployments: 134,
-            successRate: 89.6,
-            trend: -1.2,
-            lastDeployment: '15분 전',
-            recentBuilds: ['success', 'success', 'failed', 'success', 'success']
-          },
-          {
-            id: 3,
-            name: 'mobile-app',
-            environment: 'Staging',
-            status: 'warning',
-            deployments: 89,
-            successRate: 87.3,
-            trend: -3.1,
-            lastDeployment: '1시간 전',
-            recentBuilds: ['failed', 'success', 'failed', 'success', 'success']
-          },
-          {
-            id: 4,
-            name: 'data-pipeline',
-            environment: 'Production',
-            status: 'healthy',
-            deployments: 67,
-            successRate: 96.1,
-            trend: 1.8,
-            lastDeployment: '3시간 전',
-            recentBuilds: ['success', 'success', 'success', 'success', 'success']
-          },
-          {
-            id: 5,
-            name: 'microservice-auth',
-            environment: 'Production',
-            status: 'error',
-            deployments: 45,
-            successRate: 72.4,
-            trend: -8.7,
-            lastDeployment: '6시간 전',
-            recentBuilds: ['failed', 'failed', 'success', 'failed', 'failed']
-          },
-          {
-            id: 6,
-            name: 'analytics-service',
-            environment: 'Development',
-            status: 'healthy',
-            deployments: 32,
-            successRate: 91.8,
-            trend: 4.2,
-            lastDeployment: '1일 전',
-            recentBuilds: ['success', 'success', 'success', 'failed', 'success']
+        // 프로젝트 목록을 대시보드 형식으로 변환
+        const projectsData = data.data.projectStats.map((project, index) => {
+          // 상태 결정 로직
+          let status = 'healthy';
+          if (project.successRate < 70) {
+            status = 'error';
+          } else if (project.successRate < 85) {
+            status = 'warning';
           }
-        ]);
 
-        setIsLoading(false);
-      }, 1000);
+          // 최근 배포에서 해당 프로젝트의 빌드 상태 추출
+          const projectDeployments = data.data.recentDeployments
+            .filter(d => d.projectName === project.name)
+            .slice(0, 5);
+          
+          const recentBuilds = projectDeployments.map(d => d.status);
+          
+          // 환경 설정 (기본값: Production)
+          const environment = projectDeployments.length > 0 ? 
+            projectDeployments[0].environment || 'Production' : 'Production';
+
+          // 마지막 배포 시간 계산
+          let lastDeployment = '배포 없음';
+          if (projectDeployments.length > 0) {
+            const lastDeploy = new Date(projectDeployments[0].deployedAt);
+            const now = new Date();
+            const diffMinutes = Math.floor((now - lastDeploy) / (1000 * 60));
+            
+            if (diffMinutes < 60) {
+              lastDeployment = `${diffMinutes}분 전`;
+            } else if (diffMinutes < 1440) {
+              lastDeployment = `${Math.floor(diffMinutes / 60)}시간 전`;
+            } else {
+              lastDeployment = `${Math.floor(diffMinutes / 1440)}일 전`;
+            }
+          }
+
+          return {
+            id: index + 1,
+            name: project.name,
+            environment: environment,
+            status: status,
+            deployments: project.deployments,
+            successRate: project.successRate,
+            trend: 0, // 트렌드 데이터는 별도 계산 필요
+            lastDeployment: lastDeployment,
+            recentBuilds: recentBuilds.length > 0 ? recentBuilds : ['unknown']
+          };
+        });
+
+        setProjects(projectsData);
+      } else {
+        throw new Error(data.error?.message || '데이터 조회 실패');
+      }
+
+      setIsLoading(false);
     } catch (error) {
       console.error('Failed to fetch dashboard stats:', error);
       toast.error('대시보드 데이터를 불러오는데 실패했습니다.');

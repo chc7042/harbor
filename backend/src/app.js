@@ -14,6 +14,7 @@ const websocketRoutes = require('./routes/websocket');
 const healthRoutes = require('./routes/health');
 const nasRoutes = require('./routes/nas');
 const projectRoutes = require('./routes/projects');
+const fileRoutes = require('./routes/files');
 const { errorHandler } = require('./middleware/error');
 const { initializeDatabase } = require('./config/database');
 const logger = require('./config/logger');
@@ -68,8 +69,36 @@ app.use(cors({
 // 미들웨어
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-app.use(express.json({ limit: '10mb' }));
+
+// JSON 파서를 커스텀 에러 핸들러와 함께 사용
+app.use(express.json({ 
+  limit: '10mb',
+  verify: (req, res, buf, encoding) => {
+    try {
+      JSON.parse(buf);
+    } catch (err) {
+      logger.warn(`클라이언트 에러: ${err.message}`);
+      throw err;
+    }
+  }
+}));
+
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// JSON 파싱 에러 핸들러
+app.use((error, req, res, next) => {
+  if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
+    logger.warn(`JSON 파싱 에러: ${error.message}`);
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_JSON',
+        message: '잘못된 JSON 형식입니다. 특수문자가 포함된 경우 적절히 이스케이프해주세요.'
+      }
+    });
+  }
+  next(error);
+});
 
 // Swagger API 문서화 설정
 setupSwagger(app);
@@ -125,6 +154,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/ws', websocketRoutes);
 app.use('/api/nas', nasRoutes);
+app.use('/api/files', fileRoutes);
 
 // 404 핸들러
 app.use('*', (req, res) => {

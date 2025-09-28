@@ -149,83 +149,80 @@ const ProjectStatusCard = ({ projects, isLoading = false }) => {
             {filteredProjects.map((project, index) => (
               <div
                 key={project.id || index}
-                className="group flex items-center justify-between p-4 border border-primary-200 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-all duration-200"
+                className="group p-4 border border-primary-200 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-all duration-200"
               >
-                <div className="flex items-center space-x-4">
-                  {/* 상태 아이콘 */}
-                  <div className={clsx(
-                    'flex items-center justify-center w-8 h-8 rounded-lg border',
-                    getStatusColor(project.status)
-                  )}>
-                    {getStatusIcon(project.status)}
+                {/* 첫 번째 줄: 프로젝트 이름과 상태 */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-3 min-w-0 flex-1">
+                    {/* 상태 아이콘 */}
+                    <div className={clsx(
+                      'flex items-center justify-center w-6 h-6 rounded-lg border flex-shrink-0',
+                      getStatusColor(project.status)
+                    )}>
+                      {getStatusIcon(project.status)}
+                    </div>
+
+                    {/* 프로젝트 이름 */}
+                    <h4 className="font-medium text-primary-900 text-sm truncate" title={project.name}>
+                      {project.name}
+                    </h4>
                   </div>
 
-                  {/* 프로젝트 정보 */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2">
-                      <h4 className="font-medium text-primary-900 truncate">
-                        {project.name}
-                      </h4>
-                      {project.environment && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-700">
-                          {project.environment}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center space-x-4 mt-1 text-sm text-primary-600">
-                      <span>{project.deployments}개 배포</span>
-                      <span>•</span>
-                      <span>마지막 배포: {project.lastDeployment || '없음'}</span>
-                    </div>
+                  {/* 성공률 */}
+                  <div className="text-right flex-shrink-0">
+                    <span className={clsx(
+                      'text-lg font-bold',
+                      getSuccessRateColor(project.successRate)
+                    )}>
+                      {project.successRate.toFixed(1)}%
+                    </span>
+                    <p className="text-xs text-primary-500">성공률</p>
                   </div>
                 </div>
 
-                {/* 성공률 및 메트릭 */}
-                <div className="flex items-center space-x-6">
-                  {/* 성공률 */}
-                  <div className="text-right">
-                    <div className="flex items-center space-x-2">
-                      <span className={clsx(
-                        'text-lg font-bold',
-                        getSuccessRateColor(project.successRate)
-                      )}>
-                        {project.successRate.toFixed(1)}%
-                      </span>
-                      {project.trend !== undefined && (
-                        <span className={clsx(
-                          'text-xs font-medium',
-                          project.trend > 0 ? 'text-success-600' : 'text-error-600'
-                        )}>
-                          {project.trend > 0 ? '+' : ''}{project.trend.toFixed(1)}%
-                        </span>
-                      )}
+                {/* 두 번째 줄: 상세 정보 */}
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col space-y-1 text-xs text-primary-600">
+                    <div className="flex items-center space-x-3">
+                      <span>{project.deployments}개 배포</span>
+                      <span>•</span>
+                      <span>마지막: {project.lastDeployment || '없음'}</span>
                     </div>
-                    <p className="text-xs text-primary-500">성공률</p>
+                    {project.environment && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-700 w-fit">
+                        환경: {project.environment}
+                      </span>
+                    )}
                   </div>
 
                   {/* 최근 빌드 상태 */}
-                  {project.recentBuilds && (
-                    <div className="flex space-x-1">
-                      {project.recentBuilds.slice(0, 5).map((build, buildIndex) => (
-                        <div
-                          key={buildIndex}
-                          className={clsx(
-                            'w-2 h-2 rounded-full',
-                            build === 'success' ? 'bg-success-500' :
-                            build === 'failed' ? 'bg-error-500' : 'bg-primary-300'
-                          )}
-                          title={`빌드 ${buildIndex + 1}: ${build}`}
-                        />
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex items-center space-x-3">
+                    {project.recentBuilds && project.recentBuilds.length > 0 && (
+                      <div className="flex flex-col items-end space-y-1">
+                        <div className="flex space-x-1">
+                          {project.recentBuilds.slice(0, 5).map((build, buildIndex) => (
+                            <div
+                              key={buildIndex}
+                              className={clsx(
+                                'w-2 h-2 rounded-full',
+                                build === 'success' ? 'bg-success-500' :
+                                build === 'failed' ? 'bg-error-500' : 'bg-primary-300'
+                              )}
+                              title={`빌드 ${buildIndex + 1}: ${build}`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-xs text-primary-500">최근 빌드</span>
+                      </div>
+                    )}
 
-                  {/* 액션 버튼 */}
-                  <button className="opacity-0 group-hover:opacity-100 transition-opacity text-primary-600 hover:text-primary-900">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
+                    {/* 액션 버튼 */}
+                    <button className="opacity-0 group-hover:opacity-100 transition-opacity text-primary-600 hover:text-primary-900 p-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

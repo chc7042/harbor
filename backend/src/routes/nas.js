@@ -2,6 +2,7 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { query, param, validationResult } = require('express-validator');
 const { getNASScanner } = require('../services/nasScanner');
+const { getNASService } = require('../services/nasService');
 const { AppError } = require('../middleware/error');
 const logger = require('../config/logger');
 
@@ -597,5 +598,331 @@ router.get('/files',
     }
   }
 );
+
+/**
+ * @swagger
+ * /api/nas/connect:
+ *   post:
+ *     tags:
+ *       - NAS
+ *     summary: NAS 서버 연결 테스트
+ *     description: nas.roboetech.com 서버에 실제 연결을 테스트합니다
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 연결 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "NAS connection successful"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: object
+ *                       description: 연결 상태 정보
+ *       503:
+ *         description: 연결 실패
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/connect', async (req, res, next) => {
+  try {
+    const nasService = getNASService();
+    await nasService.connect();
+    const status = nasService.getConnectionStatus();
+
+    res.json({
+      success: true,
+      message: 'NAS connection successful',
+      data: { status }
+    });
+
+  } catch (error) {
+    logger.error('NAS connection test failed:', error.message);
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/nas/explore:
+ *   get:
+ *     tags:
+ *       - NAS
+ *     summary: release_version 디렉토리 구조 탐색
+ *     description: NAS의 release_version 디렉토리 하위 구조를 탐색하고 release 폴더를 찾습니다
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 탐색 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     basePath:
+ *                       type: string
+ *                       example: "release_version"
+ *                     projects:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           name:
+ *                             type: string
+ *                           path:
+ *                             type: string
+ *                           totalItems:
+ *                             type: integer
+ *                           releaseFolder:
+ *                             type: object
+ *                             nullable: true
+ *       404:
+ *         description: release_version 디렉토리를 찾을 수 없음
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       503:
+ *         description: NAS 연결 실패
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/explore', async (req, res, next) => {
+  try {
+    const nasService = getNASService();
+    const structure = await nasService.exploreReleaseStructure();
+
+    res.json({
+      success: true,
+      data: structure
+    });
+
+  } catch (error) {
+    logger.error('NAS structure exploration failed:', error.message);
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/nas/search:
+ *   get:
+ *     tags:
+ *       - NAS
+ *     summary: NAS 파일 검색
+ *     description: 지정된 경로에서 파일을 검색합니다
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: path
+ *         schema:
+ *           type: string
+ *           default: "release_version"
+ *         description: 검색할 디렉토리 경로
+ *       - in: query
+ *         name: pattern
+ *         schema:
+ *           type: string
+ *         description: 검색 패턴 (파일명에 포함될 문자열)
+ *     responses:
+ *       200:
+ *         description: 검색 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     searchPath:
+ *                       type: string
+ *                     pattern:
+ *                       type: string
+ *                     files:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           name:
+ *                             type: string
+ *                           path:
+ *                             type: string
+ *                           size:
+ *                             type: integer
+ *                           modified:
+ *                             type: string
+ *                             format: date-time
+ *                           buildNumber:
+ *                             type: string
+ *                             nullable: true
+ */
+router.get('/search',
+  [
+    query('path').optional().isString(),
+    query('pattern').optional().isString()
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError('Invalid query parameters', 400, errors.array());
+      }
+
+      const { path: searchPath = 'release_version', pattern } = req.query;
+      
+      const nasService = getNASService();
+      const files = await nasService.searchFiles(searchPath, pattern);
+
+      res.json({
+        success: true,
+        data: {
+          searchPath,
+          pattern: pattern || null,
+          files
+        }
+      });
+
+    } catch (error) {
+      logger.error('NAS file search failed:', error.message);
+      next(error);
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /api/nas/directory:
+ *   get:
+ *     tags:
+ *       - NAS
+ *     summary: 디렉토리 목록 조회
+ *     description: 지정된 NAS 디렉토리의 내용을 조회합니다
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: path
+ *         schema:
+ *           type: string
+ *           default: ""
+ *         description: 조회할 디렉토리 경로 (빈 문자열은 루트)
+ *     responses:
+ *       200:
+ *         description: 조회 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     path:
+ *                       type: string
+ *                     items:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ */
+router.get('/directory',
+  [
+    query('path').optional().isString()
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError('Invalid query parameters', 400, errors.array());
+      }
+
+      const { path: dirPath = '' } = req.query;
+      
+      const nasService = getNASService();
+      const items = await nasService.listDirectory(dirPath);
+
+      res.json({
+        success: true,
+        data: {
+          path: dirPath,
+          items
+        }
+      });
+
+    } catch (error) {
+      logger.error('NAS directory listing failed:', error.message);
+      next(error);
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /api/nas/disconnect:
+ *   post:
+ *     tags:
+ *       - NAS
+ *     summary: NAS 연결 해제
+ *     description: 현재 NAS 연결을 해제합니다
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 연결 해제 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "NAS disconnected successfully"
+ */
+router.post('/disconnect', async (req, res, next) => {
+  try {
+    const nasService = getNASService();
+    await nasService.disconnect();
+
+    res.json({
+      success: true,
+      message: 'NAS disconnected successfully'
+    });
+
+  } catch (error) {
+    logger.error('NAS disconnection failed:', error.message);
+    next(error);
+  }
+});
 
 module.exports = router;
