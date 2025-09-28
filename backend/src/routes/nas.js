@@ -152,7 +152,7 @@ router.post('/scan', async (req, res, next) => {
  *                     scanInterval:
  *                       type: string
  *                       description: 스캔 주기 (cron 표현식)
- *                       example: "*/15 * * * *"
+ *                       example: "every 15 minutes"
  *                     stats:
  *                       type: object
  *                       description: 마지막 스캔 통계
@@ -174,7 +174,7 @@ router.post('/scan', async (req, res, next) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/status', (req, res) => {
+router.get('/status', (req, res, next) => {
   try {
     const scanner = getNASScanner();
     const status = scanner.getStatus();
@@ -278,7 +278,7 @@ router.post('/scheduler/start', async (req, res, next) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/scheduler/stop', (req, res) => {
+router.post('/scheduler/stop', (req, res, next) => {
   try {
     const scanner = getNASScanner();
     const stopped = scanner.stopScheduler();
@@ -325,7 +325,7 @@ router.post('/scheduler/stop', (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/watcher/start', (req, res) => {
+router.post('/watcher/start', (req, res, next) => {
   try {
     const scanner = getNASScanner();
     const started = scanner.startFileWatcher();
@@ -372,7 +372,7 @@ router.post('/watcher/start', (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/watcher/stop', (req, res) => {
+router.post('/watcher/stop', (req, res, next) => {
   try {
     const scanner = getNASScanner();
     scanner.stopFileWatcher();

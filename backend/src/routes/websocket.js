@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const websocketManager = require('../services/websocketManager');
-const { requireAuth } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 const logger = require('../config/logger');
 
 /**
@@ -41,7 +41,7 @@ const logger = require('../config/logger');
  *                       items:
  *                         type: object
  */
-router.get('/stats', requireAuth, (req, res) => {
+router.get('/stats', authenticateToken, (req, res) => {
   try {
     const connectedClients = websocketManager.getConnectedClients();
     const roomStats = websocketManager.getRoomStats();
@@ -120,7 +120,7 @@ router.get('/stats', requireAuth, (req, res) => {
  *       500:
  *         description: 서버 오류
  */
-router.post('/broadcast/deployment', requireAuth, (req, res) => {
+router.post('/broadcast/deployment', authenticateToken, (req, res) => {
   try {
     const { deploymentData } = req.body;
 
@@ -213,7 +213,7 @@ router.post('/broadcast/deployment', requireAuth, (req, res) => {
  *       500:
  *         description: 서버 오류
  */
-router.post('/broadcast/system', requireAuth, (req, res) => {
+router.post('/broadcast/system', authenticateToken, (req, res) => {
   try {
     const { notification } = req.body;
 
@@ -293,7 +293,7 @@ router.post('/broadcast/system', requireAuth, (req, res) => {
  *       200:
  *         description: 테스트 메시지 전송 성공
  */
-router.post('/test/deployment', requireAuth, (req, res) => {
+router.post('/test/deployment', authenticateToken, (req, res) => {
   try {
     const testDeployment = {
       id: Date.now(),
@@ -340,7 +340,7 @@ router.post('/test/deployment', requireAuth, (req, res) => {
  *       200:
  *         description: 테스트 알림 전송 성공
  */
-router.post('/test/notification', requireAuth, (req, res) => {
+router.post('/test/notification', authenticateToken, (req, res) => {
   try {
     const testNotification = {
       title: '테스트 알림',

@@ -12,13 +12,13 @@ const dashboardRoutes = require('./routes/dashboard');
 const webhookRoutes = require('./routes/webhooks');
 const websocketRoutes = require('./routes/websocket');
 const healthRoutes = require('./routes/health');
-// const nasRoutes = require('./routes/nas'); // 임시 비활성화
+const nasRoutes = require('./routes/nas');
 const { errorHandler } = require('./middleware/error');
 const { initializeDatabase } = require('./config/database');
 const logger = require('./config/logger');
 const { setupSwagger } = require('./config/swagger');
 const websocketManager = require('./services/websocketManager');
-// const { getNASScanner } = require('./services/nasScanner'); // 임시 비활성화
+const { getNASScanner } = require('./services/nasScanner');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -47,10 +47,10 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// 로그인 특별 제한
+// 로그인 특별 제한 (개발환경에서는 완화)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15분
-  max: 5, // 최대 5회 로그인 시도
+  max: process.env.NODE_ENV === 'development' ? 100 : 5, // 개발환경: 100회, 프로덕션: 5회
   message: '로그인 시도 횟수를 초과했습니다. 15분 후 다시 시도해주세요.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -122,7 +122,7 @@ app.use('/api/deployments', deploymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/ws', websocketRoutes);
-// app.use('/api/nas', nasRoutes); // 임시 비활성화
+app.use('/api/nas', nasRoutes);
 
 // 404 핸들러
 app.use('*', (req, res) => {
@@ -153,28 +153,29 @@ async function startServer() {
       }
     }
 
-    // NAS 스캐너 초기화 (개발환경에서는 비활성화)
-    if (process.env.NODE_ENV !== 'development') {
-      try {
-        const { getNASScanner } = require('./services/nasScanner');
-        const nasScanner = getNASScanner();
+    // NAS 스캐너 초기화
+    try {
+      const nasScanner = getNASScanner();
 
-        // 파일 감시 시작
-        if (process.env.NAS_WATCH_ENABLED !== 'false') {
-          nasScanner.startFileWatcher();
-          logger.info('NAS file watcher started');
-        }
+      // 개발환경에서는 mock 디렉토리 생성
+      if (process.env.NODE_ENV === 'development') {
+        await nasScanner.ensureMockDirectory();
+        logger.info('NAS mock directory created');
+      }
 
-        // 스케줄러 시작
-        if (process.env.NAS_SCHEDULER_ENABLED !== 'false') {
+      // 파일 감시 시작 (개발환경에서도 활성화)
+      if (process.env.NAS_WATCH_ENABLED !== 'false') {
+        nasScanner.startFileWatcher();
+        logger.info('NAS file watcher started');
+      }
+
+      // 스케줄러 시작 (개발환경에서는 비활성화)
+      if (process.env.NAS_SCHEDULER_ENABLED !== 'false' && process.env.NODE_ENV !== 'development') {
           nasScanner.startScheduler();
           logger.info('NAS scan scheduler started');
         }
-      } catch (error) {
-        logger.warn('NAS scanner initialization failed:', error.message);
-      }
-    } else {
-      logger.info('NAS scanner disabled in development mode');
+    } catch (error) {
+      logger.warn('NAS scanner initialization failed:', error.message);
     }
 
     // 서버 시작
