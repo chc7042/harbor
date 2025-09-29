@@ -58,16 +58,16 @@ describe('Dashboard Routes', () => {
             project_name: 'project-1',
             status: 'success',
             created_at: new Date().toISOString(),
-            deployed_by: 'testuser'
+            deployed_by: 'testuser',
           },
           {
             id: 2,
             project_name: 'project-2',
             status: 'failed',
             created_at: new Date(Date.now() - 3600000).toISOString(),
-            deployed_by: 'testuser2'
-          }
-        ]
+            deployed_by: 'testuser2',
+          },
+        ],
       });
 
       const response = await request(app)
@@ -87,8 +87,8 @@ describe('Dashboard Routes', () => {
         rows: [
           { id: 1, project_name: 'project-1', status: 'success' },
           { id: 2, project_name: 'project-2', status: 'failed' },
-          { id: 3, project_name: 'project-3', status: 'success' }
-        ]
+          { id: 3, project_name: 'project-3', status: 'success' },
+        ],
       });
 
       const response = await request(app)
@@ -110,16 +110,16 @@ describe('Dashboard Routes', () => {
             total_deployments: '25',
             successful_deployments: '23',
             failed_deployments: '2',
-            success_rate: '92.00'
+            success_rate: '92.00',
           },
           {
             project_name: 'project-beta',
             total_deployments: '15',
             successful_deployments: '14',
             failed_deployments: '1',
-            success_rate: '93.33'
-          }
-        ]
+            success_rate: '93.33',
+          },
+        ],
       });
 
       const response = await request(app)
@@ -154,15 +154,15 @@ describe('Dashboard Routes', () => {
             date: '2024-01-01',
             total_deployments: '5',
             successful_deployments: '4',
-            failed_deployments: '1'
+            failed_deployments: '1',
           },
           {
             date: '2024-01-02',
             total_deployments: '8',
             successful_deployments: '7',
-            failed_deployments: '1'
-          }
-        ]
+            failed_deployments: '1',
+          },
+        ],
       });
 
       const response = await request(app)

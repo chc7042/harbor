@@ -38,7 +38,7 @@ describe('Deployment Routes', () => {
             deployed_by: 'testuser',
             branch: 'main',
             created_at: new Date().toISOString(),
-            duration: 300
+            duration: 300,
           },
           {
             id: 2,
@@ -49,9 +49,9 @@ describe('Deployment Routes', () => {
             deployed_by: 'testuser2',
             branch: 'develop',
             created_at: new Date().toISOString(),
-            duration: 180
-          }
-        ]
+            duration: 180,
+          },
+        ],
       });
 
       const response = await request(app)
@@ -76,9 +76,9 @@ describe('Deployment Routes', () => {
             id: 1,
             project_name: 'test-project',
             status: 'success',
-            build_number: 123
-          }
-        ]
+            build_number: 123,
+          },
+        ],
       });
 
       const response = await request(app)
@@ -98,9 +98,9 @@ describe('Deployment Routes', () => {
             id: 1,
             project_name: 'specific-project',
             status: 'success',
-            build_number: 123
-          }
-        ]
+            build_number: 123,
+          },
+        ],
       });
 
       const response = await request(app)
@@ -120,9 +120,9 @@ describe('Deployment Routes', () => {
             id: 1,
             project_name: 'search-test-project',
             status: 'success',
-            build_number: 123
-          }
-        ]
+            build_number: 123,
+          },
+        ],
       });
 
       const response = await request(app)
@@ -141,14 +141,14 @@ describe('Deployment Routes', () => {
           {
             id: 2,
             project_name: 'project-b',
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
           },
           {
             id: 1,
             project_name: 'project-a',
-            created_at: new Date(Date.now() - 60000).toISOString()
-          }
-        ]
+            created_at: new Date(Date.now() - 60000).toISOString(),
+          },
+        ],
       });
 
       const response = await request(app)
@@ -184,8 +184,8 @@ describe('Deployment Routes', () => {
           branch: 'main',
           created_at: new Date().toISOString(),
           duration: 300,
-          description: 'Test deployment'
-        }]
+          description: 'Test deployment',
+        }],
       });
 
       const response = await request(app)
@@ -224,8 +224,8 @@ describe('Deployment Routes', () => {
           project_name: 'new-project',
           build_number: 125,
           status: 'pending',
-          created_at: new Date().toISOString()
-        }]
+          created_at: new Date().toISOString(),
+        }],
       });
 
       const newDeployment = {
@@ -233,7 +233,7 @@ describe('Deployment Routes', () => {
         build_number: 125,
         environment: 'production',
         branch: 'main',
-        description: 'New deployment test'
+        description: 'New deployment test',
       };
 
       const response = await request(app)
@@ -251,7 +251,7 @@ describe('Deployment Routes', () => {
         .post('/api/deployments')
         .send({
           // Missing project_name and build_number
-          environment: 'production'
+          environment: 'production',
         });
 
       expect(response.status).toBe(400);
@@ -264,7 +264,7 @@ describe('Deployment Routes', () => {
         .send({
           project_name: 'test-project',
           build_number: 'invalid-number', // Should be number
-          environment: 'production'
+          environment: 'production',
         });
 
       expect(response.status).toBe(400);
@@ -279,8 +279,8 @@ describe('Deployment Routes', () => {
         rows: [{
           id: 1,
           project_name: 'test-project',
-          status: 'in_progress'
-        }]
+          status: 'in_progress',
+        }],
       });
 
       // 업데이트 실행
@@ -289,15 +289,15 @@ describe('Deployment Routes', () => {
           id: 1,
           project_name: 'test-project',
           status: 'success',
-          duration: 300
-        }]
+          duration: 300,
+        }],
       });
 
       const response = await request(app)
         .put('/api/deployments/1')
         .send({
           status: 'success',
-          duration: 300
+          duration: 300,
         });
 
       expect(response.status).toBe(200);
@@ -323,8 +323,8 @@ describe('Deployment Routes', () => {
       global.mockQuery.mockResolvedValueOnce({
         rows: [{
           id: 1,
-          project_name: 'test-project'
-        }]
+          project_name: 'test-project',
+        }],
       });
 
       // 삭제 실행
@@ -356,9 +356,9 @@ describe('Deployment Routes', () => {
             id: 1,
             project_name: 'recent-project',
             created_at: new Date().toISOString(),
-            status: 'success'
-          }
-        ]
+            status: 'success',
+          },
+        ],
       });
 
       const response = await request(app)

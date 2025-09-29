@@ -22,7 +22,7 @@ describe('Authentication Routes', () => {
         bind: jest.fn(),
         search: jest.fn(),
         unbind: jest.fn(),
-        on: jest.fn()
+        on: jest.fn(),
       };
       ldap.createClient.mockReturnValue(mockClient);
     });
@@ -66,7 +66,7 @@ describe('Authentication Routes', () => {
         .post('/api/auth/login')
         .send({
           username: 'testuser',
-          password: 'wrongpassword'
+          password: 'wrongpassword',
         });
 
       expect(response.status).toBe(401);
@@ -92,13 +92,13 @@ describe('Authentication Routes', () => {
                 object: {
                   cn: 'Test User',
                   mail: 'test@example.com',
-                  uid: 'testuser'
-                }
+                  uid: 'testuser',
+                },
               });
             } else if (event === 'end') {
               handler();
             }
-          })
+          }),
         };
         callback(null, mockSearchResult);
       });
@@ -113,7 +113,7 @@ describe('Authentication Routes', () => {
         .post('/api/auth/login')
         .send({
           username: 'testuser',
-          password: 'correctpassword'
+          password: 'correctpassword',
         });
 
       expect(response.status).toBe(200);
@@ -135,7 +135,7 @@ describe('Authentication Routes', () => {
         .post('/api/auth/login')
         .send({
           username: 'testuser',
-          password: 'password'
+          password: 'password',
         });
 
       expect(response.status).toBe(500);
@@ -168,7 +168,7 @@ describe('Authentication Routes', () => {
       const refreshToken = jwt.sign(
         { id: 1, username: 'testuser', type: 'refresh' },
         process.env.JWT_REFRESH_SECRET,
-        { expiresIn: '7d' }
+        { expiresIn: '7d' },
       );
 
       // 데이터베이스 세션 조회 모킹
@@ -176,8 +176,8 @@ describe('Authentication Routes', () => {
         rows: [{
           id: 1,
           user_id: 1,
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24시간 후
-        }]
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24시간 후
+        }],
       });
 
       const response = await request(app)
@@ -254,8 +254,8 @@ describe('Authentication Routes', () => {
           id: 1,
           username: 'testuser',
           email: 'test@example.com',
-          name: 'Test User'
-        }]
+          name: 'Test User',
+        }],
       });
 
       const response = await request(app)
@@ -305,7 +305,7 @@ describe('Authentication Middleware', () => {
       const expiredToken = jwt.sign(
         { id: 1, username: 'testuser' },
         process.env.JWT_SECRET,
-        { expiresIn: '-1h' } // 1시간 전 만료
+        { expiresIn: '-1h' }, // 1시간 전 만료
       );
 
       const response = await request(app)

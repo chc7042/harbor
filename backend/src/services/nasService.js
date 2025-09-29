@@ -1,7 +1,7 @@
 const SMB2 = require('@marsaud/smb2');
 const path = require('path');
 const fs = require('fs').promises;
-const { execSync, exec } = require('child_process');
+const { exec } = require('child_process');
 const { promisify } = require('util');
 const logger = require('../config/logger');
 const { AppError } = require('../middleware/error');
@@ -133,7 +133,7 @@ class NASService {
     const command = `smbclient //${host}/${share} -U ${username}%${password} -c "ls" 2>/dev/null`;
 
     try {
-      const { stdout, stderr } = await execAsync(command);
+      const { stderr } = await execAsync(command);
       if (stderr && !stderr.includes('WARNING')) {
         throw new Error(`smbclient error: ${stderr}`);
       }
@@ -469,17 +469,6 @@ class NASService {
     }
   }
 
-  /**
-   * 디렉토리 존재 확인
-   */
-  async directoryExists(dirPath) {
-    try {
-      const info = await this.getFileInfo(dirPath);
-      return info.isDirectory;
-    } catch (error) {
-      return false;
-    }
-  }
 
   /**
    * 파일 검색
@@ -794,7 +783,7 @@ class NASService {
                 const datePath = path.posix.join(searchPath, dirName);
                 const dirInfo = await this.getFileInfo(datePath);
                 if (!dirInfo.isDirectory) continue;
-                
+
                 logger.info(`Found date directory: ${datePath}`);
 
                 // 날짜 디렉토리 안의 빌드 번호 디렉토리들을 검색
@@ -806,7 +795,7 @@ class NASService {
                       const buildPath = path.posix.join(datePath, buildDirName);
                       const buildDirInfo = await this.getFileInfo(buildPath);
                       if (!buildDirInfo.isDirectory) continue;
-                      
+
                       logger.info(`Found build directory: ${buildPath}`);
 
                   // 실제 아티팩트 파일들 검색
@@ -900,7 +889,7 @@ class NASService {
 
       // 최종 아티팩트는 V{version}_XXX.tar 형태로 생성됨
       const finalArtifactPattern = `V${version}_`;
-      
+
       // 검색 경로 - 최종 아티팩트는 상위 레벨에 생성될 가능성이 높음
       const searchPaths = [
         `release/product/${version}`,  // 메인 경로
@@ -925,7 +914,7 @@ class NASService {
                 const datePath = path.posix.join(searchPath, dirName);
                 const dirInfo = await this.getFileInfo(datePath);
                 if (!dirInfo.isDirectory) continue;
-                
+
                 logger.info(`Searching final artifacts in date directory: ${datePath}`);
 
                 // 날짜 디렉토리 안의 빌드 번호 디렉토리들을 검색
@@ -943,7 +932,7 @@ class NASService {
 
                       const finalFiles = artifactFiles.filter(file => {
                         // V{version}_XXX.tar 패턴 매칭
-                        return file.name.startsWith(finalArtifactPattern) && 
+                        return file.name.startsWith(finalArtifactPattern) &&
                                file.name.match(/\.tar$/i);
                       });
 
@@ -978,8 +967,8 @@ class NASService {
           // 직접 파일 검색도 시도
           const directFiles = await this.searchFiles(searchPath);
           const finalFiles = directFiles.filter(file =>
-            file.name.startsWith(finalArtifactPattern) && 
-            file.name.match(/\.tar$/i)
+            file.name.startsWith(finalArtifactPattern) &&
+            file.name.match(/\.tar$/i),
           );
 
           for (const file of finalFiles) {
@@ -1007,7 +996,7 @@ class NASService {
 
       // 중복 제거 및 최신순 정렬
       const uniqueArtifacts = finalArtifacts.filter((artifact, index, self) =>
-        index === self.findIndex(a => a.filename === artifact.filename)
+        index === self.findIndex(a => a.filename === artifact.filename),
       );
 
       uniqueArtifacts.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
@@ -1024,6 +1013,86 @@ class NASService {
   /**
    * 서비스 정리
    */
+  /**
+   * 디렉토리 존재 여부 확인
+   * @param {string} dirPath - 확인할 디렉토리 경로 (예: "release/product/mr3.0.0/250310/26")
+   * @returns {Promise<boolean>} - 디렉토리 존재 여부
+   */
+  async directoryExists(dirPath) {
+    try {
+      await this.ensureConnection();
+
+      const host = process.env.NAS_HOST || 'nas.roboetech.com';
+      const share = process.env.NAS_SHARE || 'release_version';
+      const username = process.env.NAS_USERNAME || 'nasadmin';
+      const password = process.env.NAS_PASSWORD || 'Cmtes123';
+
+      // smbclient를 사용하여 디렉토리 존재 확인
+      const command = `smbclient //${host}/${share} -U ${username}%${password} -c "cd \\"${dirPath}\\"; ls" 2>/dev/null`;
+
+      logger.debug(`Checking directory existence: ${dirPath}`);
+      logger.debug(`Command: ${command.replace(password, '***')}`);
+
+      const { stdout, stderr } = await execAsync(command);
+
+      // cd 명령이 성공하면 디렉토리가 존재
+      if (stderr && stderr.includes('NT_STATUS_OBJECT_NAME_NOT_FOUND')) {
+        logger.info(`Directory does not exist: ${dirPath}`);
+        return false;
+      }
+
+      if (stdout && stdout.trim().length > 0) {
+        logger.info(`Directory exists: ${dirPath}`);
+        return true;
+      }
+
+      return false;
+
+    } catch (error) {
+      logger.warn(`Error checking directory existence for ${dirPath}: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * 여러 가능한 디렉토리 경로 중 실제 존재하는 첫 번째 경로 찾기
+   * @param {string[]} possiblePaths - 가능한 경로들의 배열
+   * @returns {Promise<string|null>} - 존재하는 첫 번째 경로 또는 null
+   */
+  async findExistingDirectory(possiblePaths) {
+    for (const dirPath of possiblePaths) {
+      const exists = await this.directoryExists(dirPath);
+      if (exists) {
+        logger.info(`Found existing directory: ${dirPath}`);
+        return dirPath;
+      }
+    }
+
+    logger.warn(`No existing directories found among: ${possiblePaths.join(', ')}`);
+    return null;
+  }
+
+  /**
+   * 특정 디렉토리의 파일 목록 확인
+   * @param {string} dirPath - 디렉토리 경로
+   * @returns {Promise<string[]>} - 파일명 목록
+   */
+  async getDirectoryFiles(dirPath) {
+    try {
+      await this.ensureConnection();
+
+      if (this.useSmbclient) {
+        return this.listDirectoryWithSmbclient(dirPath);
+      }
+
+      return this.listDirectory(dirPath);
+
+    } catch (error) {
+      logger.warn(`Error getting files for directory ${dirPath}: ${error.message}`);
+      return [];
+    }
+  }
+
   async cleanup() {
     await this.disconnect();
     logger.info('NAS service cleanup completed');

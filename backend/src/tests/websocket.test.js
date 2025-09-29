@@ -19,7 +19,7 @@ describe('WebSocket Manager', () => {
     testToken = jwt.sign(
       { id: 1, username: 'testuser' },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '1h' },
     );
 
     return new Promise((resolve) => {
@@ -40,7 +40,7 @@ describe('WebSocket Manager', () => {
 
   describe('WebSocket Connection', () => {
     it('should accept connection with valid JWT token', (done) => {
-      const port = server.address().port;
+      const {port} = server.address();
       const ws = new WebSocket(`ws://localhost:${port}?token=${testToken}`);
 
       ws.on('open', () => {
@@ -55,7 +55,7 @@ describe('WebSocket Manager', () => {
     });
 
     it('should reject connection without token', (done) => {
-      const port = server.address().port;
+      const {port} = server.address();
       const ws = new WebSocket(`ws://localhost:${port}`);
 
       ws.on('error', (error) => {
@@ -69,7 +69,7 @@ describe('WebSocket Manager', () => {
     });
 
     it('should reject connection with invalid token', (done) => {
-      const port = server.address().port;
+      const {port} = server.address();
       const invalidToken = 'invalid.jwt.token';
       const ws = new WebSocket(`ws://localhost:${port}?token=${invalidToken}`);
 
@@ -88,7 +88,7 @@ describe('WebSocket Manager', () => {
     let ws;
 
     beforeEach((done) => {
-      const port = server.address().port;
+      const {port} = server.address();
       ws = new WebSocket(`ws://localhost:${port}?token=${testToken}`);
       ws.on('open', () => done());
     });
@@ -102,7 +102,7 @@ describe('WebSocket Manager', () => {
     it('should handle room subscription', (done) => {
       const subscribeMessage = {
         type: 'subscribe',
-        room: 'deployments'
+        room: 'deployments',
       };
 
       ws.on('message', (data) => {
@@ -119,12 +119,12 @@ describe('WebSocket Manager', () => {
     it('should handle room unsubscription', (done) => {
       const subscribeMessage = {
         type: 'subscribe',
-        room: 'deployments'
+        room: 'deployments',
       };
 
       const unsubscribeMessage = {
         type: 'unsubscribe',
-        room: 'deployments'
+        room: 'deployments',
       };
 
       let subscribed = false;
@@ -147,7 +147,7 @@ describe('WebSocket Manager', () => {
     it('should handle invalid room names', (done) => {
       const invalidMessage = {
         type: 'subscribe',
-        room: 'invalid-room'
+        room: 'invalid-room',
       };
 
       ws.on('message', (data) => {
@@ -164,7 +164,7 @@ describe('WebSocket Manager', () => {
 
   describe('Message Broadcasting', () => {
     it('should broadcast to specific room subscribers', (done) => {
-      const port = server.address().port;
+      const {port} = server.address();
 
       const ws1 = new WebSocket(`ws://localhost:${port}?token=${testToken}`);
       const ws2 = new WebSocket(`ws://localhost:${port}?token=${testToken}`);
@@ -188,7 +188,7 @@ describe('WebSocket Manager', () => {
           const testData = {
             id: 1,
             project_name: 'test-project',
-            status: 'success'
+            status: 'success',
           };
 
           websocketManager.broadcast('deployments', { type: 'deployment_updated', data: testData });
@@ -221,7 +221,7 @@ describe('WebSocket Manager', () => {
 
   describe('Heartbeat System', () => {
     it('should respond to ping messages', (done) => {
-      const port = server.address().port;
+      const {port} = server.address();
       const ws = new WebSocket(`ws://localhost:${port}?token=${testToken}`);
 
       ws.on('open', () => {
@@ -239,7 +239,7 @@ describe('WebSocket Manager', () => {
     });
 
     it('should handle connection cleanup on close', (done) => {
-      const port = server.address().port;
+      const {port} = server.address();
       const ws = new WebSocket(`ws://localhost:${port}?token=${testToken}`);
 
       ws.on('open', () => {
@@ -261,7 +261,7 @@ describe('WebSocket Manager', () => {
 
   describe('Error Handling', () => {
     it('should handle malformed JSON messages', (done) => {
-      const port = server.address().port;
+      const {port} = server.address();
       const ws = new WebSocket(`ws://localhost:${port}?token=${testToken}`);
 
       ws.on('open', () => {
@@ -279,7 +279,7 @@ describe('WebSocket Manager', () => {
     });
 
     it('should handle unknown message types', (done) => {
-      const port = server.address().port;
+      const {port} = server.address();
       const ws = new WebSocket(`ws://localhost:${port}?token=${testToken}`);
 
       ws.on('open', () => {
@@ -299,7 +299,7 @@ describe('WebSocket Manager', () => {
 
   describe('Integration with Deployment Updates', () => {
     it('should broadcast deployment status changes', (done) => {
-      const port = server.address().port;
+      const {port} = server.address();
       const ws = new WebSocket(`ws://localhost:${port}?token=${testToken}`);
 
       ws.on('open', () => {
@@ -319,7 +319,7 @@ describe('WebSocket Manager', () => {
             id: 1,
             project_name: 'test-project',
             status: 'in_progress',
-            build_number: 123
+            build_number: 123,
           };
 
           websocketManager.broadcastDeploymentUpdate(deploymentUpdate);
@@ -333,7 +333,7 @@ describe('WebSocket Manager', () => {
     });
 
     it('should broadcast system notifications', (done) => {
-      const port = server.address().port;
+      const {port} = server.address();
       const ws = new WebSocket(`ws://localhost:${port}?token=${testToken}`);
 
       ws.on('open', () => {
@@ -352,7 +352,7 @@ describe('WebSocket Manager', () => {
           const notification = {
             type: 'warning',
             title: 'System Alert',
-            message: 'High memory usage detected'
+            message: 'High memory usage detected',
           };
 
           websocketManager.broadcastSystemNotification(notification);

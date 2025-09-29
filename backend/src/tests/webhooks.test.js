@@ -32,8 +32,8 @@ describe('Webhook Routes', () => {
         build: {
           number: 123,
           phase: 'COMPLETED',
-          status: 'SUCCESS'
-        }
+          status: 'SUCCESS',
+        },
       });
 
       const signature = createSignature(payload);
@@ -51,7 +51,7 @@ describe('Webhook Routes', () => {
     it('should reject webhook with invalid signature', async () => {
       const payload = JSON.stringify({
         name: 'test-project',
-        build: { number: 123, phase: 'COMPLETED', status: 'SUCCESS' }
+        build: { number: 123, phase: 'COMPLETED', status: 'SUCCESS' },
       });
 
       const invalidSignature = 'sha256=invalid-signature-hash';
@@ -70,7 +70,7 @@ describe('Webhook Routes', () => {
     it('should reject webhook without signature header', async () => {
       const payload = JSON.stringify({
         name: 'test-project',
-        build: { number: 123, phase: 'COMPLETED', status: 'SUCCESS' }
+        build: { number: 123, phase: 'COMPLETED', status: 'SUCCESS' },
       });
 
       const response = await request(app)
@@ -86,7 +86,7 @@ describe('Webhook Routes', () => {
     it('should reject webhook with malformed signature', async () => {
       const payload = JSON.stringify({
         name: 'test-project',
-        build: { number: 123, phase: 'COMPLETED', status: 'SUCCESS' }
+        build: { number: 123, phase: 'COMPLETED', status: 'SUCCESS' },
       });
 
       const malformedSignature = 'invalid-format';
@@ -123,8 +123,8 @@ describe('Webhook Routes', () => {
           id: 1,
           project_name: 'test-project',
           build_number: 123,
-          status: 'in_progress'
-        }]
+          status: 'in_progress',
+        }],
       });
 
       global.mockQuery.mockResolvedValueOnce({
@@ -133,8 +133,8 @@ describe('Webhook Routes', () => {
           project_name: 'test-project',
           build_number: 123,
           status: 'success',
-          duration: 300
-        }]
+          duration: 300,
+        }],
       });
 
       const payload = {
@@ -143,8 +143,8 @@ describe('Webhook Routes', () => {
           number: 123,
           phase: 'COMPLETED',
           status: 'SUCCESS',
-          duration: 300000
-        }
+          duration: 300000,
+        },
       };
 
       const response = await createValidRequest(payload);
@@ -160,8 +160,8 @@ describe('Webhook Routes', () => {
           id: 2,
           project_name: 'failed-project',
           build_number: 124,
-          status: 'in_progress'
-        }]
+          status: 'in_progress',
+        }],
       });
 
       global.mockQuery.mockResolvedValueOnce({
@@ -170,8 +170,8 @@ describe('Webhook Routes', () => {
           project_name: 'failed-project',
           build_number: 124,
           status: 'failed',
-          duration: 150
-        }]
+          duration: 150,
+        }],
       });
 
       const payload = {
@@ -180,8 +180,8 @@ describe('Webhook Routes', () => {
           number: 124,
           phase: 'COMPLETED',
           status: 'FAILURE',
-          duration: 150000
-        }
+          duration: 150000,
+        },
       };
 
       const response = await createValidRequest(payload);
@@ -197,8 +197,8 @@ describe('Webhook Routes', () => {
           id: 3,
           project_name: 'starting-project',
           build_number: 125,
-          status: 'pending'
-        }]
+          status: 'pending',
+        }],
       });
 
       global.mockQuery.mockResolvedValueOnce({
@@ -206,8 +206,8 @@ describe('Webhook Routes', () => {
           id: 3,
           project_name: 'starting-project',
           build_number: 125,
-          status: 'in_progress'
-        }]
+          status: 'in_progress',
+        }],
       });
 
       const payload = {
@@ -215,8 +215,8 @@ describe('Webhook Routes', () => {
         build: {
           number: 125,
           phase: 'STARTED',
-          status: null
-        }
+          status: null,
+        },
       };
 
       const response = await createValidRequest(payload);
@@ -233,8 +233,8 @@ describe('Webhook Routes', () => {
           id: 4,
           project_name: 'new-project',
           build_number: 126,
-          status: 'in_progress'
-        }]
+          status: 'in_progress',
+        }],
       });
 
       const payload = {
@@ -242,8 +242,8 @@ describe('Webhook Routes', () => {
         build: {
           number: 126,
           phase: 'STARTED',
-          status: null
-        }
+          status: null,
+        },
       };
 
       const response = await createValidRequest(payload);
@@ -258,8 +258,8 @@ describe('Webhook Routes', () => {
         build: {
           number: 127,
           phase: 'COMPLETED',
-          status: 'SUCCESS'
-        }
+          status: 'SUCCESS',
+        },
       };
 
       const response = await createValidRequest(payload);
@@ -277,8 +277,8 @@ describe('Webhook Routes', () => {
         build: {
           number: 128,
           phase: 'COMPLETED',
-          status: 'SUCCESS'
-        }
+          status: 'SUCCESS',
+        },
       };
 
       const response = await createValidRequest(payload);
@@ -305,20 +305,20 @@ describe('Webhook Routes', () => {
 
     it('should map Jenkins SUCCESS to success status', async () => {
       global.mockQuery.mockResolvedValueOnce({
-        rows: [{ id: 1, project_name: 'test', build_number: 123, status: 'in_progress' }]
+        rows: [{ id: 1, project_name: 'test', build_number: 123, status: 'in_progress' }],
       });
 
       let updateQuery;
       global.mockQuery.mockImplementationOnce((sql, params) => {
         updateQuery = { sql, params };
         return Promise.resolve({
-          rows: [{ id: 1, status: 'success' }]
+          rows: [{ id: 1, status: 'success' }],
         });
       });
 
       const payload = {
         name: 'test',
-        build: { number: 123, phase: 'COMPLETED', status: 'SUCCESS' }
+        build: { number: 123, phase: 'COMPLETED', status: 'SUCCESS' },
       };
 
       await createValidRequest(payload);
@@ -328,20 +328,20 @@ describe('Webhook Routes', () => {
 
     it('should map Jenkins FAILURE to failed status', async () => {
       global.mockQuery.mockResolvedValueOnce({
-        rows: [{ id: 1, project_name: 'test', build_number: 123, status: 'in_progress' }]
+        rows: [{ id: 1, project_name: 'test', build_number: 123, status: 'in_progress' }],
       });
 
       let updateQuery;
       global.mockQuery.mockImplementationOnce((sql, params) => {
         updateQuery = { sql, params };
         return Promise.resolve({
-          rows: [{ id: 1, status: 'failed' }]
+          rows: [{ id: 1, status: 'failed' }],
         });
       });
 
       const payload = {
         name: 'test',
-        build: { number: 123, phase: 'COMPLETED', status: 'FAILURE' }
+        build: { number: 123, phase: 'COMPLETED', status: 'FAILURE' },
       };
 
       await createValidRequest(payload);
@@ -351,20 +351,20 @@ describe('Webhook Routes', () => {
 
     it('should map Jenkins UNSTABLE to warning status', async () => {
       global.mockQuery.mockResolvedValueOnce({
-        rows: [{ id: 1, project_name: 'test', build_number: 123, status: 'in_progress' }]
+        rows: [{ id: 1, project_name: 'test', build_number: 123, status: 'in_progress' }],
       });
 
       let updateQuery;
       global.mockQuery.mockImplementationOnce((sql, params) => {
         updateQuery = { sql, params };
         return Promise.resolve({
-          rows: [{ id: 1, status: 'warning' }]
+          rows: [{ id: 1, status: 'warning' }],
         });
       });
 
       const payload = {
         name: 'test',
-        build: { number: 123, phase: 'COMPLETED', status: 'UNSTABLE' }
+        build: { number: 123, phase: 'COMPLETED', status: 'UNSTABLE' },
       };
 
       await createValidRequest(payload);
@@ -374,20 +374,20 @@ describe('Webhook Routes', () => {
 
     it('should map Jenkins ABORTED to cancelled status', async () => {
       global.mockQuery.mockResolvedValueOnce({
-        rows: [{ id: 1, project_name: 'test', build_number: 123, status: 'in_progress' }]
+        rows: [{ id: 1, project_name: 'test', build_number: 123, status: 'in_progress' }],
       });
 
       let updateQuery;
       global.mockQuery.mockImplementationOnce((sql, params) => {
         updateQuery = { sql, params };
         return Promise.resolve({
-          rows: [{ id: 1, status: 'cancelled' }]
+          rows: [{ id: 1, status: 'cancelled' }],
         });
       });
 
       const payload = {
         name: 'test',
-        build: { number: 123, phase: 'COMPLETED', status: 'ABORTED' }
+        build: { number: 123, phase: 'COMPLETED', status: 'ABORTED' },
       };
 
       await createValidRequest(payload);
@@ -399,7 +399,7 @@ describe('Webhook Routes', () => {
   describe('Webhook Integration with WebSocket', () => {
     it('should broadcast deployment updates via WebSocket', async () => {
       global.mockQuery.mockResolvedValueOnce({
-        rows: [{ id: 1, project_name: 'ws-test', build_number: 123, status: 'in_progress' }]
+        rows: [{ id: 1, project_name: 'ws-test', build_number: 123, status: 'in_progress' }],
       });
 
       global.mockQuery.mockResolvedValueOnce({
@@ -408,13 +408,13 @@ describe('Webhook Routes', () => {
           project_name: 'ws-test',
           build_number: 123,
           status: 'success',
-          created_at: new Date().toISOString()
-        }]
+          created_at: new Date().toISOString(),
+        }],
       });
 
       const payload = {
         name: 'ws-test',
-        build: { number: 123, phase: 'COMPLETED', status: 'SUCCESS' }
+        build: { number: 123, phase: 'COMPLETED', status: 'SUCCESS' },
       };
 
       const payloadString = JSON.stringify(payload);

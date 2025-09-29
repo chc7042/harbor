@@ -6,11 +6,13 @@ const logger = require('../config/logger');
 // GET /api/projects - 프로젝트 목록 조회
 router.get('/', async (req, res) => {
   try {
-    logger.info('프로젝트 목록 조회 요청');
+    const showAll = req.query.all === 'true';
 
-    // Jenkins에서 프로젝트 작업 목록 가져오기
+    logger.info(showAll ? '전체 프로젝트 목록 조회 요청' : '프로젝트 목록 조회 요청 (projects 폴더만)');
+
+    // Jenkins에서 작업 목록 가져오기
     const jenkinsService = getJenkinsService();
-    const jobs = await jenkinsService.getJobs();
+    const jobs = showAll ? await jenkinsService.getAllJobs() : await jenkinsService.getJobs();
 
     // 프로젝트별로 그룹화하여 정리
     const projectMap = new Map();
@@ -68,7 +70,7 @@ router.get('/', async (req, res) => {
     res.json({
       success: true,
       data: projects,
-      message: '프로젝트 목록을 성공적으로 조회했습니다.',
+      message: showAll ? '전체 프로젝트 목록을 성공적으로 조회했습니다.' : '프로젝트 목록을 성공적으로 조회했습니다.',
     });
 
   } catch (error) {
