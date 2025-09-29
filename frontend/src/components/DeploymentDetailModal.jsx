@@ -28,11 +28,28 @@ const DeploymentDetailModal = ({
   const [artifacts, setArtifacts] = useState([]);
   const [loadingArtifacts, setLoadingArtifacts] = useState(false);
 
-  // 실제 NAS에서 아티팩트 가져오기
+  // 배포 데이터에서 아티팩트 정보 사용 (백엔드에서 이미 조회됨)
   const fetchArtifacts = async () => {
     if (!deployment) return;
     
     setLoadingArtifacts(true);
+    
+    // 배포 데이터에 아티팩트 정보가 있으면 사용
+    if (deployment.artifacts && deployment.artifacts.length > 0) {
+      const deploymentArtifacts = deployment.artifacts.map(artifact => ({
+        name: artifact.name,
+        size: formatFileSize(artifact.size),
+        type: artifact.name.endsWith('.tar.gz') ? 'Release Package' : 
+              artifact.name.endsWith('.zip') ? 'Archive' : 'File',
+        url: artifact.downloadUrl,
+        modified: artifact.lastModified
+      }));
+      setArtifacts(deploymentArtifacts);
+      setLoadingArtifacts(false);
+      return;
+    }
+    
+    // 아티팩트 정보가 없으면 기존 로직으로 fallback
     try {
       const projectParts = deployment.project_name.split('/');
       const versionFolder = projectParts[0] || '1.2.0';
@@ -52,7 +69,7 @@ const DeploymentDetailModal = ({
               name: file.name,
               size: formatFileSize(file.size),
               type: file.name.endsWith('.tar.gz') ? 'Release Package' : 'Archive',
-              url: `/nas/release_version/${versionFolder}/${file.name}`,
+              url: `/api/files/download?path=${encodeURIComponent('/nas/release_version/' + versionFolder + '/' + file.name)}`,
               modified: file.modified
             }));
           setArtifacts(artifactFiles);
@@ -60,23 +77,8 @@ const DeploymentDetailModal = ({
       }
     } catch (error) {
       console.error('Failed to fetch artifacts:', error);
-      // 에러 시 fallback으로 mock 아티팩트 사용
-      setArtifacts([
-        {
-          name: `${versionFolder}_release.tar.gz`,
-          size: '45.2 MB',
-          type: 'Release Package',
-          url: `/nas/release_version/${versionFolder}/${versionFolder}_release.tar.gz`,
-          modified: '2025-01-27T14:33:40Z'
-        },
-        {
-          name: `${versionFolder}_config.zip`,
-          size: '2.1 MB',
-          type: 'Configuration Archive',
-          url: `/nas/release_version/${versionFolder}/${versionFolder}_config.zip`,
-          modified: '2025-01-27T14:33:35Z'
-        }
-      ]);
+      // 에러 시 빈 배열로 설정
+      setArtifacts([]);
     } finally {
       setLoadingArtifacts(false);
     }
@@ -441,8 +443,15 @@ const DeploymentDetailModal = ({
                       className="btn-secondary text-sm"
                       onClick={async () => {
                         try {
-                          // 백엔드 API를 통해 NAS 파일 다운로드
-                          const response = await fetch(`/api/files/download?path=${encodeURIComponent(artifact.url)}`, {
+                          // artifact.url이 이미 완전한 다운로드 URL인 경우 직접 사용
+                          let downloadUrl = artifact.url;
+                          
+                          // 상대 경로인 경우 API 경로로 변환
+                          if (!downloadUrl.startsWith('/api/files/download')) {
+                            downloadUrl = `/api/files/download?path=${encodeURIComponent(artifact.url)}`;
+                          }
+                          
+                          const response = await fetch(downloadUrl, {
                             headers: {
                               'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
                             }
@@ -459,7 +468,7 @@ const DeploymentDetailModal = ({
                             window.URL.revokeObjectURL(url);
                             document.body.removeChild(a);
                           } else {
-                            throw new Error('Download failed');
+                            throw new Error(`Download failed: ${response.status}`);
                           }
                         } catch (error) {
                           console.error('Download error:', error);

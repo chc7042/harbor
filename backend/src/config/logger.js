@@ -76,7 +76,7 @@ if (process.env.NODE_ENV === 'development') {
       format: fileLogFormat,
       maxsize: 5242880, // 5MB
       maxFiles: 3,
-    })
+    }),
   );
 }
 

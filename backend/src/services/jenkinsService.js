@@ -14,8 +14,8 @@ class JenkinsService {
       headers: {
         'Authorization': `Basic ${this.auth}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
+        'Accept': 'application/json',
+      },
     });
 
     this.client.interceptors.response.use(
@@ -24,10 +24,10 @@ class JenkinsService {
         logger.error('Jenkins API Error:', {
           url: error.config?.url,
           status: error.response?.status,
-          message: error.message
+          message: error.message,
         });
         throw error;
-      }
+      },
     );
   }
 
@@ -49,7 +49,7 @@ class JenkinsService {
           const folderUrl = `/job/projects/job/${encodeURIComponent(folder.name)}/api/json?tree=jobs[name,url,buildable,lastBuild[number,url,result,timestamp,duration,displayName]]`;
           const folderResponse = await this.client.get(folderUrl);
           const folderJobs = folderResponse.data.jobs || [];
-          
+
           // mr 또는 fs로 시작하고 버전 형식과 _release 접미사를 가진 작업들만 필터링 (예: mr1.0.0_release, fs1.1.0_release)
           const filteredJobs = folderJobs.filter(job => {
             const jobName = job.name.toLowerCase();
@@ -57,13 +57,13 @@ class JenkinsService {
             const releasePattern = /^(mr|fs)\d+\.\d+\.\d+_release$/;
             return releasePattern.test(jobName);
           });
-          
+
           // 프로젝트 폴더 이름을 각 작업에 추가
           filteredJobs.forEach(job => {
             job.projectFolder = folder.name;
             job.fullJobName = `${folder.name}/${job.name}`;
           });
-          
+
           allJobs.push(...filteredJobs);
           logger.info(`Found ${filteredJobs.length} release jobs (mr/fs x.x.x_release format) out of ${folderJobs.length} total jobs in ${folder.name} folder`);
         } catch (folderError) {
@@ -123,7 +123,7 @@ class JenkinsService {
         displayName: build.displayName,
         url: build.url,
         parameters: this.extractParameters(build.actions),
-        changes: this.extractChanges(build.changeSet)
+        changes: this.extractChanges(build.changeSet),
       }));
     } catch (error) {
       logger.error(`Failed to fetch builds for job ${jobName}:`, error.message);
@@ -160,7 +160,7 @@ class JenkinsService {
         artifacts: build.artifacts || [],
         building: build.building || false,
         result: build.result,
-        queueId: build.queueId
+        queueId: build.queueId,
       };
     } catch (error) {
       logger.error(`Failed to fetch build details for ${jobName}#${buildNumber}:`, error.message);
@@ -177,7 +177,7 @@ class JenkinsService {
         timestamp: new Date().toISOString(),
         level: this.detectLogLevel(line),
         message: line,
-        lineNumber: index + 1
+        lineNumber: index + 1,
       }));
 
       return logs;
@@ -214,20 +214,20 @@ class JenkinsService {
         // tar 명령어 패턴
         /tar.*?-[czf]+.*?([a-zA-Z0-9_\-\.]+\.tar\.gz)/gi,
         // 파일명만 있는 패턴 (mr1.2.0_release_1.2.0.tar.gz 형식)
-        /([a-zA-Z0-9_\-\.]+_release_[0-9\.]+\.(tar\.gz|zip|7z))/gi
+        /([a-zA-Z0-9_\-\.]+_release_[0-9\.]+\.(tar\.gz|zip|7z))/gi,
       ];
 
       // 각 라인에서 아티팩트 파일명 추출
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        
+
         for (const pattern of artifactPatterns) {
           let match;
           pattern.lastIndex = 0; // 정규식 상태 초기화
-          
+
           while ((match = pattern.exec(line)) !== null) {
             const filename = match[1];
-            
+
             // 중복 제거 및 유효성 검사
             if (filename && !artifacts.find(a => a.filename === filename)) {
               const artifact = {
@@ -236,7 +236,7 @@ class JenkinsService {
                 jobName: jobName,
                 foundInLine: i + 1,
                 context: line.trim(),
-                extractedAt: new Date().toISOString()
+                extractedAt: new Date().toISOString(),
               };
 
               // 파일 크기 추출 시도 (같은 라인이나 주변 라인에서)
@@ -266,7 +266,7 @@ class JenkinsService {
             ...expected,
             foundInLine: null,
             context: 'Generated from job pattern',
-            extractedAt: new Date().toISOString()
+            extractedAt: new Date().toISOString(),
           });
         }
       }
@@ -285,19 +285,19 @@ class JenkinsService {
    */
   generateExpectedArtifacts(jobName, buildNumber) {
     const artifacts = [];
-    
+
     // jobName에서 버전 정보 추출
     const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
     if (versionMatch) {
       const version = versionMatch[1];
       const jobType = jobName.toLowerCase().includes('mr') ? 'mr' : 'fs';
-      
+
       // 일반적인 아티팩트 파일명 패턴들
       const patterns = [
         `${jobType}${version}_release_${version}.tar.gz`,
         `${jobName}_${buildNumber}.tar.gz`,
         `${jobName}.tar.gz`,
-        `release_${version}.tar.gz`
+        `release_${version}.tar.gz`,
       ];
 
       for (const filename of patterns) {
@@ -305,7 +305,7 @@ class JenkinsService {
           filename: filename,
           buildNumber: buildNumber,
           jobName: jobName,
-          type: 'expected'
+          type: 'expected',
         });
       }
     }
@@ -332,7 +332,7 @@ class JenkinsService {
         jobName,
         queueId,
         parameters,
-        message: '빌드가 시작되었습니다.'
+        message: '빌드가 시작되었습니다.',
       };
     } catch (error) {
       logger.error(`Failed to trigger build for job ${jobName}:`, error.message);
@@ -350,7 +350,7 @@ class JenkinsService {
       return {
         jobName,
         buildNumber,
-        message: '빌드가 중지되었습니다.'
+        message: '빌드가 중지되었습니다.',
       };
     } catch (error) {
       logger.error(`Failed to stop build ${jobName}#${buildNumber}:`, error.message);
@@ -360,7 +360,7 @@ class JenkinsService {
 
   async getQueueInfo(queueId) {
     try {
-      const response = await this.client.get(`/queue/api/json?tree=items[id,task[name],stuck,blocked,buildable,params,why,inQueueSince]`);
+      const response = await this.client.get('/queue/api/json?tree=items[id,task[name],stuck,blocked,buildable,params,why,inQueueSince]');
       const queueItem = response.data.items.find(item => item.id === parseInt(queueId));
 
       if (queueItem) {
@@ -371,7 +371,7 @@ class JenkinsService {
           blocked: queueItem.blocked,
           buildable: queueItem.buildable,
           reason: queueItem.why,
-          inQueueSince: new Date(queueItem.inQueueSince)
+          inQueueSince: new Date(queueItem.inQueueSince),
         };
       }
 
@@ -405,7 +405,7 @@ class JenkinsService {
               displayName: `${job.fullJobName} (빌드 없음)`,
               url: job.url,
               parameters: {},
-              changes: []
+              changes: [],
             };
             allBuilds.push(projectEntry);
           } else {
@@ -426,7 +426,7 @@ class JenkinsService {
             displayName: `${job.fullJobName} (오류)`,
             url: job.url,
             parameters: {},
-            changes: []
+            changes: [],
           };
           allBuilds.push(errorEntry);
         }
@@ -473,7 +473,7 @@ class JenkinsService {
     return changeSet.items.map(item => ({
       commitId: item.commitId,
       message: item.msg,
-      author: item.author ? item.author.fullName : 'Unknown'
+      author: item.author ? item.author.fullName : 'Unknown',
     }));
   }
 
@@ -501,13 +501,13 @@ class JenkinsService {
         status: 'healthy',
         version: response.data.version || 'unknown',
         mode: response.data.mode || 'unknown',
-        nodeDescription: response.data.nodeDescription || 'unknown'
+        nodeDescription: response.data.nodeDescription || 'unknown',
       };
     } catch (error) {
       logger.error('Jenkins health check failed:', error.message);
       return {
         status: 'unhealthy',
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -524,5 +524,5 @@ function getJenkinsService() {
 
 module.exports = {
   JenkinsService,
-  getJenkinsService
+  getJenkinsService,
 };

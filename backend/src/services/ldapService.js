@@ -32,16 +32,16 @@ class LDAPService {
       // 개발 환경에서 모의 인증 사용
       if (process.env.NODE_ENV === 'development' && process.env.ENABLE_MOCK_AUTH === 'true') {
         console.log(`Using mock authentication for development - user: ${username}`);
-        
+
         // 모의 사용자 정보 생성
         const mockUserInfo = {
           dn: `uid=${username},ou=users,dc=dev,dc=com`,
           username: username,
           email: `${username}@dev.com`,
-          fullName: username.split('.').map(name => 
-            name.charAt(0).toUpperCase() + name.slice(1)
+          fullName: username.split('.').map(name =>
+            name.charAt(0).toUpperCase() + name.slice(1),
           ).join(' '),
-          department: 'Development'
+          department: 'Development',
         };
 
         // 모의 사용자 정보로 사용자 동기화

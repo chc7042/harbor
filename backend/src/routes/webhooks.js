@@ -29,7 +29,7 @@ const webhookLimiter = rateLimit({
 // Raw body 파싱을 위한 미들웨어
 const rawBodyParser = express.raw({
   type: ['application/json', 'application/x-www-form-urlencoded'],
-  limit: '1mb'
+  limit: '1mb',
 });
 
 /**
@@ -170,7 +170,7 @@ router.post('/jenkins',
       const webhookService = getJenkinsWebhookService();
       const result = await webhookService.processWebhook(payload, signature, {
         'x-jenkins-event': eventType,
-        'user-agent': userAgent
+        'user-agent': userAgent,
       });
 
       res.json({
@@ -178,8 +178,8 @@ router.post('/jenkins',
         message: 'Webhook processed successfully',
         data: {
           deployment: result.deployment,
-          eventType: result.eventType
-        }
+          eventType: result.eventType,
+        },
       });
 
     } catch (error) {
@@ -187,7 +187,7 @@ router.post('/jenkins',
         error: error.message,
         stack: error.stack,
         headers: req.headers,
-        ip: req.ip
+        ip: req.ip,
       });
 
       if (error instanceof AppError) {
@@ -196,8 +196,8 @@ router.post('/jenkins',
           error: {
             code: error.code || 'WEBHOOK_ERROR',
             message: error.message,
-            timestamp: new Date().toISOString()
-          }
+            timestamp: new Date().toISOString(),
+          },
         });
       }
 
@@ -206,11 +206,11 @@ router.post('/jenkins',
         error: {
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Internal server error occurred',
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
     }
-  }
+  },
 );
 
 /**
@@ -278,7 +278,7 @@ router.get('/jenkins/status', async (req, res, next) => {
 
     res.json({
       success: true,
-      data: status
+      data: status,
     });
 
   } catch (error) {
@@ -346,14 +346,14 @@ router.post('/jenkins/test', async (req, res, next) => {
       duration: 300,
       jenkins_url: req.body.jenkins_url || 'https://jenkins.example.com/job/test/1/',
       triggered_by: req.body.triggered_by || 'test-user',
-      environment: req.body.environment || 'development'
+      environment: req.body.environment || 'development',
     };
 
     const webhookService = getJenkinsWebhookService();
     const result = await webhookService.processWebhook(
       JSON.stringify(testData),
       null, // 테스트에서는 서명 없음
-      { 'x-jenkins-event': 'test.webhook' }
+      { 'x-jenkins-event': 'test.webhook' },
     );
 
     res.json({
@@ -361,8 +361,8 @@ router.post('/jenkins/test', async (req, res, next) => {
       message: 'Test webhook processed successfully',
       data: {
         deployment: result.deployment,
-        eventType: 'test.webhook'
-      }
+        eventType: 'test.webhook',
+      },
     });
 
   } catch (error) {
@@ -428,7 +428,7 @@ router.get('/jenkins/config', (req, res) => {
         'job.completed',
         'job.finalized',
         'build.started',
-        'build.completed'
+        'build.completed',
       ],
       setupInstructions: `
 1. Jenkins에서 'Generic Webhook Trigger' 플러그인 설치
@@ -439,8 +439,8 @@ router.get('/jenkins/config', (req, res) => {
 6. Content Type: application/json
 ${process.env.JENKINS_WEBHOOK_SECRET ? '7. Secret Token 설정: [환경변수에서 설정됨]' : '7. Secret Token: [선택사항]'}
 8. 필요한 변수들을 JSON으로 전송하도록 설정
-      `.trim()
-    }
+      `.trim(),
+    },
   });
 });
 

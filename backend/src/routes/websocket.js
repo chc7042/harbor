@@ -56,9 +56,9 @@ router.get('/stats', authenticateToken, (req, res) => {
           username: client.username,
           subscriptions: client.subscriptions,
           connectedAt: client.connectedAt,
-          status: client.status
-        }))
-      }
+          status: client.status,
+        })),
+      },
     });
   } catch (error) {
     logger.error('Failed to get WebSocket stats:', error);
@@ -66,8 +66,8 @@ router.get('/stats', authenticateToken, (req, res) => {
       success: false,
       error: {
         message: 'WebSocket 통계 조회 실패',
-        code: 'WEBSOCKET_STATS_ERROR'
-      }
+        code: 'WEBSOCKET_STATS_ERROR',
+      },
     });
   }
 });
@@ -129,8 +129,8 @@ router.post('/broadcast/deployment', authenticateToken, (req, res) => {
         success: false,
         error: {
           message: 'deploymentData is required',
-          code: 'MISSING_DEPLOYMENT_DATA'
-        }
+          code: 'MISSING_DEPLOYMENT_DATA',
+        },
       });
     }
 
@@ -143,8 +143,8 @@ router.post('/broadcast/deployment', authenticateToken, (req, res) => {
         success: false,
         error: {
           message: `Missing required fields: ${missingFields.join(', ')}`,
-          code: 'MISSING_REQUIRED_FIELDS'
-        }
+          code: 'MISSING_REQUIRED_FIELDS',
+        },
       });
     }
 
@@ -157,8 +157,8 @@ router.post('/broadcast/deployment', authenticateToken, (req, res) => {
       success: true,
       data: {
         message: 'Deployment update broadcasted successfully',
-        deployment: deploymentData
-      }
+        deployment: deploymentData,
+      },
     });
   } catch (error) {
     logger.error('Failed to broadcast deployment update:', error);
@@ -166,8 +166,8 @@ router.post('/broadcast/deployment', authenticateToken, (req, res) => {
       success: false,
       error: {
         message: '배포 업데이트 브로드캐스트 실패',
-        code: 'BROADCAST_ERROR'
-      }
+        code: 'BROADCAST_ERROR',
+      },
     });
   }
 });
@@ -222,8 +222,8 @@ router.post('/broadcast/system', authenticateToken, (req, res) => {
         success: false,
         error: {
           message: 'notification is required',
-          code: 'MISSING_NOTIFICATION'
-        }
+          code: 'MISSING_NOTIFICATION',
+        },
       });
     }
 
@@ -232,8 +232,8 @@ router.post('/broadcast/system', authenticateToken, (req, res) => {
         success: false,
         error: {
           message: 'notification.message is required',
-          code: 'MISSING_MESSAGE'
-        }
+          code: 'MISSING_MESSAGE',
+        },
       });
     }
 
@@ -244,7 +244,7 @@ router.post('/broadcast/system', authenticateToken, (req, res) => {
       type: notification.type || 'info',
       showBrowserNotification: notification.showBrowserNotification ?? true,
       timestamp: new Date().toISOString(),
-      sender: req.user.username
+      sender: req.user.username,
     };
 
     // 대상 룸이 지정된 경우 해당 룸에만 브로드캐스트
@@ -252,7 +252,7 @@ router.post('/broadcast/system', authenticateToken, (req, res) => {
       notification.targetRooms.forEach(room => {
         websocketManager.broadcast(room, {
           type: 'system_notification',
-          data: systemNotification
+          data: systemNotification,
         });
       });
     } else {
@@ -266,8 +266,8 @@ router.post('/broadcast/system', authenticateToken, (req, res) => {
       success: true,
       data: {
         message: 'System notification broadcasted successfully',
-        notification: systemNotification
-      }
+        notification: systemNotification,
+      },
     });
   } catch (error) {
     logger.error('Failed to broadcast system notification:', error);
@@ -275,8 +275,8 @@ router.post('/broadcast/system', authenticateToken, (req, res) => {
       success: false,
       error: {
         message: '시스템 알림 브로드캐스트 실패',
-        code: 'BROADCAST_ERROR'
-      }
+        code: 'BROADCAST_ERROR',
+      },
     });
   }
 });
@@ -304,7 +304,7 @@ router.post('/test/deployment', authenticateToken, (req, res) => {
       deployed_by: req.user.username,
       branch: 'main',
       created_at: new Date().toISOString(),
-      duration: Math.floor(Math.random() * 300) + 30
+      duration: Math.floor(Math.random() * 300) + 30,
     };
 
     websocketManager.broadcastDeploymentUpdate(testDeployment);
@@ -313,8 +313,8 @@ router.post('/test/deployment', authenticateToken, (req, res) => {
       success: true,
       data: {
         message: 'Test deployment update sent',
-        deployment: testDeployment
-      }
+        deployment: testDeployment,
+      },
     });
   } catch (error) {
     logger.error('Failed to send test deployment update:', error);
@@ -322,8 +322,8 @@ router.post('/test/deployment', authenticateToken, (req, res) => {
       success: false,
       error: {
         message: '테스트 배포 업데이트 전송 실패',
-        code: 'TEST_ERROR'
-      }
+        code: 'TEST_ERROR',
+      },
     });
   }
 });
@@ -346,7 +346,7 @@ router.post('/test/notification', authenticateToken, (req, res) => {
       title: '테스트 알림',
       message: '이것은 테스트 시스템 알림입니다.',
       type: 'info',
-      showBrowserNotification: true
+      showBrowserNotification: true,
     };
 
     websocketManager.broadcastSystemNotification(testNotification);
@@ -355,8 +355,8 @@ router.post('/test/notification', authenticateToken, (req, res) => {
       success: true,
       data: {
         message: 'Test notification sent',
-        notification: testNotification
-      }
+        notification: testNotification,
+      },
     });
   } catch (error) {
     logger.error('Failed to send test notification:', error);
@@ -364,8 +364,8 @@ router.post('/test/notification', authenticateToken, (req, res) => {
       success: false,
       error: {
         message: '테스트 알림 전송 실패',
-        code: 'TEST_ERROR'
-      }
+        code: 'TEST_ERROR',
+      },
     });
   }
 });

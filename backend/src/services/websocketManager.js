@@ -18,7 +18,7 @@ class WebSocketManager {
       this.wss = new WebSocket.Server({
         server,
         path: '/ws',
-        verifyClient: this.verifyClient.bind(this)
+        verifyClient: this.verifyClient.bind(this),
       });
 
       this.wss.on('connection', this.handleConnection.bind(this));
@@ -59,7 +59,7 @@ class WebSocketManager {
    * 새 연결 처리
    */
   handleConnection(ws, req) {
-    const user = req.user;
+    const {user} = req;
     const clientId = this.generateClientId();
 
     // 클라이언트 정보 저장
@@ -69,7 +69,7 @@ class WebSocketManager {
       username: user.username,
       subscriptions: new Set(),
       lastPong: Date.now(),
-      connectedAt: new Date()
+      connectedAt: new Date(),
     });
 
     logger.info(`WebSocket client connected: ${user.username} (${clientId})`);
@@ -80,8 +80,8 @@ class WebSocketManager {
       data: {
         clientId,
         serverTime: new Date().toISOString(),
-        message: 'WebSocket connection established successfully'
-      }
+        message: 'WebSocket connection established successfully',
+      },
     });
 
     // 이벤트 리스너 등록
@@ -128,7 +128,7 @@ class WebSocketManager {
           this.sendToClient(ws, {
             type: 'error',
             message: 'Unknown message type',
-            code: 'UNKNOWN_MESSAGE_TYPE'
+            code: 'UNKNOWN_MESSAGE_TYPE',
           });
       }
     } catch (error) {
@@ -136,7 +136,7 @@ class WebSocketManager {
       this.sendToClient(ws, {
         type: 'error',
         message: 'Invalid message format',
-        code: 'INVALID_MESSAGE'
+        code: 'INVALID_MESSAGE',
       });
     }
   }
@@ -150,7 +150,7 @@ class WebSocketManager {
       this.sendToClient(ws, {
         type: 'error',
         message: 'Room name is required',
-        code: 'MISSING_ROOM'
+        code: 'MISSING_ROOM',
       });
       return;
     }
@@ -159,7 +159,7 @@ class WebSocketManager {
     this.sendToClient(ws, {
       type: 'subscribed',
       room,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -172,7 +172,7 @@ class WebSocketManager {
       this.sendToClient(ws, {
         type: 'error',
         message: 'Room name is required',
-        code: 'MISSING_ROOM'
+        code: 'MISSING_ROOM',
       });
       return;
     }
@@ -181,7 +181,7 @@ class WebSocketManager {
     this.sendToClient(ws, {
       type: 'unsubscribed',
       room,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -199,21 +199,21 @@ class WebSocketManager {
         status: 'in_progress',
         progress: 45,
         step: 'Building application',
-        logs: ['Starting build process...', 'Installing dependencies...', 'Building assets...']
+        logs: ['Starting build process...', 'Installing dependencies...', 'Building assets...'],
       };
 
       this.sendToClient(ws, {
         type: 'deployment_status',
         deploymentId,
         data: status,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     } catch (error) {
       logger.error('Error getting deployment status:', error);
       this.sendToClient(ws, {
         type: 'error',
         message: 'Failed to get deployment status',
-        code: 'DEPLOYMENT_STATUS_ERROR'
+        code: 'DEPLOYMENT_STATUS_ERROR',
       });
     }
   }
@@ -319,7 +319,7 @@ class WebSocketManager {
         this.sendToClient(ws, {
           ...message,
           room,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         });
         sentCount++;
       }
@@ -338,7 +338,7 @@ class WebSocketManager {
       if (ws !== excludeWs && ws.readyState === WebSocket.OPEN) {
         this.sendToClient(ws, {
           ...message,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         });
         sentCount++;
       }
@@ -354,7 +354,7 @@ class WebSocketManager {
   broadcastDeploymentUpdate(deploymentData) {
     const message = {
       type: 'deployment_update',
-      data: deploymentData
+      data: deploymentData,
     };
 
     // 전역 브로드캐스트
@@ -379,7 +379,7 @@ class WebSocketManager {
   broadcastSystemNotification(notification) {
     const message = {
       type: 'system_notification',
-      data: notification
+      data: notification,
     };
 
     this.broadcast('global', message);
@@ -424,7 +424,7 @@ class WebSocketManager {
         username: client.username,
         subscriptions: Array.from(client.subscriptions),
         connectedAt: client.connectedAt,
-        status: ws.readyState === WebSocket.OPEN ? 'connected' : 'disconnected'
+        status: ws.readyState === WebSocket.OPEN ? 'connected' : 'disconnected',
       });
     });
     return clients;

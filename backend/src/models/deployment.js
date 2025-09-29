@@ -19,7 +19,7 @@ class DeploymentModel {
       nasPath,
       notes,
       estimatedDuration,
-      tags
+      tags,
     } = deploymentData;
 
     const query = `
@@ -48,7 +48,7 @@ class DeploymentModel {
       nasPath,
       notes,
       estimatedDuration,
-      JSON.stringify(tags || [])
+      JSON.stringify(tags || []),
     ];
 
     try {
@@ -94,7 +94,7 @@ class DeploymentModel {
       startDate,
       endDate,
       sortBy = 'created_at',
-      sortOrder = 'DESC'
+      sortOrder = 'DESC',
     } = options;
 
     const offset = (page - 1) * limit;
@@ -165,12 +165,12 @@ class DeploymentModel {
     try {
       const [dataResult, countResult] = await Promise.all([
         executeQuery(dataQuery, values),
-        executeQuery(countQuery, countValues)
+        executeQuery(countQuery, countValues),
       ]);
 
       const deployments = dataResult.rows.map(deployment => ({
         ...deployment,
-        tags: JSON.parse(deployment.tags || '[]')
+        tags: JSON.parse(deployment.tags || '[]'),
       }));
 
       const total = parseInt(countResult.rows[0].total);
@@ -184,8 +184,8 @@ class DeploymentModel {
           totalItems: total,
           itemsPerPage: limit,
           hasNext: page < totalPages,
-          hasPrevious: page > 1
-        }
+          hasPrevious: page > 1,
+        },
       };
     } catch (error) {
       logger.error('배포 목록 조회 실패:', error);
@@ -197,7 +197,7 @@ class DeploymentModel {
   static async update(id, updateData) {
     const allowedFields = [
       'status', 'started_at', 'completed_at', 'duration_seconds',
-      'error_message', 'nas_path', 'notes', 'tags'
+      'error_message', 'nas_path', 'notes', 'tags',
     ];
 
     const updates = [];
@@ -222,7 +222,7 @@ class DeploymentModel {
       throw new Error('업데이트할 필드가 없습니다.');
     }
 
-    updates.push(`updated_at = NOW()`);
+    updates.push('updated_at = NOW()');
 
     const query = `
       UPDATE deployments
@@ -280,7 +280,7 @@ class DeploymentModel {
       const result = await executeQuery(query, [projectName, limit]);
       return result.rows.map(deployment => ({
         ...deployment,
-        tags: JSON.parse(deployment.tags || '[]')
+        tags: JSON.parse(deployment.tags || '[]'),
       }));
     } catch (error) {
       logger.error('프로젝트별 최근 배포 조회 실패:', error);
@@ -346,7 +346,7 @@ class DeploymentModel {
         inProgressDeployments: parseInt(stats.in_progress_deployments),
         successRate: parseFloat(successRate.toFixed(2)),
         averageDuration: parseFloat(stats.average_duration),
-        uniqueProjects: parseInt(stats.unique_projects)
+        uniqueProjects: parseInt(stats.unique_projects),
       };
     } catch (error) {
       logger.error('배포 통계 조회 실패:', error);
@@ -380,7 +380,7 @@ class DeploymentModel {
           ? parseFloat(((parseInt(row.successful_deployments) / parseInt(row.total_deployments)) * 100).toFixed(2))
           : 0,
         averageDuration: parseFloat(row.average_duration),
-        lastDeployment: row.last_deployment
+        lastDeployment: row.last_deployment,
       }));
     } catch (error) {
       logger.error('프로젝트별 통계 조회 실패:', error);
@@ -412,7 +412,7 @@ class DeploymentModel {
         successRate: parseInt(row.total_deployments) > 0
           ? parseFloat(((parseInt(row.successful_deployments) / parseInt(row.total_deployments)) * 100).toFixed(2))
           : 0,
-        averageDuration: parseFloat(row.average_duration)
+        averageDuration: parseFloat(row.average_duration),
       }));
     } catch (error) {
       logger.error('환경별 통계 조회 실패:', error);

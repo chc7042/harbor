@@ -104,7 +104,7 @@ router.post('/scan', async (req, res, next) => {
     res.json({
       success: true,
       message: 'NAS scan completed successfully',
-      data: result
+      data: result,
     });
 
   } catch (error) {
@@ -182,7 +182,7 @@ router.get('/status', (req, res, next) => {
 
     res.json({
       success: true,
-      data: status
+      data: status,
     });
 
   } catch (error) {
@@ -236,7 +236,7 @@ router.post('/scheduler/start', async (req, res, next) => {
     if (started) {
       res.json({
         success: true,
-        message: 'NAS scan scheduler started'
+        message: 'NAS scan scheduler started',
       });
     } else {
       throw new AppError('Failed to start scheduler', 500);
@@ -286,7 +286,7 @@ router.post('/scheduler/stop', (req, res, next) => {
 
     res.json({
       success: true,
-      message: stopped ? 'NAS scan scheduler stopped' : 'Scheduler was not running'
+      message: stopped ? 'NAS scan scheduler stopped' : 'Scheduler was not running',
     });
 
   } catch (error) {
@@ -333,7 +333,7 @@ router.post('/watcher/start', (req, res, next) => {
 
     res.json({
       success: true,
-      message: started ? 'File watcher started' : 'File watching is disabled or already running'
+      message: started ? 'File watcher started' : 'File watching is disabled or already running',
     });
 
   } catch (error) {
@@ -380,7 +380,7 @@ router.post('/watcher/stop', (req, res, next) => {
 
     res.json({
       success: true,
-      message: 'File watcher stopped'
+      message: 'File watcher stopped',
     });
 
   } catch (error) {
@@ -484,7 +484,7 @@ router.get('/files',
     query('page').optional().isInt({ min: 1 }),
     query('limit').optional().isInt({ min: 1, max: 100 }),
     query('project').optional().isString(),
-    query('extension').optional().isString()
+    query('extension').optional().isString(),
   ],
   async (req, res, next) => {
     try {
@@ -508,7 +508,7 @@ router.get('/files',
             file_hash: 'sha256:abc123def456',
             build_number: 1,
             file_extension: '.tar.gz',
-            scanned_at: new Date()
+            scanned_at: new Date(),
           },
           {
             id: 2,
@@ -519,8 +519,8 @@ router.get('/files',
             file_hash: 'sha256:def456ghi789',
             build_number: 2,
             file_extension: '.tar.gz',
-            scanned_at: new Date()
-          }
+            scanned_at: new Date(),
+          },
         ];
 
         const filteredFiles = mockFiles.filter(file => {
@@ -537,9 +537,9 @@ router.get('/files',
               page: parseInt(page),
               limit: parseInt(limit),
               total: filteredFiles.length,
-              totalPages: Math.ceil(filteredFiles.length / limit)
-            }
-          }
+              totalPages: Math.ceil(filteredFiles.length / limit),
+            },
+          },
         });
       }
 
@@ -587,16 +587,16 @@ router.get('/files',
             page: parseInt(page),
             limit: parseInt(limit),
             total,
-            totalPages: Math.ceil(total / limit)
-          }
-        }
+            totalPages: Math.ceil(total / limit),
+          },
+        },
       });
 
     } catch (error) {
       logger.error('Failed to get NAS files:', error.message);
       next(error);
     }
-  }
+  },
 );
 
 /**
@@ -645,7 +645,7 @@ router.post('/connect', async (req, res, next) => {
     res.json({
       success: true,
       message: 'NAS connection successful',
-      data: { status }
+      data: { status },
     });
 
   } catch (error) {
@@ -715,7 +715,7 @@ router.get('/explore', async (req, res, next) => {
 
     res.json({
       success: true,
-      data: structure
+      data: structure,
     });
 
   } catch (error) {
@@ -785,7 +785,7 @@ router.get('/explore', async (req, res, next) => {
 router.get('/search',
   [
     query('path').optional().isString(),
-    query('pattern').optional().isString()
+    query('pattern').optional().isString(),
   ],
   async (req, res, next) => {
     try {
@@ -795,7 +795,7 @@ router.get('/search',
       }
 
       const { path: searchPath = 'release_version', pattern } = req.query;
-      
+
       const nasService = getNASService();
       const files = await nasService.searchFiles(searchPath, pattern);
 
@@ -804,15 +804,15 @@ router.get('/search',
         data: {
           searchPath,
           pattern: pattern || null,
-          files
-        }
+          files,
+        },
       });
 
     } catch (error) {
       logger.error('NAS file search failed:', error.message);
       next(error);
     }
-  }
+  },
 );
 
 /**
@@ -855,7 +855,7 @@ router.get('/search',
  */
 router.get('/directory',
   [
-    query('path').optional().isString()
+    query('path').optional().isString(),
   ],
   async (req, res, next) => {
     try {
@@ -865,7 +865,7 @@ router.get('/directory',
       }
 
       const { path: dirPath = '' } = req.query;
-      
+
       const nasService = getNASService();
       const items = await nasService.listDirectory(dirPath);
 
@@ -873,15 +873,15 @@ router.get('/directory',
         success: true,
         data: {
           path: dirPath,
-          items
-        }
+          items,
+        },
       });
 
     } catch (error) {
       logger.error('NAS directory listing failed:', error.message);
       next(error);
     }
-  }
+  },
 );
 
 /**
@@ -972,7 +972,7 @@ router.get('/directory',
 router.get('/artifacts/build-log',
   [
     query('jobName').notEmpty().isString().withMessage('Job name is required'),
-    query('buildNumber').notEmpty().isInt({ min: 1 }).withMessage('Build number must be a positive integer')
+    query('buildNumber').notEmpty().isInt({ min: 1 }).withMessage('Build number must be a positive integer'),
   ],
   async (req, res, next) => {
     try {
@@ -983,12 +983,12 @@ router.get('/artifacts/build-log',
 
       const { jobName, buildNumber } = req.query;
       const nasService = getNASService();
-      
+
       logger.info(`Searching artifacts from build log for ${jobName}#${buildNumber}`);
       const artifacts = await nasService.searchArtifactsFromBuildLog(jobName, parseInt(buildNumber));
-      
+
       const verifiedCount = artifacts.filter(a => a.verified).length;
-      
+
       res.json({
         success: true,
         data: {
@@ -996,15 +996,15 @@ router.get('/artifacts/build-log',
           buildNumber: parseInt(buildNumber),
           extractedCount: artifacts.length,
           verifiedCount,
-          artifacts
-        }
+          artifacts,
+        },
       });
 
     } catch (error) {
       logger.error('Build log artifact search failed:', error.message);
       next(error);
     }
-  }
+  },
 );
 
 /**
@@ -1080,7 +1080,7 @@ router.get('/artifacts/build-log',
 router.get('/artifacts/version',
   [
     query('version').notEmpty().isString().withMessage('Version is required'),
-    query('pattern').optional().isString()
+    query('pattern').optional().isString(),
   ],
   async (req, res, next) => {
     try {
@@ -1091,25 +1091,25 @@ router.get('/artifacts/version',
 
       const { version, pattern } = req.query;
       const nasService = getNASService();
-      
+
       logger.info(`Searching artifacts by version ${version} with pattern: ${pattern || 'none'}`);
       const artifacts = await nasService.searchArtifactsByVersion(version, pattern);
-      
+
       res.json({
         success: true,
         data: {
           version,
           pattern: pattern || null,
           totalCount: artifacts.length,
-          artifacts
-        }
+          artifacts,
+        },
       });
 
     } catch (error) {
       logger.error('Version-based artifact search failed:', error.message);
       next(error);
     }
-  }
+  },
 );
 
 /**
@@ -1144,7 +1144,7 @@ router.post('/disconnect', async (req, res, next) => {
 
     res.json({
       success: true,
-      message: 'NAS disconnected successfully'
+      message: 'NAS disconnected successfully',
     });
 
   } catch (error) {

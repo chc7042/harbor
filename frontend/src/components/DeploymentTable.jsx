@@ -11,7 +11,8 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  MoreHorizontal
+  MoreHorizontal,
+  Download
 } from 'lucide-react';
 
 const DeploymentTable = ({
@@ -293,8 +294,32 @@ const DeploymentTable = ({
                         <div className="font-medium text-primary-900">
                           {deployment.project_name}
                         </div>
+                        {/* Jenkins job 구조 표시 - subJobs가 있는 경우 */}
+                        {deployment.subJobs && deployment.subJobs.length > 0 && (
+                          <div className="text-sm text-gray-600 mt-1">
+                            <div className="flex items-center space-x-2">
+                              <span>빌드 순서:</span>
+                              {deployment.subJobs.map((subJob, index) => (
+                                <span key={index} className="flex items-center">
+                                  <span className={`px-2 py-1 rounded text-xs ${
+                                    subJob.status === 'success' 
+                                      ? 'bg-green-100 text-green-700' 
+                                      : subJob.status === 'failed'
+                                        ? 'bg-red-100 text-red-700'
+                                        : 'bg-yellow-100 text-yellow-700'
+                                  }`}>
+                                    {subJob.prefix}
+                                  </span>
+                                  {index < deployment.subJobs.length - 1 && (
+                                    <span className="mx-1 text-gray-400">→</span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         {deployment.description && (
-                          <div className="text-sm text-gray-500 truncate max-w-xs">
+                          <div className="text-sm text-gray-500 truncate max-w-xs mt-1">
                             {deployment.description}
                           </div>
                         )}
@@ -358,12 +383,47 @@ const DeploymentTable = ({
                   </td>
 
                   <td onClick={(e) => e.stopPropagation()}>
-                    <button
-                      className="p-1 text-gray-400 hover:text-primary-600 transition-colors rounded"
-                      title="상세 정보"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center space-x-1">
+                      {/* 다운로드 버튼 - 아티팩트가 있는 경우에만 표시 */}
+                      {deployment.artifacts && deployment.artifacts.length > 0 && (
+                        <div className="relative group">
+                          <button
+                            className="p-1 text-gray-400 hover:text-green-600 transition-colors rounded"
+                            title={`${deployment.artifacts.length}개 아티팩트 다운로드`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (deployment.artifacts.length === 1) {
+                                // 아티팩트가 하나인 경우 바로 다운로드
+                                window.open(deployment.artifacts[0].downloadUrl, '_blank');
+                              } else {
+                                // 여러 아티팩트가 있는 경우 모달 열기
+                                onRowClick?.(deployment);
+                              }
+                            }}
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                          {/* 아티팩트 수 표시 */}
+                          {deployment.artifacts.length > 1 && (
+                            <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                              {deployment.artifacts.length}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* 상세 정보 버튼 */}
+                      <button
+                        className="p-1 text-gray-400 hover:text-primary-600 transition-colors rounded"
+                        title="상세 정보"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRowClick?.(deployment);
+                        }}
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

@@ -28,7 +28,7 @@ class NASScanner {
       totalFiles: 0,
       processedFiles: 0,
       errors: 0,
-      duration: 0
+      duration: 0,
     };
 
     // 개발환경에서는 실제 NAS 경로 대신 mock 경로 사용
@@ -112,7 +112,7 @@ class NASScanner {
         file_extension: ext,
         created_at: stats.birthtime,
         modified_at: stats.mtime,
-        scanned_at: new Date()
+        scanned_at: new Date(),
       };
 
     } catch (error) {
@@ -252,7 +252,7 @@ class NASScanner {
       fileInfo.file_extension,
       fileInfo.created_at,
       fileInfo.modified_at,
-      fileInfo.scanned_at
+      fileInfo.scanned_at,
     ];
 
     const result = await query(insertQuery, values);
@@ -277,7 +277,7 @@ class NASScanner {
       fileInfo.file_hash,
       fileInfo.modified_at,
       fileInfo.scanned_at,
-      fileId
+      fileId,
     ]);
   }
 
@@ -306,7 +306,7 @@ class NASScanner {
         totalFiles: 0,
         processedFiles: 0,
         errors: 0,
-        duration: 0
+        duration: 0,
       };
 
       // 디렉토리 스캔
@@ -325,7 +325,7 @@ class NASScanner {
       return {
         success: true,
         stats: this.scanStats,
-        files: fileInfoList.slice(0, 10) // 처음 10개 파일만 반환
+        files: fileInfoList.slice(0, 10), // 처음 10개 파일만 반환
       };
 
     } catch (error) {
@@ -360,7 +360,7 @@ class NASScanner {
         logger.error('Scheduled scan failed:', error.message);
       }
     }, {
-      scheduled: false
+      scheduled: false,
     });
 
     this.schedulerTask.start();
@@ -396,7 +396,7 @@ class NASScanner {
         persistent: true,
         ignoreInitial: true,
         followSymlinks: false,
-        depth: 10
+        depth: 10,
       });
 
       watcher
@@ -498,8 +498,8 @@ class NASScanner {
       watchers: Array.from(this.watchers.keys()),
       config: {
         maxFileSize: this.maxFileSize,
-        allowedExtensions: this.allowedExtensions
-      }
+        allowedExtensions: this.allowedExtensions,
+      },
     };
   }
 
@@ -525,5 +525,5 @@ function getNASScanner() {
 
 module.exports = {
   NASScanner,
-  getNASScanner
+  getNASScanner,
 };

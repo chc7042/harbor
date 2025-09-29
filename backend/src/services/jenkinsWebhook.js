@@ -16,7 +16,7 @@ class JenkinsWebhookService {
       'job.deleted',
       'build.started',
       'build.completed',
-      'build.finalized'
+      'build.finalized',
     ];
   }
 
@@ -96,7 +96,7 @@ class JenkinsWebhookService {
       environment: this.extractEnvironment(job.name),
       log_url: `${build.url}console`,
       parameters: build.parameters || {},
-      raw_data: data
+      raw_data: data,
     };
   }
 
@@ -118,7 +118,7 @@ class JenkinsWebhookService {
       environment: this.extractEnvironment(data.project.name),
       log_url: `${data.url}console`,
       parameters: data.parameters || {},
-      raw_data: data
+      raw_data: data,
     };
   }
 
@@ -141,7 +141,7 @@ class JenkinsWebhookService {
       log_url: data.log_url,
       parameters: data.parameters || {},
       artifact_info: data.artifact_info || {},
-      raw_data: data
+      raw_data: data,
     };
   }
 
@@ -159,7 +159,7 @@ class JenkinsWebhookService {
       'BUILDING': 'in_progress',
       'PENDING': 'pending',
       'STARTED': 'in_progress',
-      'COMPLETED': 'success'
+      'COMPLETED': 'success',
     };
 
     return statusMap[status.toUpperCase()] || 'pending';
@@ -202,13 +202,13 @@ class JenkinsWebhookService {
         log_url,
         parameters,
         artifact_info,
-        raw_data
+        raw_data,
       } = deploymentData;
 
       // 중복 체크
       const existingDeployment = await this.findExistingDeployment(
         project_name,
-        build_number
+        build_number,
       );
 
       if (existingDeployment) {
@@ -244,7 +244,7 @@ class JenkinsWebhookService {
         log_url,
         JSON.stringify(parameters),
         JSON.stringify(artifact_info),
-        JSON.stringify(raw_data)
+        JSON.stringify(raw_data),
       ]);
 
       logger.info(`New deployment saved: ${project_name} #${build_number}`);
@@ -258,7 +258,7 @@ class JenkinsWebhookService {
           id: Math.floor(Math.random() * 1000),
           ...deploymentData,
           created_at: new Date(),
-          updated_at: new Date()
+          updated_at: new Date(),
         };
       }
       throw new AppError(`Failed to save deployment: ${error.message}`, 500);
@@ -299,7 +299,7 @@ class JenkinsWebhookService {
         completed_at,
         duration,
         artifact_info,
-        raw_data
+        raw_data,
       } = deploymentData;
 
       const updateQuery = `
@@ -320,7 +320,7 @@ class JenkinsWebhookService {
         duration,
         JSON.stringify(artifact_info),
         JSON.stringify(raw_data),
-        deploymentId
+        deploymentId,
       ]);
 
       logger.info(`Deployment updated: ID ${deploymentId}`);
@@ -359,7 +359,7 @@ class JenkinsWebhookService {
       return {
         success: true,
         deployment: savedDeployment,
-        eventType
+        eventType,
       };
 
     } catch (error) {
@@ -395,9 +395,9 @@ class JenkinsWebhookService {
           totalWebhooks: parseInt(stats.total_webhooks),
           successfulDeployments: parseInt(stats.successful_deployments),
           failedDeployments: parseInt(stats.failed_deployments),
-          recentWebhooks: parseInt(stats.recent_webhooks)
+          recentWebhooks: parseInt(stats.recent_webhooks),
         },
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
 
     } catch (error) {
@@ -410,9 +410,9 @@ class JenkinsWebhookService {
             totalWebhooks: 0,
             successfulDeployments: 0,
             failedDeployments: 0,
-            recentWebhooks: 0
+            recentWebhooks: 0,
           },
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         };
       }
       throw new AppError(`Failed to get webhook status: ${error.message}`, 500);
@@ -432,5 +432,5 @@ function getJenkinsWebhookService() {
 
 module.exports = {
   JenkinsWebhookService,
-  getJenkinsWebhookService
+  getJenkinsWebhookService,
 };

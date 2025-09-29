@@ -33,8 +33,8 @@ jest.mock('../config/database', () => ({
   pool: {
     connect: jest.fn(),
     query: mockQuery,
-    end: jest.fn()
-  }
+    end: jest.fn(),
+  },
 }));
 
 // 전역에서 접근 가능한 mock 함수 설정
@@ -46,8 +46,8 @@ jest.mock('ldapjs', () => ({
     bind: jest.fn(),
     search: jest.fn(),
     unbind: jest.fn(),
-    on: jest.fn()
-  }))
+    on: jest.fn(),
+  })),
 }));
 
 // 테스트 전/후 설정
@@ -86,7 +86,7 @@ global.testUtils = {
     username: 'testuser',
     email: 'test@example.com',
     name: 'Test User',
-    role: 'user'
+    role: 'user',
   },
 
   // 테스트용 배포 데이터
@@ -99,7 +99,7 @@ global.testUtils = {
     deployed_by: 'testuser',
     branch: 'main',
     created_at: new Date().toISOString(),
-    duration: 300
+    duration: 300,
   },
 
   // API 응답 검증 헬퍼
@@ -122,5 +122,5 @@ global.testUtils = {
     if (expectedMessage) {
       expect(response.body.error).toHaveProperty('message', expectedMessage);
     }
-  }
+  },
 };

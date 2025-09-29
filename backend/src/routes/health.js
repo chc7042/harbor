@@ -16,8 +16,8 @@ router.get('/', async (req, res) => {
     checks: {
       database: 'unknown',
       memory: 'unknown',
-      disk: 'unknown'
-    }
+      disk: 'unknown',
+    },
   };
 
   try {
@@ -40,7 +40,7 @@ router.get('/', async (req, res) => {
       status: memUsagePercent < 90 ? 'healthy' : 'warning',
       used: `${memUsedMB.toFixed(2)} MB`,
       total: `${memTotalMB.toFixed(2)} MB`,
-      percentage: `${memUsagePercent.toFixed(2)}%`
+      percentage: `${memUsagePercent.toFixed(2)}%`,
     };
 
     if (memUsagePercent >= 95) {
@@ -55,7 +55,7 @@ router.get('/', async (req, res) => {
 
     res.status(statusCode).json({
       success: true,
-      data: healthCheck
+      data: healthCheck,
     });
 
   } catch (error) {
@@ -68,9 +68,9 @@ router.get('/', async (req, res) => {
       success: false,
       error: {
         code: 'HEALTH_CHECK_FAILED',
-        message: 'Application health check failed'
+        message: 'Application health check failed',
       },
-      data: healthCheck
+      data: healthCheck,
     });
   }
 });
@@ -87,7 +87,7 @@ router.get('/ready', async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Application is ready',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error('Readiness check failed:', error);
@@ -96,9 +96,9 @@ router.get('/ready', async (req, res) => {
       success: false,
       error: {
         code: 'NOT_READY',
-        message: 'Application is not ready to serve traffic'
+        message: 'Application is not ready to serve traffic',
       },
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 });
@@ -112,7 +112,7 @@ router.get('/live', (req, res) => {
     success: true,
     message: 'Application is alive',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
   });
 });
 
@@ -130,12 +130,12 @@ router.get('/metrics', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
     pid: process.pid,
     platform: process.platform,
-    nodeVersion: process.version
+    nodeVersion: process.version,
   };
 
   res.status(200).json({
     success: true,
-    data: metrics
+    data: metrics,
   });
 });
 

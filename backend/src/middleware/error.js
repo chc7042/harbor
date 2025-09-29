@@ -95,8 +95,8 @@ const errorHandler = (error, req, res, next) => {
       code: error.name || 'INTERNAL_SERVER_ERROR',
       message,
       details: process.env.NODE_ENV === 'production' ? null : details,
-      timestamp: new Date().toISOString()
-    }
+      timestamp: new Date().toISOString(),
+    },
   });
 };
 
@@ -107,8 +107,8 @@ const notFoundHandler = (req, res) => {
     error: {
       code: 'NOT_FOUND',
       message: '요청한 리소스를 찾을 수 없습니다.',
-      timestamp: new Date().toISOString()
-    }
+      timestamp: new Date().toISOString(),
+    },
   });
 };
 
@@ -117,7 +117,7 @@ process.on('unhandledRejection', (reason, promise) => {
   logger.error('처리되지 않은 Promise 거부:', {
     reason: reason.message || reason,
     stack: reason.stack,
-    promise
+    promise,
   });
 
   // Graceful shutdown
@@ -128,7 +128,7 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('uncaughtException', (error) => {
   logger.error('처리되지 않은 예외:', {
     message: error.message,
-    stack: error.stack
+    stack: error.stack,
   });
 
   // Graceful shutdown
@@ -138,5 +138,5 @@ process.on('uncaughtException', (error) => {
 module.exports = {
   AppError,
   errorHandler,
-  notFoundHandler
+  notFoundHandler,
 };
