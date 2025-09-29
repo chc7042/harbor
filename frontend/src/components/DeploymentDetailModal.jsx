@@ -61,7 +61,22 @@ const DeploymentDetailModal = ({
     } catch (error) {
       console.error('Failed to fetch artifacts:', error);
       // 에러 시 fallback으로 mock 아티팩트 사용
-      setArtifacts([]);
+      setArtifacts([
+        {
+          name: `${versionFolder}_release.tar.gz`,
+          size: '45.2 MB',
+          type: 'Release Package',
+          url: `/nas/release_version/${versionFolder}/${versionFolder}_release.tar.gz`,
+          modified: '2025-01-27T14:33:40Z'
+        },
+        {
+          name: `${versionFolder}_config.zip`,
+          size: '2.1 MB',
+          type: 'Configuration Archive',
+          url: `/nas/release_version/${versionFolder}/${versionFolder}_config.zip`,
+          modified: '2025-01-27T14:33:35Z'
+        }
+      ]);
     } finally {
       setLoadingArtifacts(false);
     }

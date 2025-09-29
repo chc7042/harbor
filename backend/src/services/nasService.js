@@ -11,7 +11,8 @@ class NASService {
   constructor() {
     this.smbClient = null;
     this.isConnected = false;
-    this.isDevelopment = process.env.NODE_ENV === 'development';
+    // FORCE 실제 NAS 서버 사용 (mock 데이터 비활성화)
+    this.isDevelopment = false;
     this.connectionConfig = {
       share: `\\\\${process.env.NAS_HOST || 'nas.roboetech.com'}\\${process.env.NAS_SHARE || 'shared'}`,
       domain: process.env.NAS_DOMAIN || '',
@@ -522,6 +523,143 @@ class NASService {
       },
       lastConnected: this.lastConnected
     };
+  }
+
+  /**
+   * 젠킨스 빌드 로그 기반 아티팩트 검색
+   */
+  async searchArtifactsFromBuildLog(jobName, buildNumber) {
+    try {
+      // 젠킨스 서비스에서 빌드 로그로부터 아티팩트 정보 추출
+      const { getJenkinsService } = require('./jenkinsService');
+      const jenkinsService = getJenkinsService();
+      
+      logger.info(`Searching artifacts for ${jobName}#${buildNumber} from build log`);
+      const extractedArtifacts = await jenkinsService.extractArtifactsFromBuildLog(jobName, buildNumber);
+      
+      if (extractedArtifacts.length === 0) {
+        logger.warn(`No artifacts found in build log for ${jobName}#${buildNumber}`);
+        return [];
+      }
+
+      // 실제 NAS 서버에서 파일 존재 여부 확인
+      const verifiedArtifacts = [];
+      
+      // jobName에서 버전 추출하여 NAS 경로 결정
+      const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
+      if (!versionMatch) {
+        throw new Error(`Cannot extract version from job name: ${jobName}`);
+      }
+      
+      const version = versionMatch[1];
+      const searchPaths = [
+        version, // 1.2.0
+        `release_version/${version}`, // release_version/1.2.0
+        `projects/${version}`, // projects/1.2.0
+        `builds/${version}`, // builds/1.2.0
+      ];
+
+      await this.ensureConnection();
+
+      for (const artifact of extractedArtifacts) {
+        let found = false;
+        
+        // 여러 경로에서 파일 검색
+        for (const searchPath of searchPaths) {
+          try {
+            const files = await this.searchFiles(searchPath, artifact.filename);
+            
+            if (files.length > 0) {
+              // 파일을 찾은 경우
+              const foundFile = files[0]; // 가장 최근 파일 선택
+              verifiedArtifacts.push({
+                ...artifact,
+                nasPath: foundFile.path,
+                fileSize: foundFile.size,
+                lastModified: foundFile.modified,
+                verified: true,
+                searchPath: searchPath
+              });
+              
+              logger.info(`Found artifact on NAS: ${foundFile.path}`);
+              found = true;
+              break;
+            }
+          } catch (searchError) {
+            logger.debug(`Failed to search in path ${searchPath}: ${searchError.message}`);
+          }
+        }
+        
+        if (!found) {
+          // 파일을 찾지 못한 경우에도 정보 보존
+          verifiedArtifacts.push({
+            ...artifact,
+            verified: false,
+            searchError: 'File not found on NAS server'
+          });
+          logger.warn(`Artifact not found on NAS: ${artifact.filename}`);
+        }
+      }
+
+      logger.info(`Verified ${verifiedArtifacts.filter(a => a.verified).length}/${extractedArtifacts.length} artifacts on NAS server`);
+      return verifiedArtifacts;
+
+    } catch (error) {
+      logger.error(`Failed to search artifacts from build log for ${jobName}#${buildNumber}:`, error.message);
+      throw new Error(`빌드 로그 기반 아티팩트 검색 실패: ${error.message}`);
+    }
+  }
+
+  /**
+   * 버전별 NAS 아티팩트 전체 검색
+   */
+  async searchArtifactsByVersion(version, pattern = null) {
+    try {
+      await this.ensureConnection();
+      
+      const searchPaths = [
+        version,
+        `release_version/${version}`,
+        `projects/${version}`,
+        `builds/${version}`
+      ];
+
+      const allArtifacts = [];
+      
+      for (const searchPath of searchPaths) {
+        try {
+          const files = await this.searchFiles(searchPath, pattern);
+          
+          // 압축 파일만 필터링
+          const compressedFiles = files.filter(file => 
+            file.name.match(/\.(tar\.gz|zip|7z)$/i)
+          );
+          
+          for (const file of compressedFiles) {
+            allArtifacts.push({
+              filename: file.name,
+              nasPath: file.path,
+              fileSize: file.size,
+              lastModified: file.modified,
+              buildNumber: file.buildNumber,
+              version: version,
+              searchPath: searchPath,
+              verified: true
+            });
+          }
+          
+          logger.info(`Found ${compressedFiles.length} artifacts in ${searchPath}`);
+        } catch (searchError) {
+          logger.debug(`No artifacts found in path ${searchPath}: ${searchError.message}`);
+        }
+      }
+
+      return allArtifacts;
+      
+    } catch (error) {
+      logger.error(`Failed to search artifacts by version ${version}:`, error.message);
+      throw new Error(`버전별 아티팩트 검색 실패: ${error.message}`);
+    }
   }
 
   /**

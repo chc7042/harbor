@@ -886,6 +886,234 @@ router.get('/directory',
 
 /**
  * @swagger
+ * /api/nas/artifacts/build-log:
+ *   get:
+ *     tags:
+ *       - NAS
+ *     summary: 빌드 로그 기반 아티팩트 검색
+ *     description: 젠킨스 빌드 로그에서 추출한 아티팩트 정보를 실제 NAS 서버에서 검색하여 검증
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: jobName
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: 젠킨스 작업명 (예- 1.2.0/mr1.2.0_release)
+ *       - in: query
+ *         name: buildNumber
+ *         schema:
+ *           type: integer
+ *         required: true
+ *         description: 빌드 번호
+ *     responses:
+ *       200:
+ *         description: 아티팩트 검색 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     jobName:
+ *                       type: string
+ *                     buildNumber:
+ *                       type: integer
+ *                     extractedCount:
+ *                       type: integer
+ *                       description: 빌드 로그에서 추출된 아티팩트 수
+ *                     verifiedCount:
+ *                       type: integer
+ *                       description: NAS에서 실제 발견된 아티팩트 수
+ *                     artifacts:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           filename:
+ *                             type: string
+ *                           verified:
+ *                             type: boolean
+ *                           nasPath:
+ *                             type: string
+ *                             nullable: true
+ *                           fileSize:
+ *                             type: integer
+ *                             nullable: true
+ *                           lastModified:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *                           context:
+ *                             type: string
+ *                             description: 빌드 로그에서 발견된 컨텍스트
+ *                           searchError:
+ *                             type: string
+ *                             nullable: true
+ *       400:
+ *         description: 잘못된 요청 파라미터
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: 인증 실패
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/artifacts/build-log',
+  [
+    query('jobName').notEmpty().isString().withMessage('Job name is required'),
+    query('buildNumber').notEmpty().isInt({ min: 1 }).withMessage('Build number must be a positive integer')
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError('Invalid query parameters', 400, errors.array());
+      }
+
+      const { jobName, buildNumber } = req.query;
+      const nasService = getNASService();
+      
+      logger.info(`Searching artifacts from build log for ${jobName}#${buildNumber}`);
+      const artifacts = await nasService.searchArtifactsFromBuildLog(jobName, parseInt(buildNumber));
+      
+      const verifiedCount = artifacts.filter(a => a.verified).length;
+      
+      res.json({
+        success: true,
+        data: {
+          jobName,
+          buildNumber: parseInt(buildNumber),
+          extractedCount: artifacts.length,
+          verifiedCount,
+          artifacts
+        }
+      });
+
+    } catch (error) {
+      logger.error('Build log artifact search failed:', error.message);
+      next(error);
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /api/nas/artifacts/version:
+ *   get:
+ *     tags:
+ *       - NAS
+ *     summary: 버전별 아티팩트 검색
+ *     description: 지정된 버전의 모든 압축 파일 아티팩트를 NAS 서버에서 검색
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: version
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: 검색할 버전 (예- 1.2.0)
+ *       - in: query
+ *         name: pattern
+ *         schema:
+ *           type: string
+ *         description: 추가 검색 패턴 (파일명에 포함될 문자열)
+ *     responses:
+ *       200:
+ *         description: 아티팩트 검색 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     version:
+ *                       type: string
+ *                     pattern:
+ *                       type: string
+ *                       nullable: true
+ *                     totalCount:
+ *                       type: integer
+ *                     artifacts:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           filename:
+ *                             type: string
+ *                           nasPath:
+ *                             type: string
+ *                           fileSize:
+ *                             type: integer
+ *                           lastModified:
+ *                             type: string
+ *                             format: date-time
+ *                           version:
+ *                             type: string
+ *                           searchPath:
+ *                             type: string
+ *                           verified:
+ *                             type: boolean
+ *       400:
+ *         description: 잘못된 요청 파라미터
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/artifacts/version',
+  [
+    query('version').notEmpty().isString().withMessage('Version is required'),
+    query('pattern').optional().isString()
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError('Invalid query parameters', 400, errors.array());
+      }
+
+      const { version, pattern } = req.query;
+      const nasService = getNASService();
+      
+      logger.info(`Searching artifacts by version ${version} with pattern: ${pattern || 'none'}`);
+      const artifacts = await nasService.searchArtifactsByVersion(version, pattern);
+      
+      res.json({
+        success: true,
+        data: {
+          version,
+          pattern: pattern || null,
+          totalCount: artifacts.length,
+          artifacts
+        }
+      });
+
+    } catch (error) {
+      logger.error('Version-based artifact search failed:', error.message);
+      next(error);
+    }
+  }
+);
+
+/**
+ * @swagger
  * /api/nas/disconnect:
  *   post:
  *     tags:

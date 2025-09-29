@@ -187,6 +187,132 @@ class JenkinsService {
     }
   }
 
+  /**
+   * 빌드 로그에서 압축 파일 정보 추출
+   */
+  async extractArtifactsFromBuildLog(jobName, buildNumber) {
+    try {
+      // projects 폴더 하위의 작업 빌드 로그 조회
+      const response = await this.client.get(`/job/projects/job/${encodeURIComponent(jobName)}/${buildNumber}/consoleText`);
+      const logContent = response.data;
+
+      const artifacts = [];
+      const lines = logContent.split('\n');
+
+      // 압축 파일 관련 패턴들
+      const artifactPatterns = [
+        // tar.gz 파일 생성/복사 패턴
+        /(?:created?|generated?|copied?|built?|archived?).*?([a-zA-Z0-9_\-\.]+\.tar\.gz)/gi,
+        // zip 파일 패턴
+        /(?:created?|generated?|copied?|built?|archived?).*?([a-zA-Z0-9_\-\.]+\.zip)/gi,
+        // 7z 파일 패턴
+        /(?:created?|generated?|copied?|built?|archived?).*?([a-zA-Z0-9_\-\.]+\.7z)/gi,
+        // 압축 파일 경로 패턴
+        /([\/\w\-\.]+\/[a-zA-Z0-9_\-\.]+\.(tar\.gz|zip|7z))/gi,
+        // Archiving artifacts 패턴 (Jenkins 기본 아카이빙)
+        /Archiving artifacts.*?([a-zA-Z0-9_\-\.]+\.(tar\.gz|zip|7z))/gi,
+        // tar 명령어 패턴
+        /tar.*?-[czf]+.*?([a-zA-Z0-9_\-\.]+\.tar\.gz)/gi,
+        // 파일명만 있는 패턴 (mr1.2.0_release_1.2.0.tar.gz 형식)
+        /([a-zA-Z0-9_\-\.]+_release_[0-9\.]+\.(tar\.gz|zip|7z))/gi
+      ];
+
+      // 각 라인에서 아티팩트 파일명 추출
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        
+        for (const pattern of artifactPatterns) {
+          let match;
+          pattern.lastIndex = 0; // 정규식 상태 초기화
+          
+          while ((match = pattern.exec(line)) !== null) {
+            const filename = match[1];
+            
+            // 중복 제거 및 유효성 검사
+            if (filename && !artifacts.find(a => a.filename === filename)) {
+              const artifact = {
+                filename: filename,
+                buildNumber: buildNumber,
+                jobName: jobName,
+                foundInLine: i + 1,
+                context: line.trim(),
+                extractedAt: new Date().toISOString()
+              };
+
+              // 파일 크기 추출 시도 (같은 라인이나 주변 라인에서)
+              const sizeMatch = line.match(/(\d+(?:\.\d+)?)\s*(KB|MB|GB|bytes?)/i);
+              if (sizeMatch) {
+                artifact.size = sizeMatch[0];
+              }
+
+              // NAS 경로 추출 시도
+              const pathMatch = line.match(/([\/\w\-\.]+)\/[a-zA-Z0-9_\-\.]+\.(tar\.gz|zip|7z)/i);
+              if (pathMatch) {
+                artifact.nasPath = pathMatch[1];
+              }
+
+              artifacts.push(artifact);
+              logger.info(`Extracted artifact from build log: ${filename} (line ${i + 1})`);
+            }
+          }
+        }
+      }
+
+      // 빌드 번호와 프로젝트명으로 예상 파일명 생성 (추가 검증용)
+      const expectedArtifacts = this.generateExpectedArtifacts(jobName, buildNumber);
+      for (const expected of expectedArtifacts) {
+        if (!artifacts.find(a => a.filename === expected.filename)) {
+          artifacts.push({
+            ...expected,
+            foundInLine: null,
+            context: 'Generated from job pattern',
+            extractedAt: new Date().toISOString()
+          });
+        }
+      }
+
+      logger.info(`Extracted ${artifacts.length} artifacts from build log for ${jobName}#${buildNumber}`);
+      return artifacts;
+
+    } catch (error) {
+      logger.error(`Failed to extract artifacts from build log for ${jobName}#${buildNumber}:`, error.message);
+      throw new Error(`빌드 로그에서 아티팩트 정보를 추출할 수 없습니다: ${error.message}`);
+    }
+  }
+
+  /**
+   * 작업명과 빌드 번호로 예상 아티팩트 파일명 생성
+   */
+  generateExpectedArtifacts(jobName, buildNumber) {
+    const artifacts = [];
+    
+    // jobName에서 버전 정보 추출
+    const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
+    if (versionMatch) {
+      const version = versionMatch[1];
+      const jobType = jobName.toLowerCase().includes('mr') ? 'mr' : 'fs';
+      
+      // 일반적인 아티팩트 파일명 패턴들
+      const patterns = [
+        `${jobType}${version}_release_${version}.tar.gz`,
+        `${jobName}_${buildNumber}.tar.gz`,
+        `${jobName}.tar.gz`,
+        `release_${version}.tar.gz`
+      ];
+
+      for (const filename of patterns) {
+        artifacts.push({
+          filename: filename,
+          buildNumber: buildNumber,
+          jobName: jobName,
+          type: 'expected'
+        });
+      }
+    }
+
+    return artifacts;
+  }
+
   async triggerBuild(jobName, parameters = {}) {
     try {
       const hasParameters = Object.keys(parameters).length > 0;

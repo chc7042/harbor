@@ -5,8 +5,8 @@
   "main": "src/app.js",
   "private": true,
   "scripts": {
-    "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
+    "start": "NODE_OPTIONS=\"--openssl-legacy-provider\" node src/app.js",
+    "dev": "NODE_OPTIONS=\"--openssl-legacy-provider\" nodemon src/app.js",
     "build": "echo 'Backend build completed'",
     "test": "jest",
     "test:watch": "jest --watch",
