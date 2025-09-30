@@ -1177,9 +1177,12 @@ router.get('/deployment-info/:projectName/:buildNumber',
               ]);
 
               let actualFileNames = {};
+              let fileInfoMap = {};
               if (actualFileNamesResult.success) {
                 actualFileNames = actualFileNamesResult.fileMap;
+                fileInfoMap = actualFileNamesResult.fileInfoMap || {};
                 logger.info(`Found actual file names: ${JSON.stringify(actualFileNames)}`);
+                logger.info(`Found file info: ${JSON.stringify(fileInfoMap)}`);
                 
                 // 실제 파일명으로 업데이트
                 if (actualFileNames.main) {
@@ -1194,6 +1197,13 @@ router.get('/deployment-info/:projectName/:buildNumber',
                   backend: actualFileNames.backend || null,
                   frontend: actualFileNames.frontend || null
                 };
+                
+                // 파일 정보 추가 (크기, 수정일)
+                deploymentInfo.fileInfoMap = fileInfoMap;
+                
+                // allFiles 배열을 실제 파일명으로 업데이트
+                deploymentInfo.allFiles = Object.values(deploymentInfo.actualFiles).filter(file => file !== null);
+                logger.info(`Updated allFiles with actual file names: ${JSON.stringify(deploymentInfo.allFiles)}`);
               } else {
                 logger.warn(`Failed to find actual file names: ${actualFileNamesResult.error}`);
               }
@@ -1289,6 +1299,13 @@ router.get('/deployment-info/:projectName/:buildNumber',
         }
 
         logger.info(`Jenkins 배포 정보 조회 완료 - 사용자: ${req.user.username}, 프로젝트: ${projectName}, 빌드: ${buildNumber}, 디렉토리 검증: ${deploymentInfo.directoryVerified}`);
+        
+        // 최종 응답 데이터 로깅 (fileInfoMap 포함)
+        logger.info(`Final deploymentInfo response data:`, JSON.stringify({
+          fileInfoMap: deploymentInfo.fileInfoMap,
+          actualFiles: deploymentInfo.actualFiles,
+          allFiles: deploymentInfo.allFiles
+        }, null, 2));
 
         res.json({
           success: true,

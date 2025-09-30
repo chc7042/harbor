@@ -245,6 +245,7 @@ class SynologyApiService {
           version: 2,
           method: 'list',
           folder_path: folderPath,
+          additional: 'time,size,type',
           _sid: this.sessionId
         },
         timeout: 10000
@@ -253,13 +254,20 @@ class SynologyApiService {
       if (response.data && response.data.success) {
         const files = response.data.data.files || [];
         logger.info(`Found ${files.length} files in directory: ${folderPath}`);
+        // 첫 번째 파일의 구조를 로그로 확인
+        if (files.length > 0) {
+          logger.info(`Sample file structure:`, JSON.stringify(files[0], null, 2));
+        }
         return {
           success: true,
           files: files.map(file => ({
             name: file.name,
             path: file.path,
             isDir: file.isdir,
-            size: file.size
+            size: file.additional?.size || file.size || 0,
+            mtime: file.additional?.time?.mtime || file.time?.mtime || file.mtime || null,
+            type: file.additional?.type || file.type || null,
+            additional: file.additional // 원본 additional 데이터도 포함
           }))
         };
       } else {
@@ -290,10 +298,20 @@ class SynologyApiService {
 
       const files = listResult.files.filter(f => !f.isDir);
       const fileMap = {};
+      const fileInfoMap = {}; // 파일 정보 (크기, 수정일) 저장
 
       // 파일명 패턴 매칭
       files.forEach(file => {
         const fileName = file.name;
+        
+        // 파일 정보 저장 (additional 데이터 확인)
+        logger.info(`Processing file: ${fileName}, full file object:`, JSON.stringify(file, null, 2));
+        fileInfoMap[fileName] = {
+          size: file.additional?.size || file.size || 0,
+          mtime: file.additional?.time?.mtime || file.time?.mtime || file.mtime || null,
+          type: file.additional?.type || file.type || null
+        };
+        logger.info(`File info for ${fileName}:`, fileInfoMap[fileName]);
         
         // 메인 파일 패턴: V{version}_{date}_*.tar.gz
         if (fileName.match(new RegExp(`^V${version.replace(/\./g, '\\.')}_${date}_\\d+\\.tar\\.gz$`))) {
@@ -321,6 +339,7 @@ class SynologyApiService {
       return {
         success: true,
         fileMap: fileMap,
+        fileInfoMap: fileInfoMap, // 파일 정보 추가
         allFiles: files.map(f => f.name)
       };
     } catch (error) {

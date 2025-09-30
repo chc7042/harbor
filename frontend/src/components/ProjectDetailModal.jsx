@@ -14,6 +14,22 @@ import {
   HardDrive
 } from 'lucide-react';
 
+// 파일 크기 포맷팅 함수
+const formatFileSize = (bytes) => {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+// 파일 날짜 포맷팅 함수
+const formatFileDate = (timestamp) => {
+  if (!timestamp) return '알 수 없음';
+  const date = new Date(timestamp * 1000); // Unix timestamp를 JS Date로 변환
+  return date.toLocaleString('ko-KR');
+};
+
 const ProjectDetailModal = ({
   deployment,
   isOpen,
@@ -30,6 +46,10 @@ const ProjectDetailModal = ({
 
   const fetchDeploymentInfo = async () => {
     if (!deployment) return;
+    
+    console.log('ProjectDetailModal deployment object:', deployment);
+    console.log('project_name:', deployment.project_name);
+    console.log('build_number:', deployment.build_number);
     
     setLoadingDeploymentInfo(true);
     try {
@@ -77,11 +97,27 @@ const ProjectDetailModal = ({
   };
 
   const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
+    if (!bytes || bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const formatFileDate = (mtime) => {
+    if (!mtime) return '알 수 없음';
+    try {
+      const date = new Date(mtime * 1000); // Unix timestamp to JS Date
+      return date.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return '알 수 없음';
+    }
   };
 
   useEffect(() => {
@@ -253,14 +289,14 @@ const ProjectDetailModal = ({
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                {tab === 'logs' ? '로그' : '아티팩트'}
+{tab === 'logs' ? '로그' : '배포 버전'}
               </button>
             ))}
           </nav>
         </div>
 
         {/* 탭 내용 */}
-        <div className="p-6 max-h-[60vh] overflow-y-auto">
+        <div className="p-6 h-[60vh] overflow-y-auto">
           {activeTab === 'logs' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -298,7 +334,7 @@ const ProjectDetailModal = ({
           {activeTab === 'artifacts' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-gray-900">아티팩트</h3>
+                <h3 className="text-lg font-medium text-gray-900">배포 버전</h3>
 
                 <div className="flex items-center space-x-4">
                   {/* NAS 디렉토리 검증 상태 표시 */}
@@ -403,8 +439,8 @@ const ProjectDetailModal = ({
                               return (
                                 <div
                                   key={index}
-                                  className={`p-4 rounded-lg border transition-all duration-200 hover:shadow-md ${
-                                    fileExists ? 'border-gray-200 bg-white hover:border-blue-300' : 'border-red-200 bg-red-50'
+                                  className={`p-4 rounded-lg border-2 transition-all duration-200 hover:shadow-lg ${
+                                    fileExists ? 'border-blue-300 bg-blue-50 hover:border-blue-400 hover:bg-blue-100' : 'border-red-300 bg-red-50 hover:border-red-400'
                                   }`}
                                 >
                                   <div className="flex items-start justify-between">
@@ -427,12 +463,23 @@ const ProjectDetailModal = ({
                                       <p className="text-sm font-medium text-gray-900 mb-1 break-all">
                                         {file}
                                       </p>
+                                      {/* 파일 정보 표시 */}
+                                      {deploymentInfo?.fileInfoMap?.[file] && (
+                                        <div className="flex items-center space-x-3 text-xs text-gray-500 mt-1">
+                                          <span className="flex items-center">
+                                            📦 {formatFileSize(deploymentInfo.fileInfoMap[file].size)}
+                                          </span>
+                                          <span className="flex items-center">
+                                            📅 {formatFileDate(deploymentInfo.fileInfoMap[file].mtime)}
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
                                     
                                     <div className="flex items-center space-x-2 ml-2">
                                       {fileExists ? (
                                         <button
-                                          className="btn-primary-sm"
+                                          className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200"
                                           onClick={(e) => {
                                             e.preventDefault();
                                             e.stopPropagation();
@@ -449,7 +496,7 @@ const ProjectDetailModal = ({
                                             }, 1000);
                                           }}
                                         >
-                                          <Download className="w-3 h-3 mr-1" />
+                                          <Download className="w-4 h-4 mr-1.5" />
                                           다운로드
                                         </button>
                                       ) : (
@@ -465,7 +512,7 @@ const ProjectDetailModal = ({
                           [(
                             <div
                               key="default-main-version"
-                              className="p-4 rounded-lg border transition-all duration-200 hover:shadow-md bg-blue-50 border-blue-200"
+                              className="p-4 rounded-lg border-2 border-blue-300 bg-blue-50 transition-all duration-200 hover:shadow-lg hover:border-blue-400 hover:bg-blue-100"
                             >
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
@@ -487,7 +534,7 @@ const ProjectDetailModal = ({
                                 
                                 <div className="flex items-center space-x-2 ml-2">
                                   <button
-                                    className="px-3 py-1 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white"
+                                    className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200"
                                     onClick={(e) => {
                                       e.preventDefault();
                                       e.stopPropagation();
@@ -497,6 +544,7 @@ const ProjectDetailModal = ({
                                       window.open(shareUrl, '_blank');
                                     }}
                                   >
+                                    <HardDrive className="w-4 h-4 mr-1.5" />
                                     NAS 확인
                                   </button>
                                 </div>
@@ -608,6 +656,17 @@ const ProjectDetailModal = ({
                                             ? '암호화된 컴포넌트 파일' 
                                             : '컴포넌트 파일'}
                                     </p>
+                                    {/* 파일 정보 표시 */}
+                                    {fileExists && deploymentInfo?.fileInfoMap?.[file] && (
+                                      <div className={`flex items-center space-x-3 text-xs mt-1 ${colors.description}`}>
+                                        <span className="flex items-center">
+                                          📦 {formatFileSize(deploymentInfo.fileInfoMap[file].size)}
+                                        </span>
+                                        <span className="flex items-center">
+                                          📅 {formatFileDate(deploymentInfo.fileInfoMap[file].mtime)}
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                                 <button 
