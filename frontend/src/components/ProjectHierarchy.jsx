@@ -504,6 +504,7 @@ const ProjectHierarchy = ({
 
       {/* 배포 상세 모달 */}
       <ProjectDetailModal
+        key={selectedDeployment ? `${selectedDeployment.project_name}-${selectedDeployment.build_number}` : 'no-deployment'}
         deployment={selectedDeployment}
         isOpen={isModalOpen}
         onClose={() => {

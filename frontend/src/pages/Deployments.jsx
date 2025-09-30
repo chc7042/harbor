@@ -360,6 +360,7 @@ const Deployments = () => {
           deployment={selectedDeployment}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
+          source="deployments"
         />
       </main>
     </div>

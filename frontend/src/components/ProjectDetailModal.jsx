@@ -163,8 +163,22 @@ const ProjectDetailModal = ({
   if (!isOpen || !deployment) return null;
 
   return (
-    <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 ${className}`}>
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+    <div 
+      className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 ${className}`}
+      onClick={(e) => {
+        // 백드롭 클릭 시에만 모달 닫기
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden"
+        onClick={(e) => {
+          // 모달 내부 클릭 시 이벤트 전파 중단
+          e.stopPropagation();
+        }}
+      >
         {/* 헤더 */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-4">
@@ -228,7 +242,11 @@ const ProjectDetailModal = ({
             {['logs', 'artifacts'].map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setActiveTab(tab);
+                }}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   activeTab === tab
                     ? 'border-blue-500 text-blue-600'
@@ -374,7 +392,7 @@ const ProjectDetailModal = ({
                       <h4 className="text-sm font-medium text-gray-700 border-b pb-2">메인 버전</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {/* 실제 V 파일이 있으면 실제 V 파일 표시 */}
-                        {(deploymentInfo?.allFiles && deploymentInfo.allFiles.some(file => file.startsWith('V'))) ? 
+                        {(deploymentInfo?.allFiles && deploymentInfo.allFiles.some(file => file.startsWith('V'))) ? (
                           deploymentInfo.allFiles
                             .filter(file => file.startsWith('V'))
                             .map((file, index) => {
@@ -441,7 +459,8 @@ const ProjectDetailModal = ({
                                   </div>
                                 </div>
                               );
-                            }) : 
+                            })
+                        ) : (
                           /* 실제 V 파일이 없어도 기본 메인 버전 카드 표시 */
                           [(
                             <div
@@ -484,7 +503,7 @@ const ProjectDetailModal = ({
                               </div>
                             </div>
                           )]
-                        }
+                        )}
                       </div>
                     </div>
 

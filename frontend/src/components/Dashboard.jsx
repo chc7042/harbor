@@ -358,10 +358,6 @@ const Dashboard = () => {
             projects={projects}
             deployments={deployments}
             onJobClick={handleJobClick}
-            onDeploymentClick={(deployment) => {
-              setSelectedDeployment(deployment);
-              setIsModalOpen(true);
-            }}
             className="mb-6"
           />
         )}
@@ -403,13 +399,14 @@ const Dashboard = () => {
           </>
         )}
 
-        {/* 배포 상세 모달 */}
-        {isModalOpen && selectedDeployment && (
+        {/* 배포 상세 모달 - 배포 이력 뷰에서만 표시 */}
+        {viewMode === 'deployments' && isModalOpen && selectedDeployment && (
           <DeploymentDetailModal
             key={`${selectedDeployment.project_name}-${selectedDeployment.build_number}`}
             deployment={selectedDeployment}
             isOpen={isModalOpen}
             onClose={handleCloseModal}
+            source="dashboard"
           />
         )}
       </main>

@@ -22,7 +22,8 @@ const DeploymentDetailModal = ({
   deployment,
   isOpen,
   onClose,
-  className = ''
+  className = '',
+  source = 'deployments' // 'deployments', 'hierarchy', 'dashboard'
 }) => {
   const [activeTab, setActiveTab] = useState('logs');
   const [copySuccess, setCopySuccess] = useState('');
@@ -516,118 +517,39 @@ const DeploymentDetailModal = ({
                   </div>
                 ) : (
                   <>
-                    {/* 메인버전 파일 (V3.0.0_XXX 형식) - 항상 표시 */}
-                    {console.log('DeploymentDetailModal Debug:', { deploymentInfo, downloadFile: deploymentInfo?.downloadFile, allFiles: deploymentInfo?.allFiles })}
-                    
-                    {/* 메인버전 파일 섹션 - 모든 배포에 대해 표시 */}
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-medium text-gray-700">메인버전 파일</h4>
-                        <div className={`border rounded-lg p-4 ${
-                          deploymentInfo?.downloadFileVerified !== false ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'
-                        }`}>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <Download className={`w-6 h-6 ${
-                                deploymentInfo?.downloadFileVerified !== false ? 'text-blue-600' : 'text-red-600'
-                              }`} />
-                              <div>
-                                <p className={`font-semibold ${
-                                  deploymentInfo?.downloadFileVerified !== false ? 'text-blue-900' : 'text-red-900'
-                                }`}>
-                                  메인버전 파일
-                                  {deploymentInfo?.downloadFileVerified === false && (
-                                    <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded">파일 없음</span>
-                                  )}
-                                </p>
-                                <p className={`text-sm font-medium ${
-                                  deploymentInfo?.downloadFileVerified !== false ? 'text-blue-800' : 'text-red-800'
-                                }`}>
-                                  {deploymentInfo?.downloadFile || 
-                                   deploymentInfo?.allFiles?.find(file => file.startsWith('V')) ||
-                                   deployment.actualFiles?.main ||
-                                   `V${deployment.version || '1.0.0'}_파일명_확인필요.tar.gz`}
-                                </p>
-                                <p className={`text-xs ${
-                                  deploymentInfo?.downloadFileVerified !== false ? 'text-blue-600' : 'text-red-600'
-                                }`}>
-                                  {deploymentInfo?.downloadFileVerified !== false ? '메인 릴리즈 파일' : '파일이 NAS에서 확인되지 않습니다'}
-                                </p>
-                              </div>
-                            </div>
-                            <button 
-                              className={`px-4 py-2 rounded-md text-sm font-medium flex items-center whitespace-nowrap ${
-                                deploymentInfo?.downloadFileVerified !== false && deploymentInfo?.directoryVerified
-                                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                              }`}
-                              disabled={deploymentInfo?.downloadFileVerified === false || !deploymentInfo?.directoryVerified}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                if (deploymentInfo?.downloadFileVerified === false || !deploymentInfo?.directoryVerified) {
-                                  alert('파일이 NAS에 존재하지 않아 다운로드할 수 없습니다.');
-                                  return;
-                                }
 
-                                const fileName = deploymentInfo?.downloadFile;
-                                
-                                // 새로운 파일별 다운로드 링크 사용
-                                const fileDownloadInfo = deploymentInfo?.fileDownloadLinks?.[fileName];
-                                const downloadUrl = deploymentInfo?.mainFileDownloadUrl || 
-                                                  fileDownloadInfo?.downloadUrl ||
-                                                  deploymentInfo?.synologyShareUrl;
-                                
-                                if (downloadUrl) {
-                                  const fileType = fileName?.startsWith('mr') ? 'Morow' : 
-                                                 fileName?.startsWith('V') ? 'V' :
-                                                 fileName?.startsWith('be') ? 'Backend' :
-                                                 fileName?.startsWith('fe') ? 'Frontend' : '기타';
-                                  
-                                  const isDirectDownload = deploymentInfo?.isMainFileDirectDownload || 
-                                                         fileDownloadInfo?.isDirectDownload || 
-                                                         false;
-                                  
-                                  console.log('Download Link Info:', {
-                                    fileName,
-                                    fileType,
-                                    downloadUrl,
-                                    isDirectDownload
-                                  });
-                                  
-                                  // 직접 다운로드 링크면 iframe으로, 공유 링크면 새 탭에서 열기
-                                  if (isDirectDownload) {
-                                    // 직접 다운로드 - iframe으로 다운로드하여 모달이 사라지지 않게 함
-                                    const iframe = document.createElement('iframe');
-                                    iframe.style.display = 'none';
-                                    iframe.src = downloadUrl;
-                                    document.body.appendChild(iframe);
-                                    setTimeout(() => document.body.removeChild(iframe), 5000);
-                                  } else {
-                                    // 공유 링크 - 새 탭에서 폴더 열기
-                                    window.open(downloadUrl, '_blank');
-                                  }
-                                } else {
-                                  alert('다운로드 링크를 생성할 수 없습니다.');
-                                }
-                              }}
-                              title={deploymentInfo?.downloadFileVerified === false ? '파일이 NAS에 존재하지 않습니다' : ''}
-                            >
-                              {deploymentInfo?.downloadFileVerified === false ? '파일 없음' : '다운로드'}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                    {/* 전체 배포 파일에 대한 개별 다운로드 카드 - 항상 표시 */}
+                    {/* 배포 파일에 대한 개별 다운로드 카드 - 빌드 타입별 표시 */}
                       <div className="space-y-3">
-                        <h4 className="text-sm font-medium text-gray-700">전체 배포 파일</h4>
+                        <h4 className="text-sm font-medium text-gray-700">배포 파일</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {/* 실제 파일이 있으면 실제 파일 표시, 없으면 기본 컴포넌트 카드 표시 */}
                           {(deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) ? 
-                          /* 기존 API 기반 파일 목록 - V 파일(메인버전) 제외 */
+                          /* 기존 API 기반 파일 목록 - V 파일(메인버전) 제외 및 빌드 타입별 필터링 */
                           deploymentInfo.allFiles.filter(file => {
-                            // V 파일(메인버전)은 위에서 별도로 표시되므로 제외
-                            return !file.startsWith('V');
+                            // 배포 이력에서만 V 파일(메인버전) 제외, 프로젝트 계층구조에서는 모든 파일 표시
+                            if (source === 'deployments' && file.startsWith('V')) return false;
+                            
+                            // 빌드 타입에 따른 파일 필터링 (배포 이력에서만 적용)
+                            if (source === 'deployments') {
+                              const projectName = deployment.project_name || '';
+                              
+                              if (projectName.includes('mr')) {
+                                // MR 빌드: mr 파일만
+                                return file.startsWith('mr');
+                              } else if (projectName.includes('fs')) {
+                                // FS 빌드: fe 파일만
+                                return file.startsWith('fe');
+                              } else if (projectName.includes('be')) {
+                                // BE 빌드: be 파일만
+                                return file.startsWith('be');
+                              } else {
+                                // 기타 빌드: 모든 컴포넌트 파일 표시
+                                return true;
+                              }
+                            } else {
+                              // 프로젝트 계층 구조나 대시보드에서는 모든 파일 표시
+                              return true;
+                            }
                           }).sort((a, b) => {
                             // 모로우, 백엔드, 프런트엔드 순서로 정렬
                             const getOrder = (file) => {
@@ -832,7 +754,33 @@ const DeploymentDetailModal = ({
                             );
                           }) : 
                           /* 기본 컴포넌트 카드들 - 실제 파일이 없을 때 표시 */
-                          (['모로우', '백엔드', '프런트엔드']).map((componentType, index) => {
+                          (() => {
+                            // 빌드 타입에 따라 표시할 컴포넌트 결정 (배포 이력에서만 적용)
+                            let componentsToShow = [];
+                            
+                            if (source === 'deployments') {
+                              const projectName = deployment.project_name || '';
+                              
+                              if (projectName.includes('mr')) {
+                                // MR 빌드: 모로우만
+                                componentsToShow = ['모로우'];
+                              } else if (projectName.includes('fs')) {
+                                // FS 빌드: 프런트엔드만  
+                                componentsToShow = ['프런트엔드'];
+                              } else if (projectName.includes('be')) {
+                                // BE 빌드: 백엔드만
+                                componentsToShow = ['백엔드'];
+                              } else {
+                                // 기타 빌드: 모든 컴포넌트 표시
+                                componentsToShow = ['모로우', '백엔드', '프런트엔드'];
+                              }
+                            } else {
+                              // 프로젝트 계층 구조나 대시보드에서는 모든 컴포넌트 표시
+                              componentsToShow = ['모로우', '백엔드', '프런트엔드'];
+                            }
+                            
+                            return componentsToShow;
+                          })().map((componentType, index) => {
                             const prefix = componentType === '모로우' ? 'mr' :
                                          componentType === '백엔드' ? 'be' :
                                          componentType === '프런트엔드' ? 'fe' : 'comp';
