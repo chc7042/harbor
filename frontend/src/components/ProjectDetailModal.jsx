@@ -373,7 +373,7 @@ const ProjectDetailModal = ({
                     <div className="space-y-3">
                       <h4 className="text-sm font-medium text-gray-700 border-b pb-2">메인 버전</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {/* 실제 V 파일이 있으면 실제 V 파일 표시, 없으면 기본 V 파일 표시 */}
+                        {/* 실제 V 파일이 있으면 실제 V 파일 표시 */}
                         {(deploymentInfo?.allFiles && deploymentInfo.allFiles.some(file => file.startsWith('V'))) ? 
                           deploymentInfo.allFiles
                             .filter(file => file.startsWith('V'))
@@ -442,16 +442,46 @@ const ProjectDetailModal = ({
                                 </div>
                               );
                             }) : 
-                          /* 실제 V 파일이 없을 때 메시지 표시 - 목 데이터 사용 안함 */
+                          /* 실제 V 파일이 없어도 기본 메인 버전 카드 표시 */
                           [(
-                            <div 
-                              key="no-main-files-message"
-                              className="col-span-full text-center py-8"
+                            <div
+                              key="default-main-version"
+                              className="p-4 rounded-lg border transition-all duration-200 hover:shadow-md bg-blue-50 border-blue-200"
                             >
-                              <p className="text-gray-500">NAS에서 메인 버전 파일을 찾을 수 없습니다.</p>
-                              <p className="text-sm text-gray-400 mt-1">
-                                실제 배포가 완료된 후 파일이 표시됩니다.
-                              </p>
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-2">
+                                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                      메인버전
+                                    </span>
+                                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                      NAS 확인 필요
+                                    </span>
+                                  </div>
+                                  <p className="text-sm font-medium text-gray-900 mb-1">
+                                    V{deployment.version || deployment.project_name.match(/(\d+\.\d+\.\d+)/)?.[1] || '1.0.0'} 메인 버전
+                                  </p>
+                                  <p className="text-xs text-gray-600">
+                                    실제 배포 파일은 NAS에서 확인하세요
+                                  </p>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2 ml-2">
+                                  <button
+                                    className="px-3 py-1 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      
+                                      // 공유 폴더 열기
+                                      const shareUrl = deploymentInfo?.synologyShareUrl || 'https://nas.roboetech.com:5001/sharing/dir_lXUVkbLMJ';
+                                      window.open(shareUrl, '_blank');
+                                    }}
+                                  >
+                                    NAS 확인
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           )]
                         }
