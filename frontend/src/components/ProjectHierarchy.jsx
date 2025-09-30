@@ -215,6 +215,10 @@ const ProjectHierarchy = ({
   };
 
   const handleDeploymentCardClick = (deployment) => {
+    console.log('ProjectHierarchy - handleDeploymentCardClick deployment:', deployment);
+    console.log('ProjectHierarchy - project_name:', deployment.project_name);
+    console.log('ProjectHierarchy - build_number:', deployment.build_number);
+    
     setSelectedDeployment(deployment);
     setIsModalOpen(true);
     

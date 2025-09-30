@@ -245,7 +245,7 @@ class SynologyApiService {
           version: 2,
           method: 'list',
           folder_path: folderPath,
-          additional: 'time,size,type',
+          additional: '["size","time","type"]',
           _sid: this.sessionId
         },
         timeout: 10000
@@ -257,6 +257,7 @@ class SynologyApiService {
         // 첫 번째 파일의 구조를 로그로 확인
         if (files.length > 0) {
           logger.info(`Sample file structure:`, JSON.stringify(files[0], null, 2));
+          logger.info(`Full response data:`, JSON.stringify(response.data, null, 2));
         }
         return {
           success: true,
