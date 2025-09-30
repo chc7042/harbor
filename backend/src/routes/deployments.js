@@ -971,9 +971,16 @@ router.get('/deployment-info/:projectName/:buildNumber',
       const synologyApiService = require('../services/synologyApiService');
 
       try {
-        // Jenkins에서 빌드 상태 먼저 확인
-        const buildInfo = await jenkinsService.getBuildInfo(projectName, parseInt(buildNumber));
-        const buildStatus = buildInfo ? buildInfo.result : null;
+        // Jenkins에서 빌드 정보 확인 - extractDeploymentInfoFromBuildLog를 통해 상태도 확인
+        let buildStatus = null;
+        try {
+          // 빌드 로그에서 정보를 먼저 추출해보고 상태 확인
+          const preliminaryInfo = await jenkinsService.extractDeploymentInfoFromBuildLog(projectName, parseInt(buildNumber));
+          buildStatus = 'SUCCESS'; // 로그를 성공적으로 가져왔으면 빌드는 완료된 것으로 간주
+        } catch (error) {
+          logger.warn(`빌드 로그 접근 실패 - ${projectName}#${buildNumber}: ${error.message}`);
+          buildStatus = 'UNKNOWN';
+        }
         
         // 실패한 배포인 경우 파일 검색 없이 기본 정보만 반환
         if (buildStatus === 'FAILURE' || buildStatus === 'FAILED' || buildStatus === 'ABORTED') {

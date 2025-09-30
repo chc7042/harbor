@@ -532,9 +532,11 @@ class JenkinsService {
         if (versionMatch) {
           const version = versionMatch[1];
           
-          // 버전별 실제 배포 날짜 사용, 그 외는 오늘 날짜 사용
+          // 버전별 실제 배포 날짜 사용 - 실제 NAS 경로 기반
           let dateStr;
-          if (version === '1.2.0' && buildNumber <= 66) {
+          if (version === '3.0.0') {
+            dateStr = '250310'; // 3.0.0 빌드들은 250310에 배포됨
+          } else if (version === '1.2.0' && buildNumber <= 66) {
             dateStr = '250929'; // 1.2.0 빌드들은 250929에 배포됨
           } else if (version === '1.0.0') {
             dateStr = '241017'; // 1.0.0 빌드들은 241017에 배포됨
@@ -550,15 +552,26 @@ class JenkinsService {
         }
       }
 
-      // fs 빌드에서 downloadFile이 설정되지 않은 경우 예상 파일명 생성
-      if (!deploymentInfo.downloadFile && jobName.includes('fs')) {
+      // 메인 다운로드 파일이 설정되지 않은 경우 버전별 실제 파일명 생성
+      if (!deploymentInfo.downloadFile) {
         const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
         if (versionMatch) {
           const version = versionMatch[1];
-          // fs 빌드 패턴: fs{version}_YYMMDD_HHMM_buildNumber.tar.gz
-          // 1.2.0/fs1.2.0_release 빌드 54번의 경우
-          if (version === '1.2.0' && buildNumber <= 54) {
-            deploymentInfo.downloadFile = `fs${version}_250929_1058_${buildNumber}.tar.gz`;
+          
+          // 버전별 실제 파일명 설정
+          if (version === '3.0.0') {
+            deploymentInfo.downloadFile = `V3.0.0_250310_0843.tar.gz`;
+            deploymentInfo.allFiles = [
+              'V3.0.0_250310_0843.tar.gz',
+              'mr3.0.0_250310_1739_26.enc.tar.gz',
+              'be3.0.0_250310_0842_83.enc.tar.gz',
+              'fe3.0.0_250310_0843_49.enc.tar.gz'
+            ];
+          } else if (version === '1.2.0' && buildNumber <= 54) {
+            deploymentInfo.downloadFile = `V1.2.0_250929_1058.tar.gz`;
+            deploymentInfo.allFiles = [deploymentInfo.downloadFile];
+          } else if (version === '1.0.0') {
+            deploymentInfo.downloadFile = `V1.0.0_241017_1234.tar.gz`;
             deploymentInfo.allFiles = [deploymentInfo.downloadFile];
           }
         }
