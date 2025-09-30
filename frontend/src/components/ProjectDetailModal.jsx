@@ -369,29 +369,169 @@ const ProjectDetailModal = ({
                   </div>
                 ) : (
                   <>
-                    {/* 모든 배포 파일 표시 (프로젝트 계층 구조 전용) */}
+                    {/* 메인 버전 섹션 */}
                     <div className="space-y-3">
-                      <h4 className="text-sm font-medium text-gray-700">배포 파일</h4>
+                      <h4 className="text-sm font-medium text-gray-700 border-b pb-2">메인 버전</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {/* 실제 파일이 있으면 실제 파일 표시 */}
+                        {/* 실제 V 파일이 있으면 실제 V 파일 표시, 없으면 기본 V 파일 표시 */}
+                        {(deploymentInfo?.allFiles && deploymentInfo.allFiles.some(file => file.startsWith('V'))) ? 
+                          deploymentInfo.allFiles
+                            .filter(file => file.startsWith('V'))
+                            .map((file, index) => {
+                              const isEncrypted = file.includes('.enc.');
+                              const fileExists = deploymentInfo.verifiedFiles ? deploymentInfo.verifiedFiles.includes(file) : true;
+                              const fileTypeColor = 'bg-blue-100 text-blue-800';
+                              
+                              return (
+                                <div
+                                  key={index}
+                                  className={`p-4 rounded-lg border transition-all duration-200 hover:shadow-md ${
+                                    fileExists ? 'border-gray-200 bg-white hover:border-blue-300' : 'border-red-200 bg-red-50'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-center space-x-2 mb-2">
+                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${fileTypeColor}`}>
+                                          메인버전
+                                        </span>
+                                        {isEncrypted && (
+                                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
+                                            암호화
+                                          </span>
+                                        )}
+                                        {!fileExists && (
+                                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                                            파일없음
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-sm font-medium text-gray-900 mb-1 break-all">
+                                        {file}
+                                      </p>
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-2 ml-2">
+                                      {fileExists ? (
+                                        <button
+                                          className="btn-primary-sm"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            
+                                            const iframe = document.createElement('iframe');
+                                            iframe.style.display = 'none';
+                                            iframe.src = deploymentInfo.downloadBaseUrl ? 
+                                              `${deploymentInfo.downloadBaseUrl}/${file}` : 
+                                              `/api/deployments/download/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}/${encodeURIComponent(file)}`;
+                                            document.body.appendChild(iframe);
+                                            
+                                            setTimeout(() => {
+                                              document.body.removeChild(iframe);
+                                            }, 1000);
+                                          }}
+                                        >
+                                          <Download className="w-3 h-3 mr-1" />
+                                          다운로드
+                                        </button>
+                                      ) : (
+                                        <span className="text-xs text-red-500">파일 없음</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }) : 
+                          /* 기본 V 파일 카드 (실제 V 파일이 없을 때) */
+                          (() => {
+                            const version = deployment.version || deployment.project_name.match(/(\d+\.\d+\.\d+)/)?.[1] || '1.0.0';
+                            const date = new Date().toISOString().slice(0,10).replace(/-/g,'').slice(2,8);
+                            const time = String(Math.floor(Math.random() * 2400)).padStart(4, '0');
+                            const fileName = `V${version}_${date}_${time}.tar.gz`;
+                            const actualFileName = deploymentInfo?.actualFiles?.main;
+                            const fileExists = !!actualFileName;
+                            
+                            return [(
+                              <div
+                                key="default-v-file"
+                                className={`p-4 rounded-lg border transition-all duration-200 hover:shadow-md ${
+                                  fileExists ? 'border-gray-200 bg-white hover:border-blue-300' : 'border-red-200 bg-red-50'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center space-x-2 mb-2">
+                                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                        메인버전
+                                      </span>
+                                      {!fileExists && (
+                                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                                          파일없음
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-sm font-medium text-gray-900 mb-1 break-all">
+                                      {actualFileName || fileName}
+                                    </p>
+                                  </div>
+                                  
+                                  <div className="flex items-center space-x-2 ml-2">
+                                    {fileExists ? (
+                                      <button
+                                        className="btn-primary-sm"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          
+                                          const iframe = document.createElement('iframe');
+                                          iframe.style.display = 'none';
+                                          iframe.src = deploymentInfo.downloadBaseUrl ? 
+                                            `${deploymentInfo.downloadBaseUrl}/${actualFileName}` : 
+                                            `/api/deployments/download/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}/${encodeURIComponent(actualFileName)}`;
+                                          document.body.appendChild(iframe);
+                                          
+                                          setTimeout(() => {
+                                            document.body.removeChild(iframe);
+                                          }, 1000);
+                                        }}
+                                      >
+                                        <Download className="w-3 h-3 mr-1" />
+                                        다운로드
+                                      </button>
+                                    ) : (
+                                      <span className="text-xs text-red-500">파일 없음</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )];
+                          })()
+                        }
+                      </div>
+                    </div>
+
+                    {/* 배포 파일 섹션 (V 파일 제외) */}
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-medium text-gray-700 border-b pb-2">배포 파일</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* 실제 파일이 있으면 실제 파일 표시 (V 파일 제외) */}
                         {(deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) ? 
-                        deploymentInfo.allFiles.sort((a, b) => {
-                          // V파일이 먼저, 그 다음 모로우, 백엔드, 프런트엔드 순서로 정렬
-                          const getOrder = (file) => {
-                            if (file.startsWith('V')) return 0; // Main version first
-                            if (file.startsWith('mr')) return 1; // Morrow
-                            if (file.startsWith('be')) return 2; // Backend  
-                            if (file.startsWith('fe')) return 3; // Frontend
-                            return 4; // 기타
-                          };
-                          return getOrder(a) - getOrder(b);
-                        }).map((file, index) => {
+                        deploymentInfo.allFiles
+                          .filter(file => !file.startsWith('V')) // V 파일 제외
+                          .sort((a, b) => {
+                            // 모로우, 백엔드, 프런트엔드 순서로 정렬
+                            const getOrder = (file) => {
+                              if (file.startsWith('mr')) return 1; // Morrow
+                              if (file.startsWith('be')) return 2; // Backend  
+                              if (file.startsWith('fe')) return 3; // Frontend
+                              return 4; // 기타
+                            };
+                            return getOrder(a) - getOrder(b);
+                          }).map((file, index) => {
                           const isEncrypted = file.includes('.enc.');
-                          const fileType = file.startsWith('V') ? '메인버전' :
-                                          file.startsWith('mr') ? '모로우' :
+                          const fileType = file.startsWith('mr') ? '모로우' :
                                           file.startsWith('be') ? '백엔드' :
-                                          file.startsWith('fe') ? '프런트엔드' : 
-                                          file.startsWith('V') ? '메인버전' : '기타';
+                                          file.startsWith('fe') ? '프런트엔드' : '기타';
                           
                           // 파일이 실제로 NAS에 존재하는지 확인
                           const fileExists = deploymentInfo.verifiedFiles ? deploymentInfo.verifiedFiles.includes(file) : true;
@@ -407,14 +547,6 @@ const ProjectDetailModal = ({
                             };
                             
                             switch (fileType) {
-                              case '메인버전':
-                                return {
-                                  bg: 'bg-blue-50',
-                                  border: 'border-blue-200',
-                                  title: 'text-blue-900',
-                                  subtitle: 'text-blue-700',
-                                  description: 'text-blue-600'
-                                };
                               case '모로우':
                                 return {
                                   bg: 'bg-purple-50',
@@ -535,10 +667,9 @@ const ProjectDetailModal = ({
                             </div>
                           );
                         }) : 
-                        /* 기본 컴포넌트 카드들 - 모든 컴포넌트 표시 */
-                        (['메인버전', '모로우', '백엔드', '프런트엔드']).map((componentType, index) => {
-                          const prefix = componentType === '메인버전' ? 'V' :
-                                       componentType === '모로우' ? 'mr' :
+                        /* 기본 컴포넌트 카드들 - 배포 파일만 표시 (메인버전 제외) */
+                        (['모로우', '백엔드', '프런트엔드']).map((componentType, index) => {
+                          const prefix = componentType === '모로우' ? 'mr' :
                                        componentType === '백엔드' ? 'be' :
                                        componentType === '프런트엔드' ? 'fe' : 'comp';
                           
@@ -547,21 +678,11 @@ const ProjectDetailModal = ({
                           const time = String(Math.floor(Math.random() * 2400)).padStart(4, '0');
                           const buildNum = deployment.build_number || Math.floor(Math.random() * 100);
                           
-                          const fileName = componentType === '메인버전' 
-                            ? `V${version}_${date}_${time}.tar.gz`
-                            : `${prefix}${version}_${date}_${time}_${buildNum}.enc.tar.gz`;
+                          const fileName = `${prefix}${version}_${date}_${time}_${buildNum}.enc.tar.gz`;
 
                           // 파일 타입별 색상 정의
                           const getFileTypeColors = (componentType) => {
                             switch (componentType) {
-                              case '메인버전':
-                                return {
-                                  bg: 'bg-blue-50',
-                                  border: 'border-blue-200',
-                                  title: 'text-blue-900',
-                                  subtitle: 'text-blue-700',
-                                  description: 'text-blue-600'
-                                };
                               case '모로우':
                                 return {
                                   bg: 'bg-purple-50',
@@ -599,7 +720,7 @@ const ProjectDetailModal = ({
                           
                           const colors = getFileTypeColors(componentType);
                           // actualFiles에서 실제 파일명이 있는지 확인
-                          const actualFileName = deploymentInfo?.actualFiles?.[componentType === '메인버전' ? 'main' : componentType === '모로우' ? 'morow' : componentType === '백엔드' ? 'backend' : 'frontend'];
+                          const actualFileName = deploymentInfo?.actualFiles?.[componentType === '모로우' ? 'morow' : componentType === '백엔드' ? 'backend' : 'frontend'];
                           const fileExists = !!actualFileName;
                           
                           return (
@@ -627,9 +748,7 @@ const ProjectDetailModal = ({
                                 </div>
                                 <button 
                                   className={`px-3 py-1 rounded-md text-sm font-medium flex items-center whitespace-nowrap ${
-                                    componentType === '메인버전'
-                                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                      : componentType === '모로우'
+                                    componentType === '모로우'
                                         ? 'bg-purple-600 hover:bg-purple-700 text-white'
                                         : componentType === '백엔드'
                                           ? 'bg-green-600 hover:bg-green-700 text-white'
@@ -644,7 +763,7 @@ const ProjectDetailModal = ({
                                     if (actualFileName) {
                                       // 실제 파일명이 있으면 개별 파일 다운로드
                                       const fileDownloadInfo = deploymentInfo.fileDownloadLinks?.[actualFileName] ||
-                                                              deploymentInfo.fileDownloadLinks?.[`${componentType === '메인버전' ? 'main' : componentType === '모로우' ? 'morow' : componentType === '백엔드' ? 'backend' : 'frontend'}File`];
+                                                              deploymentInfo.fileDownloadLinks?.[`${componentType === '모로우' ? 'morow' : componentType === '백엔드' ? 'backend' : 'frontend'}File`];
                                       
                                       if (fileDownloadInfo) {
                                         const downloadUrl = fileDownloadInfo.downloadUrl;
