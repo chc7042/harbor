@@ -446,7 +446,7 @@ const ProjectDetailModal = ({
                           [(
                             <div 
                               key="no-main-files-message"
-                              className="col-span-full text-center py-8"
+                              className="text-center py-8 col-span-2"
                             >
                               <p className="text-gray-500">NAS에서 메인 버전 파일을 찾을 수 없습니다.</p>
                               <p className="text-sm text-gray-400 mt-1">
@@ -619,7 +619,7 @@ const ProjectDetailModal = ({
                         [(
                           <div 
                             key="no-files-message"
-                            className="col-span-full text-center py-8"
+                            className="text-center py-8 col-span-2"
                           >
                             <p className="text-gray-500">NAS에서 배포 파일을 찾을 수 없습니다.</p>
                             <p className="text-sm text-gray-400 mt-1">
