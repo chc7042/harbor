@@ -5,7 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 // Axios 인스턴스 생성
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
-  timeout: 10000,
+  timeout: 60000, // Increased timeout to 60 seconds for slow Jenkins API calls
   headers: {
     'Content-Type': 'application/json',
   },

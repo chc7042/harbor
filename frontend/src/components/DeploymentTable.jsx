@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   ChevronUp,
   ChevronDown,
@@ -11,7 +11,6 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  MoreHorizontal,
   Download
 } from 'lucide-react';
 
@@ -23,7 +22,6 @@ const DeploymentTable = ({
   onRowClick,
   className = ''
 }) => {
-  const [selectedRows, setSelectedRows] = useState(new Set());
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -56,26 +54,15 @@ const DeploymentTable = ({
     };
 
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[status] || 'bg-gray-100 text-gray-800 border-gray-200'}`}>
-        {getStatusIcon(status)}
-        <span className="ml-1">{labels[status] || status}</span>
+      <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap ${styles[status] || 'bg-gray-100 text-gray-800 border-gray-200'}`} style={{display: 'inline-block', whiteSpace: 'nowrap'}}>
+        <span className="inline-flex items-center">
+          {getStatusIcon(status)}
+          <span className="ml-1">{labels[status] || status}</span>
+        </span>
       </span>
     );
   };
 
-  const getEnvironmentBadge = (environment) => {
-    const styles = {
-      production: 'bg-red-100 text-red-800',
-      staging: 'bg-yellow-100 text-yellow-800',
-      development: 'bg-blue-100 text-blue-800'
-    };
-
-    return (
-      <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${styles[environment] || 'bg-gray-100 text-gray-800'}`}>
-        {environment}
-      </span>
-    );
-  };
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -116,23 +103,6 @@ const DeploymentTable = ({
       <ChevronDown className="w-4 h-4 text-primary-600" />;
   };
 
-  const handleRowSelect = (deploymentId) => {
-    const newSelected = new Set(selectedRows);
-    if (newSelected.has(deploymentId)) {
-      newSelected.delete(deploymentId);
-    } else {
-      newSelected.add(deploymentId);
-    }
-    setSelectedRows(newSelected);
-  };
-
-  const handleSelectAll = () => {
-    if (selectedRows.size === deployments.length) {
-      setSelectedRows(new Set());
-    } else {
-      setSelectedRows(new Set(deployments.map(d => d.id)));
-    }
-  };
 
   if (loading) {
     return (
@@ -174,33 +144,10 @@ const DeploymentTable = ({
     <div className={`card-minimal overflow-hidden ${className}`}>
       {/* 테이블 헤더 */}
       <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={selectedRows.size === deployments.length && deployments.length > 0}
-                onChange={handleSelectAll}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-600"
-              />
-              <span className="ml-2 text-sm text-gray-600">
-                {selectedRows.size > 0 ? `${selectedRows.size}개 선택됨` : '전체 선택'}
-              </span>
-            </label>
-            <span className="text-sm text-gray-500">
-              총 {deployments.length}개 결과
-            </span>
-          </div>
-          {selectedRows.size > 0 && (
-            <div className="flex items-center space-x-2">
-              <button className="btn-secondary text-sm">
-                선택 항목 내보내기
-              </button>
-              <button className="btn-secondary text-sm">
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+        <div className="flex items-center">
+          <span className="text-sm text-gray-500">
+            총 {deployments.length}개 결과
+          </span>
         </div>
       </div>
 
@@ -209,13 +156,10 @@ const DeploymentTable = ({
         <table className="table-minimal">
           <thead>
             <tr>
-              <th className="w-4">
-                {/* 체크박스 컬럼 */}
-              </th>
               <th>
                 <button
                   onClick={() => handleSort('project_name')}
-                  className="flex items-center space-x-1 hover:text-primary-900 transition-colors"
+                  className="flex items-center justify-center space-x-1 hover:text-primary-900 transition-colors w-full"
                 >
                   <span>프로젝트</span>
                   {getSortIcon('project_name')}
@@ -224,7 +168,7 @@ const DeploymentTable = ({
               <th>
                 <button
                   onClick={() => handleSort('build_number')}
-                  className="flex items-center space-x-1 hover:text-primary-900 transition-colors"
+                  className="flex items-center justify-center space-x-1 hover:text-primary-900 transition-colors w-full"
                 >
                   <span>빌드</span>
                   {getSortIcon('build_number')}
@@ -233,57 +177,45 @@ const DeploymentTable = ({
               <th>
                 <button
                   onClick={() => handleSort('status')}
-                  className="flex items-center space-x-1 hover:text-primary-900 transition-colors"
+                  className="flex items-center justify-center space-x-1 hover:text-primary-900 transition-colors w-full"
                 >
                   <span>상태</span>
                   {getSortIcon('status')}
                 </button>
               </th>
-              <th>환경</th>
-              <th>
+              <th className="w-24">
                 <button
                   onClick={() => handleSort('deployed_by')}
-                  className="flex items-center space-x-1 hover:text-primary-900 transition-colors"
+                  className="flex items-center justify-center space-x-1 hover:text-primary-900 transition-colors w-full"
                 >
                   <span>배포자</span>
                   {getSortIcon('deployed_by')}
                 </button>
               </th>
-              <th>브랜치</th>
-              <th>
+              <th className="text-center w-32">브랜치</th>
+              <th className="w-32">
                 <button
                   onClick={() => handleSort('created_at')}
-                  className="flex items-center space-x-1 hover:text-primary-900 transition-colors"
+                  className="flex items-center justify-center space-x-1 hover:text-primary-900 transition-colors w-full"
                 >
                   <span>배포 시간</span>
                   {getSortIcon('created_at')}
                 </button>
               </th>
-              <th>소요 시간</th>
-              <th className="w-8">액션</th>
+              <th className="text-center w-20">소요 시간</th>
+              <th className="w-16 text-center">액션</th>
             </tr>
           </thead>
           <tbody>
             {deployments.map((deployment) => {
-              const isSelected = selectedRows.has(deployment.id);
               const dateInfo = formatDate(deployment.created_at);
 
               return (
                 <tr
                   key={deployment.id}
-                  className={`cursor-pointer transition-colors ${
-                    isSelected ? 'bg-primary-50 border-primary-200' : ''
-                  }`}
+                  className="cursor-pointer transition-colors hover:bg-gray-50"
                   onClick={() => onRowClick?.(deployment)}
                 >
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => handleRowSelect(deployment.id)}
-                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-600"
-                    />
-                  </td>
 
                   <td>
                     <div className="flex items-center space-x-3">
@@ -293,15 +225,12 @@ const DeploymentTable = ({
                       <div>
                         <div className="font-medium text-primary-900">
                           {deployment.project_name}
-                        </div>
-                        {/* Jenkins job 구조 표시 - subJobs가 있는 경우 */}
-                        {deployment.subJobs && deployment.subJobs.length > 0 && (
-                          <div className="text-sm text-gray-600 mt-1">
-                            <div className="flex items-center space-x-2">
-                              <span>빌드 순서:</span>
+                          {/* Jenkins job 구조 표시 - subJobs가 있는 경우 */}
+                          {deployment.subJobs && deployment.subJobs.length > 0 && (
+                            <span className="ml-2">
                               {deployment.subJobs.map((subJob, index) => (
-                                <span key={index} className="flex items-center">
-                                  <span className={`px-2 py-1 rounded text-xs ${
+                                <span key={index}>
+                                  <span className={`inline-block px-1 py-0.5 rounded text-xs font-medium ${
                                     subJob.status === 'success' 
                                       ? 'bg-green-100 text-green-700' 
                                       : subJob.status === 'failed'
@@ -311,13 +240,13 @@ const DeploymentTable = ({
                                     {subJob.prefix}
                                   </span>
                                   {index < deployment.subJobs.length - 1 && (
-                                    <span className="mx-1 text-gray-400">→</span>
+                                    <span className="mx-0.5 text-gray-400 text-xs">→</span>
                                   )}
                                 </span>
                               ))}
-                            </div>
-                          </div>
-                        )}
+                            </span>
+                          )}
+                        </div>
                         {deployment.description && (
                           <div className="text-sm text-gray-500 truncate max-w-xs mt-1">
                             {deployment.description}
@@ -330,7 +259,7 @@ const DeploymentTable = ({
                   <td>
                     <div className="flex items-center space-x-2">
                       <Tag className="w-3 h-3 text-gray-400" />
-                      <span className="font-mono text-sm">
+                      <span className="font-mono text-sm whitespace-nowrap">
                         #{deployment.build_number}
                       </span>
                     </div>
@@ -340,15 +269,12 @@ const DeploymentTable = ({
                     {getStatusBadge(deployment.status)}
                   </td>
 
-                  <td>
-                    {deployment.environment && getEnvironmentBadge(deployment.environment)}
-                  </td>
 
                   <td>
                     {deployment.deployed_by && (
-                      <div className="flex items-center space-x-2">
-                        <User className="w-3 h-3 text-gray-400" />
-                        <span className="text-sm">{deployment.deployed_by}</span>
+                      <div className="flex items-center space-x-1">
+                        <User className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                        <span className="text-sm truncate max-w-20" title={deployment.deployed_by}>{deployment.deployed_by}</span>
                       </div>
                     )}
                   </td>
@@ -357,7 +283,7 @@ const DeploymentTable = ({
                     {deployment.branch && (
                       <div className="flex items-center space-x-2">
                         <GitBranch className="w-3 h-3 text-gray-400" />
-                        <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
+                        <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded whitespace-nowrap">
                           {deployment.branch}
                         </span>
                       </div>
@@ -365,7 +291,7 @@ const DeploymentTable = ({
                   </td>
 
                   <td>
-                    <div className="text-sm">
+                    <div className="text-xs whitespace-nowrap">
                       <div className="font-medium text-primary-900">
                         {dateInfo.date}
                       </div>
@@ -376,8 +302,8 @@ const DeploymentTable = ({
                   </td>
 
                   <td>
-                    <div className="flex items-center space-x-1 text-sm text-gray-600">
-                      <Clock className="w-3 h-3" />
+                    <div className="flex items-center space-x-1 text-xs text-gray-600 whitespace-nowrap">
+                      <Clock className="w-3 h-3 flex-shrink-0" />
                       <span>{formatDuration(deployment.duration)}</span>
                     </div>
                   </td>

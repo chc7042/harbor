@@ -13,6 +13,7 @@ const webhookRoutes = require('./routes/webhooks');
 const websocketRoutes = require('./routes/websocket');
 const healthRoutes = require('./routes/health');
 const nasRoutes = require('./routes/nas');
+const nasArchiveRoutes = require('./routes/nas-archive');
 const projectRoutes = require('./routes/projects');
 const fileRoutes = require('./routes/files');
 const { errorHandler } = require('./middleware/error');
@@ -154,6 +155,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/ws', websocketRoutes);
 app.use('/api/nas', nasRoutes);
+app.use('/api/nas-archive', nasArchiveRoutes);
 app.use('/api/files', fileRoutes);
 
 // 404 핸들러
@@ -271,4 +273,4 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-startServer();
+startServer(); // Force restart for unlimited fix

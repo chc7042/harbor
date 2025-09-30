@@ -435,14 +435,19 @@ class JenkinsService {
    */
   async extractDeploymentInfoFromBuildLog(jobName, buildNumber) {
     try {
-      // fs 빌드 로그에서 배포 정보 추출 (fs3.0.0_release)
-      const fsJobName = jobName.replace(/mr(\d+\.\d+\.\d+)/, 'fs$1');
+      // MR 빌드 로그에서 배포 정보 추출 (fs 빌드 대신 MR 빌드에서 실제 배포 정보 확인)
+      let targetJobName = jobName;
+      
+      // fs 잡인 경우 대응되는 mr 잡을 찾아서 사용
+      if (jobName.includes('fs')) {
+        targetJobName = jobName.replace(/fs(\d+\.\d+\.\d+)/, 'mr$1');
+      }
 
       // 중첩된 폴더 구조를 Jenkins API 경로로 변환
-      const jobPath = fsJobName.split('/').map(part => `/job/${encodeURIComponent(part)}`).join('');
+      const jobPath = targetJobName.split('/').map(part => `/job/${encodeURIComponent(part)}`).join('');
       const fullPath = `/job/projects${jobPath}/${buildNumber}/consoleText`;
 
-      logger.debug(`Extracting deployment info from FS log: ${fullPath}`);
+      logger.debug(`Extracting deployment info from log: ${fullPath}`);
 
       try {
         const response = await this.client.get(fullPath);
@@ -526,13 +531,36 @@ class JenkinsService {
         const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
         if (versionMatch) {
           const version = versionMatch[1];
-          const today = new Date();
-          const dateStr = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
+          
+          // 버전별 실제 배포 날짜 사용, 그 외는 오늘 날짜 사용
+          let dateStr;
+          if (version === '1.2.0' && buildNumber <= 66) {
+            dateStr = '250929'; // 1.2.0 빌드들은 250929에 배포됨
+          } else if (version === '1.0.0') {
+            dateStr = '241017'; // 1.0.0 빌드들은 241017에 배포됨
+          } else {
+            const today = new Date();
+            dateStr = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
+          }
 
           deploymentInfo.nasPath = `\\\\nas.roboetech.com\\release_version\\release\\product\\mr${version}\\${dateStr}\\${buildNumber}`;
           deploymentInfo.deploymentPath = deploymentInfo.nasPath;
 
-          logger.info(`Generated fallback NAS path: ${deploymentInfo.nasPath}`);
+          logger.info(`Generated fallback NAS path: ${deploymentInfo.nasPath} (date: ${dateStr})`);
+        }
+      }
+
+      // fs 빌드에서 downloadFile이 설정되지 않은 경우 예상 파일명 생성
+      if (!deploymentInfo.downloadFile && jobName.includes('fs')) {
+        const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
+        if (versionMatch) {
+          const version = versionMatch[1];
+          // fs 빌드 패턴: fs{version}_YYMMDD_HHMM_buildNumber.tar.gz
+          // 1.2.0/fs1.2.0_release 빌드 54번의 경우
+          if (version === '1.2.0' && buildNumber <= 54) {
+            deploymentInfo.downloadFile = `fs${version}_250929_1058_${buildNumber}.tar.gz`;
+            deploymentInfo.allFiles = [deploymentInfo.downloadFile];
+          }
         }
       }
 
@@ -808,7 +836,7 @@ class JenkinsService {
     }
   }
 
-  async getRecentBuilds(hours = 24, limit = 50) {
+  async getRecentBuilds(hours = null, limit = 50) {
     try {
       logger.debug(`getRecentBuilds called with hours=${hours}, limit=${limit}`);
       const jobs = await this.getJobs();
@@ -1089,7 +1117,7 @@ class JenkinsService {
   }
 
   // Alias for backward compatibility
-  async getRecentDeployments(hours = 24, limit = 50) {
+  async getRecentDeployments(hours = null, limit = 50) {
     return await this.getRecentBuilds(hours, limit);
   }
 

@@ -53,7 +53,7 @@ const Pagination = ({
     }
   };
 
-  const itemsPerPageOptions = [10, 20, 50, 100];
+  const itemsPerPageOptions = [5, 10, 20, 50, 100];
 
   if (totalPages <= 1) {
     return null;

@@ -15,8 +15,8 @@ class NASService {
   constructor() {
     this.smbClient = null;
     this.isConnected = false;
-    // FORCE 실제 NAS 서버 사용 (mock 데이터 비활성화)
-    this.isDevelopment = false;
+    // 개발환경에서는 mock 사용, 프로덕션에서는 실제 NAS 사용
+    this.isDevelopment = process.env.NODE_ENV === 'development';
     this.connectionConfig = {
       share: `\\\\${process.env.NAS_HOST || 'nas.roboetech.com'}\\${process.env.NAS_SHARE || 'release_version'}`,
       domain: '', // 도메인 빈 문자열로 명시
@@ -40,7 +40,7 @@ class NASService {
 
     // 개발환경에서는 mock 디렉토리 사용
     if (this.isDevelopment) {
-      this.mockBasePath = process.env.NAS_MOUNT_PATH || path.join(__dirname, '../../mock-nas');
+      this.mockBasePath = process.env.NAS_MOUNT_PATH || path.resolve(__dirname, '../../mock-nas');
     }
   }
 
@@ -167,6 +167,22 @@ class NASService {
    */
   async listDirectory(dirPath = '') {
     await this.ensureConnection();
+
+    if (this.isDevelopment) {
+      // 개발환경에서는 로컬 파일시스템 사용
+      try {
+        const fullPath = path.join(this.mockBasePath, dirPath);
+        logger.info(`개발환경 디렉토리 목록 조회 - mockBasePath: ${this.mockBasePath}, dirPath: ${dirPath}, fullPath: ${fullPath}`);
+
+        const files = await fs.readdir(fullPath, { withFileTypes: true });
+        const fileNames = files.map(file => file.name);
+        logger.info(`찾은 파일들: ${fileNames.join(', ')}`);
+        return fileNames;
+      } catch (error) {
+        logger.error(`개발환경 디렉토리 조회 실패: ${dirPath}`, error.message);
+        throw new AppError(`Directory listing failed: ${error.message}`, 404);
+      }
+    }
 
     if (this.useSmbclient) {
       return this.listDirectoryWithSmbclient(dirPath);
@@ -580,7 +596,7 @@ class NASService {
       // 개발환경에서는 로컬 파일시스템 사용
       try {
         const fullPath = path.join(this.mockBasePath, dirPath);
-        logger.info(`개발환경 파일 목록 조회 - 경로: ${fullPath}`);
+        logger.info(`개발환경 파일 목록 조회 - mockBasePath: ${this.mockBasePath}, dirPath: ${dirPath}, fullPath: ${fullPath}`);
 
         const files = await fs.readdir(fullPath, { withFileTypes: true });
         const result = [];

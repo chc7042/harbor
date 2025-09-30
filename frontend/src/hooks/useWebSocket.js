@@ -56,9 +56,13 @@ export const useWebSocket = () => {
       setConnectionState('disconnected');
       console.log('WebSocket disconnected:', data);
 
-      // 비정상 종료인 경우 토스트 알림
+      // 비정상 종료인 경우 토스트 알림 (세션당 한 번만)
       if (data.code !== 1000) {
-        toast.error('실시간 연결이 끊어졌습니다. 재연결을 시도합니다.');
+        const disconnectToastShown = sessionStorage.getItem('ws_disconnect_toast_shown');
+        if (!disconnectToastShown) {
+          toast.error('실시간 연결이 끊어졌습니다. 재연결을 시도합니다.');
+          sessionStorage.setItem('ws_disconnect_toast_shown', 'true');
+        }
       }
     };
 
@@ -67,19 +71,37 @@ export const useWebSocket = () => {
       setIsConnected(false);
       setConnectionState('error');
       console.error('WebSocket error:', data);
-      toast.error('실시간 연결에 오류가 발생했습니다.');
+      
+      // 에러 토스트 중복 방지
+      const errorToastShown = sessionStorage.getItem('ws_error_toast_shown');
+      if (!errorToastShown) {
+        toast.error('실시간 연결에 오류가 발생했습니다.');
+        sessionStorage.setItem('ws_error_toast_shown', 'true');
+      }
     };
 
     // 최대 재연결 시도 도달
     const handleMaxReconnectAttempts = () => {
       setConnectionState('failed');
-      toast.error('실시간 연결을 복구할 수 없습니다. 페이지를 새로고침해주세요.');
+      
+      // 최대 재연결 토스트 중복 방지
+      const maxReconnectToastShown = sessionStorage.getItem('ws_max_reconnect_toast_shown');
+      if (!maxReconnectToastShown) {
+        toast.error('실시간 연결을 복구할 수 없습니다. 페이지를 새로고침해주세요.');
+        sessionStorage.setItem('ws_max_reconnect_toast_shown', 'true');
+      }
     };
 
     // 연결 확립
     const handleConnectionEstablished = (data) => {
       console.log('WebSocket connection established:', data);
-      toast.success('실시간 업데이트가 활성화되었습니다.');
+      
+      // 세션당 한 번만 토스트 표시
+      const toastShown = sessionStorage.getItem('ws_connection_toast_shown');
+      if (!toastShown) {
+        toast.success('실시간 업데이트가 활성화되었습니다.');
+        sessionStorage.setItem('ws_connection_toast_shown', 'true');
+      }
     };
 
     // 이벤트 리스너 등록

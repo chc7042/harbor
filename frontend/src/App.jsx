@@ -55,7 +55,8 @@ function App() {
                 background: '#ffffff',
                 color: '#000000',
                 border: '1px solid #e5e7eb',
-                fontFamily: 'Inter, system-ui, sans-serif',
+                fontFamily: 'Noto Sans KR, system-ui, sans-serif',
+                fontSize: '14px',
               },
               success: {
                 iconTheme: {

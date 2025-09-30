@@ -445,7 +445,7 @@ router.get('/recent',
       }
 
       const {
-        hours = 24,
+        hours,
         limit = 5,
         page = 1,
         sort = 'created_at',
@@ -456,8 +456,8 @@ router.get('/recent',
       const jenkinsService = getJenkinsService();
 
       try {
-        // hours가 null이거나 빈 문자열인 경우 무제한으로 설정
-        const timeLimit = (hours === null || hours === 'null' || hours === '') ? null : parseInt(hours);
+        // hours가 null, undefined이거나 빈 문자열인 경우 무제한으로 설정
+        const timeLimit = (hours === null || hours === undefined || hours === 'null' || hours === '') ? null : parseInt(hours);
         // 페이지네이션을 위해 더 많은 데이터를 가져온 후 프론트엔드에서 페이징 처리
         const fetchLimit = timeLimit === null ? 10000 : Math.max(parseInt(limit) * parseInt(page), 100);
 
@@ -964,11 +964,40 @@ router.get('/deployment-info/:projectName/:buildNumber',
 
       const { projectName, buildNumber } = req.params;
 
+      logger.info(`배포 정보 조회 요청 - 사용자: ${req.user.username}, 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+
       const jenkinsService = getJenkinsService();
       const nasService = getNASService();
       const synologyApiService = require('../services/synologyApiService');
 
       try {
+        // Jenkins에서 빌드 상태 먼저 확인
+        const buildInfo = await jenkinsService.getBuildInfo(projectName, parseInt(buildNumber));
+        const buildStatus = buildInfo ? buildInfo.result : null;
+        
+        // 실패한 배포인 경우 파일 검색 없이 기본 정보만 반환
+        if (buildStatus === 'FAILURE' || buildStatus === 'FAILED' || buildStatus === 'ABORTED') {
+          logger.info(`배포 실패 상태(${buildStatus})로 인해 파일 검색 생략 - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+          
+          return res.json({
+            success: true,
+            data: {
+              projectName,
+              buildNumber: parseInt(buildNumber),
+              status: buildStatus,
+              deploymentPath: null,
+              nasPath: null,
+              downloadFile: null,
+              allFiles: [],
+              verifiedFiles: [],
+              directoryVerified: false,
+              downloadFileVerified: false,
+              message: `배포가 실패했습니다 (${buildStatus}). 아티팩트 파일이 생성되지 않았습니다.`
+            },
+            message: '배포 정보를 조회했습니다.'
+          });
+        }
+
         // Jenkins에서 배포 정보 조회
         const deploymentInfo = await jenkinsService.extractDeploymentInfoFromBuildLog(projectName, parseInt(buildNumber));
 
@@ -1032,10 +1061,41 @@ router.get('/deployment-info/:projectName/:buildNumber',
                 }
               }
 
-              // allFiles 배열의 파일들도 검증
+              // allFiles 배열의 파일들도 검증하고, NAS에서 실제 배포 파일 찾기
               if (deploymentInfo.allFiles && deploymentInfo.allFiles.length > 0) {
                 deploymentInfo.verifiedAllFiles = deploymentInfo.allFiles.filter(file => files.includes(file));
                 deploymentInfo.allFiles = deploymentInfo.verifiedAllFiles; // 존재하는 파일만 반환
+              } else {
+                // allFiles가 비어있는 경우, NAS에서 직접 배포 파일 찾기
+                deploymentInfo.allFiles = [];
+                
+                // 버전 정보 추출
+                const versionMatch = projectName.match(/(\d+\.\d+\.\d+)/);
+                if (versionMatch) {
+                  const version = versionMatch[1];
+                  
+                  // NAS에서 해당 버전 관련 파일들 찾기
+                  const versionFiles = files.filter(file => {
+                    const isDeploymentFile = file.endsWith('.tar.gz') || file.endsWith('.enc.tar.gz');
+                    const hasVersionInName = file.includes(version);
+                    return isDeploymentFile && hasVersionInName;
+                  });
+                  
+                  deploymentInfo.allFiles = versionFiles;
+                  deploymentInfo.verifiedAllFiles = versionFiles;
+                  
+                  logger.info(`Found ${versionFiles.length} version-related files in NAS: ${versionFiles.join(', ')}`);
+                  
+                  // 메인 다운로드 파일도 다시 설정 (V{version}로 시작하는 비암호화 파일 우선)
+                  if (!deploymentInfo.downloadFileVerified) {
+                    const mainFile = versionFiles.find(f => f.startsWith('V') && !f.includes('.enc.'));
+                    if (mainFile) {
+                      deploymentInfo.downloadFile = mainFile;
+                      deploymentInfo.downloadFileVerified = true;
+                      logger.info(`Updated download file to: ${mainFile}`);
+                    }
+                  }
+                }
               }
 
               logger.info(`NAS directory verified: ${unixPath} (${files.length} files found)`);
@@ -1230,11 +1290,14 @@ router.get('/deployment-info/:projectName/:buildNumber',
         });
       } catch (error) {
         logger.error(`Jenkins 배포 정보 조회 실패 - 프로젝트: ${projectName}, 빌드: ${buildNumber}:`, error.message);
+        logger.error('Error stack:', error.stack);
 
         res.status(500).json({
           success: false,
           message: '배포 정보 조회에 실패했습니다.',
           error: error.message,
+          projectName: projectName,
+          buildNumber: buildNumber
         });
       }
     } catch (error) {

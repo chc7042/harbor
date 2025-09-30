@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ConnectionStatus from './ConnectionStatus';
@@ -11,6 +11,8 @@ const Header = () => {
   const location = useLocation();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isNotificationSettingsOpen, setIsNotificationSettingsOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
 
   const handleLogout = async () => {
     try {
@@ -25,6 +27,12 @@ const Header = () => {
   const toggleDropdown = () => {
     setIsDropdownOpen(!isDropdownOpen);
   };
+
+  const handleProfileClick = () => {
+    setIsDropdownOpen(false);
+    setIsProfileModalOpen(true);
+  };
+
 
   return (
     <header className="bg-white border-b border-primary-200">
@@ -47,25 +55,29 @@ const Header = () => {
           </div>
 
           {/* 네비게이션 */}
-          <nav className="hidden md:flex items-center space-x-8">
-            <a
-              href="/dashboard"
-              className="text-primary-600 hover:text-primary-900 px-3 py-2 text-sm font-medium transition-colors duration-200"
-            >
-              대시보드
-            </a>
-            <a
-              href="/deployments"
-              className="text-primary-600 hover:text-primary-900 px-3 py-2 text-sm font-medium transition-colors duration-200"
-            >
-              배포 이력
-            </a>
-            <a
-              href="/projects"
-              className="text-primary-600 hover:text-primary-900 px-3 py-2 text-sm font-medium transition-colors duration-200"
-            >
-              프로젝트
-            </a>
+          <nav className="hidden md:flex items-center">
+            <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+              <a
+                href="/dashboard"
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                  location.pathname === '/dashboard' || location.pathname === '/'
+                    ? 'bg-white text-primary-900 shadow-sm'
+                    : 'text-gray-600 hover:text-primary-900 hover:bg-white/50'
+                }`}
+              >
+                📊 대시보드
+              </a>
+              <a
+                href="/projects"
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                  location.pathname === '/projects'
+                    ? 'bg-white text-primary-900 shadow-sm'
+                    : 'text-gray-600 hover:text-primary-900 hover:bg-white/50'
+                }`}
+              >
+                📁 프로젝트
+              </a>
+            </div>
           </nav>
 
           {/* 사용자 메뉴 */}
@@ -126,22 +138,12 @@ const Header = () => {
                     <div className="py-1">
                       <button
                         className="dropdown-item"
-                        onClick={() => setIsDropdownOpen(false)}
+                        onClick={handleProfileClick}
                       >
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
                         프로필
-                      </button>
-                      <button
-                        className="dropdown-item"
-                        onClick={() => setIsDropdownOpen(false)}
-                      >
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        설정
                       </button>
                       <div className="border-t border-primary-200 my-1"></div>
                       <button
@@ -167,6 +169,70 @@ const Header = () => {
         isOpen={isNotificationSettingsOpen}
         onClose={() => setIsNotificationSettingsOpen(false)}
       />
+
+      {/* 프로필 모달 */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-primary-900">프로필</h2>
+              <button
+                onClick={() => setIsProfileModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
+                  <span className="text-2xl text-primary-700 font-medium">
+                    {user?.name?.charAt(0) || user?.username?.charAt(0) || 'U'}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-primary-900">
+                    {user?.name || user?.username}
+                  </h3>
+                  <p className="text-sm text-primary-500">
+                    {user?.department || '사용자'}
+                  </p>
+                  <p className="text-sm text-primary-400">
+                    {user?.email}
+                  </p>
+                </div>
+              </div>
+              <div className="border-t pt-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">사용자 ID:</span>
+                    <span className="text-sm font-medium">{user?.username}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">부서:</span>
+                    <span className="text-sm font-medium">{user?.department || '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">이메일:</span>
+                    <span className="text-sm font-medium">{user?.email || '-'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setIsProfileModalOpen(false)}
+                className="px-4 py-2 bg-primary-900 text-white rounded-md hover:bg-primary-800 transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </header>
   );
 };

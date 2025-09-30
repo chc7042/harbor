@@ -49,6 +49,7 @@ const SearchFilter = ({
     { value: 'yesterday', label: '어제' },
     { value: 'last7days', label: '지난 7일' },
     { value: 'last30days', label: '지난 30일' },
+    { value: 'unlimited', label: '제한 없음' },
     { value: 'custom', label: '사용자 정의' }
   ];
 

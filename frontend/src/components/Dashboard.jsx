@@ -7,6 +7,7 @@ import SearchFilter from './SearchFilter';
 import DeploymentTable from './DeploymentTable';
 import DeploymentDetailModal from './DeploymentDetailModal';
 import Pagination from './Pagination';
+import ProjectHierarchy from './ProjectHierarchy';
 import { useDeploymentUpdates } from '../hooks/useWebSocket';
 import api from '../services/api';
 import toast from 'react-hot-toast';
@@ -30,14 +31,14 @@ const Dashboard = () => {
     status: 'all',
     environment: 'all',
     project: 'all',
-    dateRange: 'all',
+    dateRange: 'last30days', // 기본값을 30일로 변경
     startDate: '',
     endDate: ''
   });
 
   // 페이지네이션 상태
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
   const [totalPages, setTotalPages] = useState(1);
 
   // 정렬 상태
@@ -50,6 +51,9 @@ const Dashboard = () => {
   const [selectedDeployment, setSelectedDeployment] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // 뷰 모드 상태 (deployments: 배포이력, projects: 프로젝트 계층)
+  const [viewMode, setViewMode] = useState('projects');
+
   useEffect(() => {
     fetchProjects();
   }, []);
@@ -60,20 +64,63 @@ const Dashboard = () => {
 
   // WebSocket으로 실시간 배포 업데이트 수신
   useDeploymentUpdates((updatedDeployment) => {
-    setDeployments(prev => 
-      prev.map(deployment => 
-        deployment.id === updatedDeployment.id ? updatedDeployment : deployment
-      )
-    );
+    if (updatedDeployment && updatedDeployment.id) {
+      setDeployments(prev => 
+        prev.map(deployment => 
+          deployment && deployment.id === updatedDeployment.id ? updatedDeployment : deployment
+        )
+      );
+    }
   });
 
   const fetchProjects = async () => {
     try {
+      console.log('Fetching projects...'); // 디버깅용
       const response = await api.get('/projects');
-      setProjects(response.data || []);
+      console.log('Projects API Response:', response.data); // 디버깅용
+      
+      // API 응답 구조에 맞게 데이터 추출
+      const projectData = response.data?.data || response.data || [];
+      console.log('Extracted project data:', projectData); // 디버깅용
+      console.log('Project data length:', projectData.length); // 디버깅용
+      
+      // 프로젝트를 버전 번호 기준으로 내림차순 정렬 (3.0.0, 2.0.0, 1.2.0 순서)
+      const sortedProjects = projectData.sort((a, b) => {
+        // 더 유연한 버전 번호 추출 (1.2, 1.2.0 모두 지원)
+        const versionA = a.name.match(/(\d+)\.(\d+)\.?(\d*)/);
+        const versionB = b.name.match(/(\d+)\.(\d+)\.?(\d*)/);
+        
+        if (versionA && versionB) {
+          const parseVersion = (match) => {
+            return [
+              parseInt(match[1], 10) || 0, // 메이저
+              parseInt(match[2], 10) || 0, // 마이너  
+              parseInt(match[3], 10) || 0  // 패치
+            ];
+          };
+          
+          const vA = parseVersion(versionA);
+          const vB = parseVersion(versionB);
+          
+          // 메이저, 마이너, 패치 버전을 차례로 비교 (내림차순)
+          for (let i = 0; i < 3; i++) {
+            if (vA[i] !== vB[i]) {
+              return vB[i] - vA[i]; // 내림차순
+            }
+          }
+          return 0; // 동일한 버전
+        }
+        
+        // 버전이 없는 경우 이름으로 정렬
+        return b.name.localeCompare(a.name);
+      });
+      
+      setProjects(sortedProjects);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
+      console.error('Error response:', error.response?.data); // 디버깅용
       toast.error('프로젝트 목록을 불러오는데 실패했습니다.');
+      setProjects([]); // 에러 시 빈 배열로 설정
     }
   };
 
@@ -105,42 +152,85 @@ const Dashboard = () => {
         params.append('project', filters.project);
       }
 
+      // 날짜 범위에 따른 시간 제한 설정
+      let hoursLimit = '720'; // 기본값 30일 (30 * 24 = 720시간)
+      
       if (filters.dateRange !== 'all') {
         if (filters.dateRange === 'custom') {
           if (filters.startDate) params.append('startDate', filters.startDate);
           if (filters.endDate) params.append('endDate', filters.endDate);
+          // custom의 경우 시간 제한 없음
+          hoursLimit = null;
+        } else if (filters.dateRange === 'unlimited') {
+          // 제한 없음의 경우 시간 제한 설정 안함
+          hoursLimit = null;
         } else {
+          // 기타 빠른 날짜 범위 설정
           params.append('dateRange', filters.dateRange);
+          switch (filters.dateRange) {
+            case 'today':
+              hoursLimit = '24';
+              break;
+            case 'yesterday':
+              hoursLimit = '48';
+              break;
+            case 'last7days':
+              hoursLimit = '168'; // 7 * 24
+              break;
+            case 'last30days':
+              hoursLimit = '720'; // 30 * 24
+              break;
+            default:
+              hoursLimit = '720';
+          }
         }
       }
 
-      // Jenkins 최근 배포 데이터 가져오기
-      params.append('hours', '720'); // 30일 범위로 설정
+      // 시간 제한이 있는 경우에만 추가
+      if (hoursLimit) {
+        params.append('hours', hoursLimit);
+      }
       
-      const response = await api.get(`/deployments/recent?${params}`);
-      if (response.data.success) {
-        const deploymentData = response.data.data || [];
-        
+      const apiUrl = `/deployments/recent?${params}`;
+      console.log('API URL:', apiUrl); // 디버깅용
+      const response = await api.get(apiUrl);
+      console.log('API Response:', response.data); // 디버깅용
+      console.log('Query params:', Object.fromEntries(params)); // 디버깅용
+      
+      // response.data가 있고 success가 true이거나, data 배열이 직접 있는 경우 처리
+      const deploymentData = response.data?.data || response.data || [];
+      
+      if (Array.isArray(deploymentData)) {
         // 프론트엔드 형식에 맞게 데이터 변환
         const transformedData = deploymentData.map(deployment => ({
           id: deployment.id,
-          project_name: deployment.projectName,
-          build_number: deployment.buildNumber,
+          project_name: deployment.projectName || deployment.project_name,
+          build_number: deployment.buildNumber || deployment.build_number,
           status: deployment.status,
           environment: deployment.environment || 'development',
-          deployed_by: deployment.deployedBy || 'Jenkins',
+          deployed_by: deployment.deployedBy || deployment.deployed_by || 'Jenkins',
           branch: deployment.branch || 'main',
-          created_at: deployment.deployedAt,
+          created_at: deployment.deployedAt || deployment.created_at,
           duration: deployment.duration,
-          description: deployment.commitMessage || `Build ${deployment.buildNumber} deployment`,
-          jenkins_url: deployment.jenkinsUrl,
-          artifacts: deployment.artifacts || []
+          description: deployment.commitMessage || deployment.description || `Build ${deployment.buildNumber || deployment.build_number} deployment`,
+          jenkins_url: deployment.jenkinsUrl || deployment.jenkins_url,
+          artifacts: deployment.artifacts || [],
+          subJobs: deployment.subJobs || []
         }));
 
         setDeployments(transformedData);
-        setTotalItems(transformedData.length);
-        setTotalPages(Math.ceil(transformedData.length / itemsPerPage));
+        
+        // API 응답에서 페이지네이션 정보 추출
+        const pagination = response.data?.pagination;
+        if (pagination) {
+          setTotalItems(pagination.totalItems || transformedData.length);
+          setTotalPages(pagination.totalPages || Math.ceil(transformedData.length / itemsPerPage));
+        } else {
+          setTotalItems(transformedData.length);
+          setTotalPages(Math.ceil(transformedData.length / itemsPerPage));
+        }
       } else {
+        console.log('No deployment data found');
         setDeployments([]);
         setTotalItems(0);
         setTotalPages(1);
@@ -188,6 +278,13 @@ const Dashboard = () => {
     setSelectedDeployment(null);
   };
 
+  const handleJobClick = (job) => {
+    // 작업 클릭 시 해당 작업의 상세 정보 표시
+    if (job.url) {
+      window.open(job.url, '_blank');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-primary-50">
@@ -217,44 +314,104 @@ const Dashboard = () => {
           </p>
         </div>
 
-        {/* 검색 및 필터 */}
-        <SearchFilter
-          searchTerm={searchTerm}
-          onSearchChange={handleSearchChange}
-          filters={filters}
-          onFilterChange={handleFilterChange}
-          projects={projects}
-          className="mb-6"
-        />
+        {/* 뷰 모드 탭 */}
+        <div className="mb-6 bg-white p-4 rounded border" style={{display: 'block', visibility: 'visible'}}>
+          <div className="border-b border-gray-200" style={{display: 'block'}}>
+            <h4 className="mb-2 text-gray-700">현재 뷰 모드: {viewMode}</h4>
+            <nav className="-mb-px flex space-x-8" style={{display: 'flex'}}>
+              {console.log('Current viewMode:', viewMode)} {/* 디버깅용 */}
+              <button
+                onClick={() => {
+                  console.log('Clicking projects tab');
+                  setViewMode('projects');
+                }}
+                className={`py-2 px-4 border-b-2 font-medium text-sm cursor-pointer ${
+                  viewMode === 'projects'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+                style={{display: 'inline-block'}}
+              >
+                프로젝트 계층 구조
+              </button>
+              <button
+                onClick={() => {
+                  console.log('Clicking deployments tab');
+                  setViewMode('deployments');
+                }}
+                className={`py-2 px-4 border-b-2 font-medium text-sm cursor-pointer ${
+                  viewMode === 'deployments'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+                style={{display: 'inline-block'}}
+              >
+                배포 이력
+              </button>
+            </nav>
+          </div>
+        </div>
 
-        {/* 배포 테이블 */}
-        <DeploymentTable
-          deployments={deployments}
-          loading={loading}
-          sortConfig={sortConfig}
-          onSort={handleSort}
-          onRowClick={handleRowClick}
-          className="mb-6"
-        />
-
-        {/* 페이지네이션 */}
-        {!loading && deployments.length > 0 && (
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={totalItems}
-            itemsPerPage={itemsPerPage}
-            onPageChange={handlePageChange}
-            onItemsPerPageChange={handleItemsPerPageChange}
+        {/* 프로젝트 계층 뷰 */}
+        {viewMode === 'projects' && (
+          <ProjectHierarchy
+            projects={projects}
+            deployments={deployments}
+            onJobClick={handleJobClick}
+            onDeploymentClick={(deployment) => {
+              setSelectedDeployment(deployment);
+              setIsModalOpen(true);
+            }}
+            className="mb-6"
           />
         )}
 
+        {/* 배포 이력 뷰 */}
+        {viewMode === 'deployments' && (
+          <>
+            {/* 검색 및 필터 */}
+            <SearchFilter
+              searchTerm={searchTerm}
+              onSearchChange={handleSearchChange}
+              filters={filters}
+              onFilterChange={handleFilterChange}
+              projects={projects}
+              className="mb-6"
+            />
+
+            {/* 배포 테이블 */}
+            <DeploymentTable
+              deployments={deployments}
+              loading={loading}
+              sortConfig={sortConfig}
+              onSort={handleSort}
+              onRowClick={handleRowClick}
+              className="mb-6"
+            />
+
+            {/* 페이지네이션 */}
+            {!loading && totalItems > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                onPageChange={handlePageChange}
+                onItemsPerPageChange={handleItemsPerPageChange}
+              />
+            )}
+          </>
+        )}
+
         {/* 배포 상세 모달 */}
-        <DeploymentDetailModal
-          deployment={selectedDeployment}
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-        />
+        {isModalOpen && selectedDeployment && (
+          <DeploymentDetailModal
+            key={`${selectedDeployment.project_name}-${selectedDeployment.build_number}`}
+            deployment={selectedDeployment}
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+          />
+        )}
       </main>
     </div>
   );

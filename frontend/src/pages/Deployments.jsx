@@ -47,6 +47,7 @@ const Deployments = () => {
   }, []);
 
   useEffect(() => {
+    console.log('useEffect triggered - filters changed:', filters);
     fetchDeployments();
   }, [searchTerm, filters, currentPage, itemsPerPage, sortConfig]);
 
@@ -65,6 +66,7 @@ const Deployments = () => {
 
   const fetchDeployments = async () => {
     try {
+      console.log('fetchDeployments started, filters:', filters);
       setLoading(true);
 
       // API 요청 파라미터 구성
@@ -91,7 +93,7 @@ const Deployments = () => {
         params.append('project', filters.project);
       }
 
-      if (filters.dateRange !== 'all') {
+      if (filters.dateRange !== 'all' && filters.dateRange !== 'unlimited') {
         if (filters.dateRange === 'custom') {
           if (filters.startDate) params.append('startDate', filters.startDate);
           if (filters.endDate) params.append('endDate', filters.endDate);
@@ -100,12 +102,20 @@ const Deployments = () => {
         }
       }
 
-      // Jenkins 최근 배포 데이터 가져오기 (더 긴 시간 범위 사용)
-      params.append('hours', '720'); // 30일 범위로 설정
+      // Jenkins 최근 배포 데이터 가져오기 - unlimited가 아닌 경우에만 시간 제한 적용
+      if (filters.dateRange !== 'unlimited') {
+        params.append('hours', '720'); // 30일 범위로 설정
+        console.log('Adding hours limit: 720');
+      } else {
+        console.log('No hours limit (unlimited)');
+      }
       
+      console.log('Final API URL:', `/deployments/recent?${params}`);
       const response = await api.get(`/deployments/recent?${params}`);
+      console.log('API response received:', response.data);
       if (response.data.success) {
         const deploymentData = response.data.data || [];
+        console.log('API data length:', deploymentData.length);
         
         // 프론트엔드 형식에 맞게 데이터 변환
         const transformedData = deploymentData.map(deployment => ({
@@ -195,8 +205,8 @@ const Deployments = () => {
         return false;
       }
 
-      // 날짜 필터링
-      if (filters.dateRange !== 'all') {
+      // 날짜 필터링 ('all'과 'unlimited'는 필터링하지 않음)
+      if (filters.dateRange !== 'all' && filters.dateRange !== 'unlimited') {
         const deploymentDate = new Date(deployment.created_at);
         const now = new Date();
 
@@ -269,6 +279,7 @@ const Deployments = () => {
   };
 
   const handleFilterChange = (newFilters) => {
+    console.log('handleFilterChange called:', newFilters);
     setFilters(newFilters);
     setCurrentPage(1); // 필터 변경 시 첫 페이지로 이동
   };
