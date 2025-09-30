@@ -24,10 +24,8 @@ const DeploymentDetailModal = ({
   onClose,
   className = ''
 }) => {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('logs');
   const [copySuccess, setCopySuccess] = useState('');
-  const [artifacts, setArtifacts] = useState([]);
-  const [loadingArtifacts, setLoadingArtifacts] = useState(false);
   const [currentDeploymentId, setCurrentDeploymentId] = useState(null);
   const [logs, setLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
@@ -98,74 +96,6 @@ const DeploymentDetailModal = ({
     }
   };
 
-  // 배포 데이터에서 아티팩트 정보 사용 (백엔드에서 이미 조회됨)
-  const fetchArtifacts = async () => {
-    if (!deployment) return;
-    
-    setLoadingArtifacts(true);
-    
-    console.log('fetchArtifacts called for deployment:', deployment);
-    console.log('deployment.artifacts:', deployment.artifacts);
-    
-    // 배포 데이터에 아티팩트 정보가 있으면 사용
-    if (deployment.artifacts && deployment.artifacts.length > 0) {
-      console.log('Using deployment artifacts:', deployment.artifacts);
-      const deploymentArtifacts = deployment.artifacts.map(artifact => ({
-        name: artifact.name,
-        size: formatFileSize(artifact.size),
-        type: artifact.name.endsWith('.tar.gz') ? 'Release Package' : 
-              artifact.name.endsWith('.zip') ? 'Archive' : 'File',
-        url: artifact.downloadUrl,
-        modified: artifact.lastModified
-      }));
-      setArtifacts(deploymentArtifacts);
-      setLoadingArtifacts(false);
-      return;
-    }
-    
-    // 아티팩트 정보가 없으면 기존 로직으로 fallback
-    try {
-      const projectParts = deployment.project_name.split('/');
-      const versionFolder = projectParts[0] || '1.2.0';
-      
-      console.log('Fallback: project_name:', deployment.project_name);
-      console.log('Fallback: versionFolder:', versionFolder);
-      
-      const response = await fetch(`/api/files/list?path=${encodeURIComponent(versionFolder)}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
-      });
-      
-      console.log('API response status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('API response data:', data);
-        if (data.success) {
-          const artifactFiles = data.data.files
-            .filter(file => file.isFile && (file.name.endsWith('.tar.gz') || file.name.endsWith('.zip')))
-            .map(file => ({
-              name: file.name,
-              size: formatFileSize(file.size),
-              type: file.name.endsWith('.tar.gz') ? 'Release Package' : 'Archive',
-              url: `/api/files/download?path=${encodeURIComponent('/nas/release_version/' + versionFolder + '/' + file.name)}`,
-              modified: file.modified
-            }));
-          console.log('Filtered artifact files:', artifactFiles);
-          setArtifacts(artifactFiles);
-        }
-      } else {
-        console.error('API response not ok:', response.status, response.statusText);
-      }
-    } catch (error) {
-      console.error('Failed to fetch artifacts:', error);
-      // 에러 시 빈 배열로 설정
-      setArtifacts([]);
-    } finally {
-      setLoadingArtifacts(false);
-    }
-  };
 
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
@@ -177,7 +107,6 @@ const DeploymentDetailModal = ({
 
   useEffect(() => {
     if (isOpen && deployment) {
-      fetchArtifacts();
       fetchDeploymentInfo();
       // 새 배포 모달이 열릴 때만 상태 초기화
       if (currentDeploymentId !== deployment.id) {
@@ -196,19 +125,20 @@ const DeploymentDetailModal = ({
   // 모달이 열리거나 닫힐 때 상태 초기화
   useEffect(() => {
     if (isOpen && deployment) {
-      setActiveTab('logs'); // 모달이 열릴 때마다 로그 탭으로 리셋
+      // 새로운 배포일 때만 탭을 초기화 (같은 배포라면 현재 탭 유지)
+      if (currentDeploymentId !== deployment.id) {
+        setActiveTab('logs'); // 새 배포일 때만 로그 탭으로 리셋
+      }
     } else if (!isOpen) {
       // 모달이 닫힐 때 모든 상태 초기화
       setActiveTab('logs');
       setLoadingDeploymentInfo(false);
       setDeploymentInfo(null);
-      setLoadingArtifacts(false);
-      setArtifacts([]);
       setLoadingLogs(false);
       setLogs([]);
       setCopySuccess('');
     }
-  }, [isOpen, deployment]);
+  }, [isOpen, deployment, currentDeploymentId]);
 
   // 로그 탭 활성화 시 로그 가져오기
   useEffect(() => {
@@ -446,27 +376,27 @@ const DeploymentDetailModal = ({
                   {/* NAS 디렉토리 검증 상태 표시 */}
                   {deploymentInfo && (
                     <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm ${
-                      deploymentInfo.directoryVerified 
+                      deploymentInfo?.directoryVerified 
                         ? 'bg-green-100 text-green-800'
-                        : deploymentInfo.verificationError
+                        : deploymentInfo?.verificationError
                           ? 'bg-red-100 text-red-800'
                           : 'bg-yellow-100 text-yellow-800'
                     }`}>
                       <div className={`w-2 h-2 rounded-full ${
-                        deploymentInfo.directoryVerified 
+                        deploymentInfo?.directoryVerified 
                           ? 'bg-green-600'
-                          : deploymentInfo.verificationError
+                          : deploymentInfo?.verificationError
                             ? 'bg-red-600'
                             : 'bg-yellow-600'
                       }`}></div>
                       <span>
-                        {deploymentInfo.directoryVerified 
+                        {deploymentInfo?.directoryVerified 
                           ? 'NAS 디렉토리 확인됨'
-                          : deploymentInfo.verificationError
+                          : deploymentInfo?.verificationError
                             ? 'NAS 디렉토리 없음'
                             : 'NAS 확인 중...'}
                       </span>
-                      {deploymentInfo.alternativePathUsed && (
+                      {deploymentInfo?.alternativePathUsed && (
                         <span className="text-xs">(대체 경로 사용됨)</span>
                       )}
                     </div>
@@ -476,12 +406,13 @@ const DeploymentDetailModal = ({
                     className={`text-sm flex items-center whitespace-nowrap ${
                       loadingDeploymentInfo || 
                       (!deploymentInfo?.downloadFile && 
-                       !deploymentInfo?.allFiles?.length && 
-                       artifacts.length === 0)
+                       !deploymentInfo?.allFiles?.length)
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed border border-gray-300 opacity-60 hover:bg-gray-300 hover:text-gray-500 px-4 py-2 rounded-md'
                         : 'btn-secondary'
                     }`}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       // 실제 배포 경로 사용, 없으면 fallback
                       let nasPath = deploymentInfo?.nasPath || deploymentInfo?.deploymentPath;
                       
@@ -510,8 +441,7 @@ const DeploymentDetailModal = ({
                         .replace(/\\/g, '/')            // \ -> /
                         .replace(/^\/+/, '/');          // 앞의 중복 슬래시 정리
                       
-                      // 디렉토리 경로 (파일명 제외)
-                      const directoryPath = pathPart;
+                      // 디렉토리 경로 정리됨
                       
                       // 시놀로지 File Station URL 생성 (디렉토리 브라우징용)
                       const fileStationUrl = `https://nas.roboetech.com:5001/webman/index.cgi?launchApp=SYNO.SDS.App.FileStation3.Instance`;
@@ -558,23 +488,20 @@ const DeploymentDetailModal = ({
                     disabled={
                       loadingDeploymentInfo || 
                       (!deploymentInfo?.downloadFile && 
-                       !deploymentInfo?.allFiles?.length && 
-                       artifacts.length === 0)
+                       !deploymentInfo?.allFiles?.length)
                     }
                   >
                     <HardDrive className={`w-4 h-4 mr-2 ${
                       loadingDeploymentInfo || 
                       (!deploymentInfo?.downloadFile && 
-                       !deploymentInfo?.allFiles?.length && 
-                       artifacts.length === 0)
+                       !deploymentInfo?.allFiles?.length)
                         ? 'text-gray-400'
                         : ''
                     }`} />
                     {loadingDeploymentInfo 
                       ? '경로 확인중...' 
                       : (!deploymentInfo?.downloadFile && 
-                         !deploymentInfo?.allFiles?.length && 
-                         artifacts.length === 0)
+                         !deploymentInfo?.allFiles?.length)
                         ? '파일 없음'
                         : '공유 폴더 열기'
                     }
@@ -583,237 +510,232 @@ const DeploymentDetailModal = ({
               </div>
 
               <div className="space-y-3">
-                {loadingArtifacts || loadingDeploymentInfo ? (
+                {loadingDeploymentInfo ? (
                   <div className="text-center py-8">
-                    <div className="text-gray-500">아티팩트 로딩 중...</div>
+                    <div className="text-gray-500">배포 파일 로딩 중...</div>
                   </div>
                 ) : (
                   <>
-                    {/* 주 다운로드 파일 (V3.0.0_250310_0843.tar.gz) */}
-                    {deploymentInfo?.downloadFile && (
-                      <div className={`border rounded-lg p-4 ${
-                        deploymentInfo.downloadFileVerified !== false ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'
-                      }`}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <Download className={`w-6 h-6 ${
-                              deploymentInfo.downloadFileVerified !== false ? 'text-blue-600' : 'text-red-600'
-                            }`} />
-                            <div>
-                              <p className={`font-semibold ${
-                                deploymentInfo.downloadFileVerified !== false ? 'text-blue-900' : 'text-red-900'
-                              }`}>
-                                메인 릴리즈 파일
-                                {deploymentInfo.downloadFileVerified === false && (
-                                  <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded">파일 없음</span>
-                                )}
-                              </p>
-                              <p className={`text-sm font-medium ${
-                                deploymentInfo.downloadFileVerified !== false ? 'text-blue-800' : 'text-red-800'
-                              }`}>
-                                {deploymentInfo.downloadFile}
-                              </p>
-                              <p className={`text-xs ${
-                                deploymentInfo.downloadFileVerified !== false ? 'text-blue-600' : 'text-red-600'
-                              }`}>
-                                {deploymentInfo.downloadFileVerified !== false ? '권장 다운로드 파일' : '파일이 NAS에서 확인되지 않습니다'}
-                              </p>
+                    {/* 메인버전 파일 (V3.0.0_XXX 형식) - 항상 표시 */}
+                    {console.log('DeploymentDetailModal Debug:', { deploymentInfo, downloadFile: deploymentInfo?.downloadFile, allFiles: deploymentInfo?.allFiles })}
+                    
+                    {/* 메인버전 파일 섹션 - 모든 배포에 대해 표시 */}
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-medium text-gray-700">메인버전 파일</h4>
+                        <div className={`border rounded-lg p-4 ${
+                          deploymentInfo?.downloadFileVerified !== false ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'
+                        }`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <Download className={`w-6 h-6 ${
+                                deploymentInfo?.downloadFileVerified !== false ? 'text-blue-600' : 'text-red-600'
+                              }`} />
+                              <div>
+                                <p className={`font-semibold ${
+                                  deploymentInfo?.downloadFileVerified !== false ? 'text-blue-900' : 'text-red-900'
+                                }`}>
+                                  메인버전 파일
+                                  {deploymentInfo?.downloadFileVerified === false && (
+                                    <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded">파일 없음</span>
+                                  )}
+                                </p>
+                                <p className={`text-sm font-medium ${
+                                  deploymentInfo?.downloadFileVerified !== false ? 'text-blue-800' : 'text-red-800'
+                                }`}>
+                                  {deploymentInfo?.downloadFile || 
+                                   deploymentInfo?.allFiles?.find(file => file.startsWith('V')) ||
+                                   deployment.actualFiles?.main ||
+                                   `V${deployment.version || '1.0.0'}_파일명_확인필요.tar.gz`}
+                                </p>
+                                <p className={`text-xs ${
+                                  deploymentInfo?.downloadFileVerified !== false ? 'text-blue-600' : 'text-red-600'
+                                }`}>
+                                  {deploymentInfo?.downloadFileVerified !== false ? '메인 릴리즈 파일' : '파일이 NAS에서 확인되지 않습니다'}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                          <button 
-                            className={`px-4 py-2 rounded-md text-sm font-medium flex items-center whitespace-nowrap ${
-                              deploymentInfo.downloadFileVerified !== false && deploymentInfo.directoryVerified
-                                ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            }`}
-                            disabled={deploymentInfo.downloadFileVerified === false || !deploymentInfo.directoryVerified}
-                            onClick={() => {
-                              if (deploymentInfo.downloadFileVerified === false || !deploymentInfo.directoryVerified) {
-                                alert('파일이 NAS에 존재하지 않아 다운로드할 수 없습니다.');
-                                return;
-                              }
-
-                              const fileName = deploymentInfo.downloadFile;
-                              
-                              // 새로운 파일별 다운로드 링크 사용
-                              const fileDownloadInfo = deploymentInfo.fileDownloadLinks?.[fileName];
-                              const downloadUrl = deploymentInfo.mainFileDownloadUrl || 
-                                                fileDownloadInfo?.downloadUrl ||
-                                                deploymentInfo.synologyShareUrl;
-                              
-                              if (downloadUrl) {
-                                const fileType = fileName.startsWith('mr') ? 'Morow' : 
-                                               fileName.startsWith('V') ? 'V' :
-                                               fileName.startsWith('be') ? 'Backend' :
-                                               fileName.startsWith('fe') ? 'Frontend' : '기타';
-                                
-                                const isDirectDownload = deploymentInfo.isMainFileDirectDownload || 
-                                                       fileDownloadInfo?.isDirectDownload || 
-                                                       false;
-                                
-                                console.log('Download Link Info:', {
-                                  fileName,
-                                  fileType,
-                                  downloadUrl,
-                                  isDirectDownload
-                                });
-                                
-                                // 직접 다운로드 링크면 현재 창에서, 공유 링크면 새 탭에서 열기
-                                if (isDirectDownload) {
-                                  // 직접 다운로드 - 파일이 바로 다운로드됨
-                                  window.location.href = downloadUrl;
-                                } else {
-                                  // 공유 링크 - 새 탭에서 폴더 열기
-                                  window.open(downloadUrl, '_blank');
+                            <button 
+                              className={`px-4 py-2 rounded-md text-sm font-medium flex items-center whitespace-nowrap ${
+                                deploymentInfo?.downloadFileVerified !== false && deploymentInfo?.directoryVerified
+                                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              }`}
+                              disabled={deploymentInfo?.downloadFileVerified === false || !deploymentInfo?.directoryVerified}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (deploymentInfo?.downloadFileVerified === false || !deploymentInfo?.directoryVerified) {
+                                  alert('파일이 NAS에 존재하지 않아 다운로드할 수 없습니다.');
+                                  return;
                                 }
-                              } else {
-                                alert('다운로드 링크를 생성할 수 없습니다.');
-                              }
-                            }}
-                            title={deploymentInfo.downloadFileVerified === false ? '파일이 NAS에 존재하지 않습니다' : ''}
-                          >
-                            {deploymentInfo.downloadFileVerified === false ? '파일 없음' : '다운로드'}
-                          </button>
+
+                                const fileName = deploymentInfo?.downloadFile;
+                                
+                                // 새로운 파일별 다운로드 링크 사용
+                                const fileDownloadInfo = deploymentInfo?.fileDownloadLinks?.[fileName];
+                                const downloadUrl = deploymentInfo?.mainFileDownloadUrl || 
+                                                  fileDownloadInfo?.downloadUrl ||
+                                                  deploymentInfo?.synologyShareUrl;
+                                
+                                if (downloadUrl) {
+                                  const fileType = fileName?.startsWith('mr') ? 'Morow' : 
+                                                 fileName?.startsWith('V') ? 'V' :
+                                                 fileName?.startsWith('be') ? 'Backend' :
+                                                 fileName?.startsWith('fe') ? 'Frontend' : '기타';
+                                  
+                                  const isDirectDownload = deploymentInfo?.isMainFileDirectDownload || 
+                                                         fileDownloadInfo?.isDirectDownload || 
+                                                         false;
+                                  
+                                  console.log('Download Link Info:', {
+                                    fileName,
+                                    fileType,
+                                    downloadUrl,
+                                    isDirectDownload
+                                  });
+                                  
+                                  // 직접 다운로드 링크면 iframe으로, 공유 링크면 새 탭에서 열기
+                                  if (isDirectDownload) {
+                                    // 직접 다운로드 - iframe으로 다운로드하여 모달이 사라지지 않게 함
+                                    const iframe = document.createElement('iframe');
+                                    iframe.style.display = 'none';
+                                    iframe.src = downloadUrl;
+                                    document.body.appendChild(iframe);
+                                    setTimeout(() => document.body.removeChild(iframe), 5000);
+                                  } else {
+                                    // 공유 링크 - 새 탭에서 폴더 열기
+                                    window.open(downloadUrl, '_blank');
+                                  }
+                                } else {
+                                  alert('다운로드 링크를 생성할 수 없습니다.');
+                                }
+                              }}
+                              title={deploymentInfo?.downloadFileVerified === false ? '파일이 NAS에 존재하지 않습니다' : ''}
+                            >
+                              {deploymentInfo?.downloadFileVerified === false ? '파일 없음' : '다운로드'}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    )}
 
-                    {/* 모든 배포 파일에 대한 개별 다운로드 카드 */}
-                    {((deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) || 
-                      (deployment.project_name.includes('fs1.2.0') && deployment.build_number <= 54)) && (
+                    {/* 전체 배포 파일에 대한 개별 다운로드 카드 - 항상 표시 */}
                       <div className="space-y-3">
                         <h4 className="text-sm font-medium text-gray-700">전체 배포 파일</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {/* fs 빌드의 경우 예상 파일 표시 */}
-                          {deployment.project_name.includes('fs1.2.0') && deployment.build_number <= 54 && !deploymentInfo?.allFiles?.length ? [
-                            `fs1.2.0_250929_1058_${deployment.build_number}.tar.gz`,
-                            `fs1.2.0_250929_1058_${deployment.build_number}.enc.tar.gz`
-                          ].map((file, index) => {
-                            const isEncrypted = file.includes('.enc.');
-                            const fileExists = false; // API에서 검증되지 않은 상태
-                            
-                            return (
-                              <div 
-                                key={index} 
-                                className="border rounded-lg p-4 bg-yellow-50 border-yellow-200"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center space-x-3">
-                                    <Download className="w-5 h-5 text-yellow-600" />
-                                    <div>
-                                      <p className="font-medium text-yellow-900">
-                                        Frontend
-                                        <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">예상 파일</span>
-                                      </p>
-                                      <p className="text-sm text-yellow-700">{file}</p>
-                                      <p className="text-xs text-yellow-600">
-                                        {isEncrypted ? '암호화된 Frontend 파일' : 'Frontend 빌드 파일'}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <button 
-                                    className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 hover:bg-yellow-700 text-white"
-                                    onClick={() => {
-                                      // fs 빌드의 실제 경로로 공유 폴더 열기
-                                      const shareUrl = 'https://nas.roboetech.com:5001/sharing/dir_lXUVkbLMJ';
-                                      window.open(shareUrl, '_blank');
-                                    }}
-                                  >
-                                    공유 폴더 열기
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          }) : 
-                          /* 기존 API 기반 파일 목록 */
+                          {/* 실제 파일이 있으면 실제 파일 표시, 없으면 기본 컴포넌트 카드 표시 */}
+                          {(deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) ? 
+                          /* 기존 API 기반 파일 목록 - V 파일(메인버전) 제외 */
                           deploymentInfo.allFiles.filter(file => {
-                            // V 파일(메인)이 아닌 모든 파일들 표시 (mr, be, fe 등)
+                            // V 파일(메인버전)은 위에서 별도로 표시되므로 제외
                             return !file.startsWith('V');
                           }).sort((a, b) => {
                             // 모로우, 백엔드, 프런트엔드 순서로 정렬
                             const getOrder = (file) => {
-                              if (file.startsWith('mr')) return 1; // Morow
+                              if (file.startsWith('mr')) return 1; // Morrow
                               if (file.startsWith('be')) return 2; // Backend  
                               if (file.startsWith('fe')) return 3; // Frontend
                               return 4; // 기타
                             };
                             return getOrder(a) - getOrder(b);
                           }).map((file, index) => {
-                            const isMainFile = file === deploymentInfo.downloadFile;
+                            // const isMainFile = file === deploymentInfo.downloadFile; // 사용되지 않음
                             const isEncrypted = file.includes('.enc.');
-                            const fileType = file.startsWith('mr') ? 'Morow' :
-                                           file.startsWith('be') ? 'Backend' :
-                                           file.startsWith('fe') ? 'Frontend' : '기타';
+                            const fileType = file.startsWith('mr') ? '모로우' :
+                                           file.startsWith('be') ? '백엔드' :
+                                           file.startsWith('fe') ? '프런트엔드' : 
+                                           file.startsWith('V') ? '메인버전' : '기타';
                             
                             // 파일이 실제로 NAS에 존재하는지 확인
                             const fileExists = deploymentInfo.verifiedFiles ? deploymentInfo.verifiedFiles.includes(file) : true;
                             
+                            // 파일 타입별 색상 정의 (버전 히스토리와 동일한 규칙 적용)
+                            const getFileTypeColors = (fileType) => {
+                              if (!fileExists) return {
+                                bg: 'bg-red-50',
+                                border: 'border-red-200',
+                                icon: 'text-red-600',
+                                title: 'text-red-900',
+                                subtitle: 'text-red-700',
+                                description: 'text-red-600'
+                              };
+                              
+                              switch (fileType) {
+                                case '메인버전':
+                                  return {
+                                    bg: 'bg-blue-50',
+                                    border: 'border-blue-200',
+                                    icon: 'text-blue-600',
+                                    title: 'text-blue-900',
+                                    subtitle: 'text-blue-700',
+                                    description: 'text-blue-600'
+                                  };
+                                case '모로우':
+                                  return {
+                                    bg: 'bg-purple-50',
+                                    border: 'border-purple-200',
+                                    icon: 'text-purple-600',
+                                    title: 'text-purple-900',
+                                    subtitle: 'text-purple-700',
+                                    description: 'text-purple-600'
+                                  };
+                                case '백엔드':
+                                  return {
+                                    bg: 'bg-green-50',
+                                    border: 'border-green-200',
+                                    icon: 'text-green-600',
+                                    title: 'text-green-900',
+                                    subtitle: 'text-green-700',
+                                    description: 'text-green-600'
+                                  };
+                                case '프런트엔드':
+                                  return {
+                                    bg: 'bg-orange-50',
+                                    border: 'border-orange-200',
+                                    icon: 'text-orange-600',
+                                    title: 'text-orange-900',
+                                    subtitle: 'text-orange-700',
+                                    description: 'text-orange-600'
+                                  };
+                                default:
+                                  return {
+                                    bg: 'bg-gray-50',
+                                    border: 'border-gray-200',
+                                    icon: 'text-gray-600',
+                                    title: 'text-gray-900',
+                                    subtitle: 'text-gray-700',
+                                    description: 'text-gray-600'
+                                  };
+                              }
+                            };
+                            
+                            const colors = getFileTypeColors(fileType);
+                            
                             return (
                               <div 
                                 key={index} 
-                                className={`border rounded-lg p-4 ${
-                                  !fileExists 
-                                    ? 'bg-red-50 border-red-200'
-                                    : isMainFile 
-                                      ? 'bg-blue-50 border-blue-200' 
-                                      : isEncrypted 
-                                        ? 'bg-orange-50 border-orange-200'
-                                        : 'bg-gray-50 border-gray-200'
-                                }`}
+                                className={`border rounded-lg p-4 ${colors.bg} ${colors.border}`}
                               >
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center space-x-3">
-                                    <Download className={`w-5 h-5 ${
-                                      !fileExists 
-                                        ? 'text-red-600'
-                                        : isMainFile 
-                                          ? 'text-blue-600' 
-                                          : isEncrypted 
-                                            ? 'text-orange-600' 
-                                            : 'text-gray-600'
-                                    }`} />
+                                    <Download className={`w-5 h-5 ${colors.icon}`} />
                                     <div>
-                                      <p className={`font-medium ${
-                                        !fileExists 
-                                          ? 'text-red-900'
-                                          : isMainFile 
-                                            ? 'text-blue-900' 
-                                            : isEncrypted 
-                                              ? 'text-orange-900' 
-                                              : 'text-gray-900'
-                                      }`}>
+                                      <p className={`font-medium ${colors.title}`}>
                                         {fileType}
                                         {!fileExists && (
                                           <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded">파일 없음</span>
                                         )}
                                       </p>
-                                      <p className={`text-sm ${
-                                        !fileExists 
-                                          ? 'text-red-700'
-                                          : isMainFile 
-                                            ? 'text-blue-700' 
-                                            : isEncrypted 
-                                              ? 'text-orange-700' 
-                                              : 'text-gray-700'
-                                      }`}>
+                                      <p className={`text-sm ${colors.subtitle}`}>
                                         {file}
                                       </p>
-                                      <p className={`text-xs ${
-                                        !fileExists 
-                                          ? 'text-red-600'
-                                          : isMainFile 
-                                            ? 'text-blue-600' 
-                                            : isEncrypted 
-                                              ? 'text-orange-600' 
-                                              : 'text-gray-600'
-                                      }`}>
+                                      <p className={`text-xs ${colors.description}`}>
                                         {!fileExists 
                                           ? '파일이 NAS에서 확인되지 않습니다'
-                                          : isMainFile 
-                                            ? '권장 다운로드 파일' 
+                                          : fileType === '메인버전'
+                                            ? '메인 릴리즈 파일' 
                                             : isEncrypted 
                                               ? '암호화된 컴포넌트 파일' 
-                                              : '일반 파일'}
+                                              : '컴포넌트 파일'}
                                       </p>
                                     </div>
                                   </div>
@@ -821,14 +743,20 @@ const DeploymentDetailModal = ({
                                     className={`px-3 py-1 rounded-md text-sm font-medium flex items-center whitespace-nowrap ${
                                       !fileExists || !deploymentInfo.directoryVerified
                                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                        : isMainFile 
+                                        : fileType === '메인버전'
                                           ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                          : isEncrypted
-                                            ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                                            : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                          : fileType === '모로우'
+                                            ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                                            : fileType === '백엔드'
+                                              ? 'bg-green-600 hover:bg-green-700 text-white'
+                                              : fileType === '프런트엔드'
+                                                ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                                                : 'bg-gray-600 hover:bg-gray-700 text-white'
                                     }`}
                                     disabled={!fileExists || !deploymentInfo.directoryVerified}
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
                                       if (!fileExists || !deploymentInfo.directoryVerified) {
                                         alert('파일이 NAS에 존재하지 않아 다운로드할 수 없습니다.');
                                         return;
@@ -841,7 +769,7 @@ const DeploymentDetailModal = ({
                                       
                                       // actualFiles에서 해당하는 파일 찾기
                                       if (deploymentInfo.actualFiles) {
-                                        const fileType = file.startsWith('mr') ? 'morow' : 
+                                        const fileType = file.startsWith('mr') ? 'morrow' : 
                                                        file.startsWith('V') ? 'main' :
                                                        file.startsWith('be') ? 'backend' :
                                                        file.startsWith('fe') ? 'frontend' : null;
@@ -866,7 +794,7 @@ const DeploymentDetailModal = ({
                                       }
                                       
                                       if (downloadUrl) {
-                                        const fileTypeLabel = file.startsWith('mr') ? 'Morow' : 
+                                        const fileTypeLabel = file.startsWith('mr') ? 'Morrow' : 
                                                             file.startsWith('V') ? 'V' :
                                                             file.startsWith('be') ? 'Backend' :
                                                             file.startsWith('fe') ? 'Frontend' : '기타';
@@ -879,10 +807,14 @@ const DeploymentDetailModal = ({
                                           isDirectDownload
                                         });
                                         
-                                        // 직접 다운로드 링크면 현재 창에서, 공유 링크면 새 탭에서 열기
+                                        // 직접 다운로드 링크면 iframe으로, 공유 링크면 새 탭에서 열기
                                         if (isDirectDownload) {
-                                          // 직접 다운로드 - 파일이 바로 다운로드됨
-                                          window.location.href = downloadUrl;
+                                          // 직접 다운로드 - iframe으로 다운로드하여 모달이 사라지지 않게 함
+                                          const iframe = document.createElement('iframe');
+                                          iframe.style.display = 'none';
+                                          iframe.src = downloadUrl;
+                                          document.body.appendChild(iframe);
+                                          setTimeout(() => document.body.removeChild(iframe), 5000);
                                         } else {
                                           // 공유 링크 - 새 탭에서 폴더 열기
                                           window.open(downloadUrl, '_blank');
@@ -898,70 +830,145 @@ const DeploymentDetailModal = ({
                                 </div>
                               </div>
                             );
+                          }) : 
+                          /* 기본 컴포넌트 카드들 - 실제 파일이 없을 때 표시 */
+                          (['모로우', '백엔드', '프런트엔드']).map((componentType, index) => {
+                            const prefix = componentType === '모로우' ? 'mr' :
+                                         componentType === '백엔드' ? 'be' :
+                                         componentType === '프런트엔드' ? 'fe' : 'comp';
+                            
+                            const version = deployment.version || deployment.project_name.match(/(\d+\.\d+\.\d+)/)?.[1] || '1.0.0';
+                            const date = new Date().toISOString().slice(0,10).replace(/-/g,'').slice(2,8);
+                            const time = String(Math.floor(Math.random() * 2400)).padStart(4, '0');
+                            const buildNum = deployment.build_number || Math.floor(Math.random() * 100);
+                            
+                            const fileName = `${prefix}${version}_${date}_${time}_${buildNum}.tar.gz`;
+                            
+                            const getFileTypeColors = (fileType) => {
+                              switch (fileType) {
+                                case '모로우':
+                                  return {
+                                    bg: 'bg-purple-50',
+                                    border: 'border-purple-200',
+                                    icon: 'text-purple-600',
+                                    title: 'text-purple-900',
+                                    subtitle: 'text-purple-700',
+                                    description: 'text-purple-600'
+                                  };
+                                case '백엔드':
+                                  return {
+                                    bg: 'bg-green-50',
+                                    border: 'border-green-200',
+                                    icon: 'text-green-600',
+                                    title: 'text-green-900',
+                                    subtitle: 'text-green-700',
+                                    description: 'text-green-600'
+                                  };
+                                case '프런트엔드':
+                                  return {
+                                    bg: 'bg-orange-50',
+                                    border: 'border-orange-200',
+                                    icon: 'text-orange-600',
+                                    title: 'text-orange-900',
+                                    subtitle: 'text-orange-700',
+                                    description: 'text-orange-600'
+                                  };
+                                default:
+                                  return {
+                                    bg: 'bg-gray-50',
+                                    border: 'border-gray-200',
+                                    icon: 'text-gray-600',
+                                    title: 'text-gray-900',
+                                    subtitle: 'text-gray-700',
+                                    description: 'text-gray-600'
+                                  };
+                              }
+                            };
+                            
+                            const colors = getFileTypeColors(componentType);
+                            // actualFiles에서 실제 파일명이 있는지 확인
+                            const actualFileName = deploymentInfo?.actualFiles?.[componentType === '모로우' ? 'morow' : componentType === '백엔드' ? 'backend' : 'frontend'];
+                            const fileExists = !!actualFileName;
+                            
+                            return (
+                              <div 
+                                key={index} 
+                                className={`border rounded-lg p-4 ${colors.bg} ${colors.border}`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-3">
+                                    <Download className={`w-5 h-5 ${colors.icon}`} />
+                                    <div>
+                                      <p className={`font-medium ${colors.title}`}>
+                                        {componentType}
+                                        {!fileExists && (
+                                          <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">확인 필요</span>
+                                        )}
+                                      </p>
+                                      <p className={`text-sm ${colors.subtitle}`}>
+                                        {deploymentInfo?.actualFiles?.[componentType === '모로우' ? 'morow' : componentType === '백엔드' ? 'backend' : 'frontend'] || fileName}
+                                      </p>
+                                      <p className={`text-xs ${colors.description}`}>
+                                        {fileExists ? `${componentType} 컴포넌트 파일` : `${componentType} 컴포넌트 (파일 확인 필요)`}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button 
+                                    className={`px-3 py-1 rounded-md text-sm font-medium flex items-center whitespace-nowrap ${
+                                      componentType === '모로우'
+                                        ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                                        : componentType === '백엔드'
+                                          ? 'bg-green-600 hover:bg-green-700 text-white'
+                                          : componentType === '프런트엔드'
+                                            ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                                            : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                    }`}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      
+                                      if (actualFileName) {
+                                        // 실제 파일명이 있으면 개별 파일 다운로드
+                                        const fileDownloadInfo = deploymentInfo.fileDownloadLinks?.[actualFileName] ||
+                                                                deploymentInfo.fileDownloadLinks?.[`${componentType === '모로우' ? 'morow' : componentType === '백엔드' ? 'backend' : 'frontend'}File`];
+                                        
+                                        if (fileDownloadInfo) {
+                                          const downloadUrl = fileDownloadInfo.downloadUrl;
+                                          const isDirectDownload = fileDownloadInfo.isDirectDownload;
+                                          
+                                          if (isDirectDownload) {
+                                            // 직접 다운로드 - iframe으로 다운로드하여 모달이 사라지지 않게 함
+                                            const iframe = document.createElement('iframe');
+                                            iframe.style.display = 'none';
+                                            iframe.src = downloadUrl;
+                                            document.body.appendChild(iframe);
+                                            setTimeout(() => document.body.removeChild(iframe), 5000);
+                                          } else {
+                                            // 공유 링크 - 새 탭에서 폴더 열기
+                                            window.open(downloadUrl, '_blank');
+                                          }
+                                        } else {
+                                          // 개별 파일 링크가 없으면 공유 폴더 열기
+                                          const shareUrl = deploymentInfo?.synologyShareUrl || 'https://nas.roboetech.com:5001/sharing/dir_lXUVkbLMJ';
+                                          window.open(shareUrl, '_blank');
+                                        }
+                                      } else {
+                                        // 실제 파일명이 없으면 공유 폴더 열기
+                                        const shareUrl = deploymentInfo?.synologyShareUrl || 'https://nas.roboetech.com:5001/sharing/dir_lXUVkbLMJ';
+                                        window.open(shareUrl, '_blank');
+                                      }
+                                    }}
+                                  >
+                                    다운로드
+                                  </button>
+                                </div>
+                              </div>
+                            );
                           })}
+                          
                         </div>
                       </div>
-                    )}
 
-                    {/* 기존 아티팩트 (fallback) */}
-                    {(!deploymentInfo?.downloadFile && !deploymentInfo?.allFiles?.length) && (
-                      artifacts.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500">
-                          <Download className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                          <p>사용 가능한 아티팩트가 없습니다.</p>
-                        </div>
-                      ) : (
-                        artifacts.map((artifact, index) => (
-                          <div key={index} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                            <div className="flex items-center space-x-3">
-                              <Download className="w-5 h-5 text-gray-400" />
-                              <div>
-                                <p className="font-medium text-primary-900">{artifact.name}</p>
-                                <p className="text-sm text-gray-500">{artifact.type} • {artifact.size}</p>
-                                <p className="text-xs text-gray-400 font-mono">{artifact.url}</p>
-                              </div>
-                            </div>
-                            <button 
-                              className="btn-secondary text-sm"
-                              onClick={async () => {
-                                try {
-                                  let downloadUrl = artifact.url;
-                                  
-                                  if (!downloadUrl.startsWith('/api/files/download')) {
-                                    downloadUrl = `/api/files/download?path=${encodeURIComponent(artifact.url)}`;
-                                  }
-                                  
-                                  const response = await fetch(downloadUrl, {
-                                    headers: {
-                                      'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-                                    }
-                                  });
-                                  
-                                  if (response.ok) {
-                                    const blob = await response.blob();
-                                    const url = window.URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = artifact.name;
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    window.URL.revokeObjectURL(url);
-                                    document.body.removeChild(a);
-                                  } else {
-                                    throw new Error(`Download failed: ${response.status}`);
-                                  }
-                                } catch (error) {
-                                  console.error('Download error:', error);
-                                  alert('다운로드에 실패했습니다. 파일이 존재하지 않거나 접근 권한이 없습니다.');
-                                }
-                              }}
-                            >
-                              다운로드
-                            </button>
-                          </div>
-                        ))
-                      )
-                    )}
                   </>
                 )}
               </div>
