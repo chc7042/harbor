@@ -18,6 +18,22 @@ import {
   HardDrive
 } from 'lucide-react';
 
+// 파일 크기 포맷팅 함수
+const formatFileSize = (bytes) => {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+// 파일 날짜 포맷팅 함수
+const formatFileDate = (timestamp) => {
+  if (!timestamp) return '알 수 없음';
+  const date = new Date(timestamp * 1000); // Unix timestamp를 JS Date로 변환
+  return date.toLocaleString('ko-KR');
+};
+
 const DeploymentDetailModal = ({
   deployment,
   isOpen,
@@ -52,17 +68,14 @@ const DeploymentDetailModal = ({
         if (data.success && data.data) {
           setLogs(data.data);
         } else {
-          // API 실패 시 mock 데이터 사용
-          setLogs(mockLogs);
+          setLogs([]);
         }
       } else {
-        // 에러 시 mock 데이터 사용
-        setLogs(mockLogs);
+        setLogs([]);
       }
     } catch (error) {
       console.error('Failed to fetch logs:', error);
-      // 에러 시 mock 데이터 사용
-      setLogs(mockLogs);
+      setLogs([]);
     } finally {
       setLoadingLogs(false);
     }
@@ -222,16 +235,6 @@ const DeploymentDetailModal = ({
     { id: 'artifacts', label: '아티팩트', icon: Download }
   ];
 
-  // Mock 데이터
-  const mockLogs = [
-    { timestamp: '2025-01-27 14:32:01', level: 'INFO', message: 'Starting deployment process...' },
-    { timestamp: '2025-01-27 14:32:05', level: 'INFO', message: 'Pulling latest code from repository' },
-    { timestamp: '2025-01-27 14:32:15', level: 'INFO', message: 'Building application...' },
-    { timestamp: '2025-01-27 14:32:45', level: 'INFO', message: 'Running tests...' },
-    { timestamp: '2025-01-27 14:33:20', level: 'INFO', message: 'All tests passed' },
-    { timestamp: '2025-01-27 14:33:25', level: 'INFO', message: 'Deploying to production environment' },
-    { timestamp: '2025-01-27 14:33:40', level: 'SUCCESS', message: 'Deployment completed successfully' }
-  ];
 
 
 
@@ -418,18 +421,7 @@ const DeploymentDetailModal = ({
                       let nasPath = deploymentInfo?.nasPath || deploymentInfo?.deploymentPath;
                       
                       if (!nasPath) {
-                        // fallback: 프로젝트 이름과 빌드 정보를 바탕으로 실제 경로 생성
-                        const projectParts = deployment.project_name.split('/');
-                        const versionFolder = projectParts[0] || '1.2.0';
-                        
-                        // 버전별 실제 배포 경로 사용
-                        if (deployment.project_name.includes('fs1.2.0') && deployment.build_number <= 54) {
-                          nasPath = `\\\\nas.roboetech.com\\release_version\\release\\product\\mr1.2.0\\250929\\${deployment.build_number}`;
-                        } else if (deployment.project_name.includes('1.0.0')) {
-                          nasPath = `\\\\nas.roboetech.com\\release_version\\release\\product\\mr1.0.0\\241017\\${deployment.build_number}`;
-                        } else {
-                          nasPath = `\\\\nas.roboetech.com\\release_version\\${versionFolder}`;
-                        }
+                        return;
                       }
                       
                       // 시놀로지 NAS 디렉토리 브라우징을 위한 File Station 접근
@@ -447,43 +439,16 @@ const DeploymentDetailModal = ({
                       // 시놀로지 File Station URL 생성 (디렉토리 브라우징용)
                       const fileStationUrl = `https://nas.roboetech.com:5001/webman/index.cgi?launchApp=SYNO.SDS.App.FileStation3.Instance`;
                       
-                      // 기본 폴더 공유 링크가 있으면 사용, 없으면 동적으로 생성
+                      // 공유 링크가 있을 때만 열기
                       let finalUrl = deploymentInfo.synologyShareUrl;
                       
                       if (!finalUrl) {
-                        // 버전별 디렉토리 공유 링크 (디렉토리 브라우징 가능한 링크) - fallback
-                        const directoryShareLinks = {
-                          '/release_version/release/product/mr3.0.0': 'dir_lXUVkbLMJ',  // 디렉토리 공유 링크
-                          '/release_version/release/product/mr2.0.0': 'dir_aB3CdE4fG',
-                          '/release_version/release/product/mr1.2.0': 'dir_hI5JkL6mN',
-                          'default': 'dir_lXUVkbLMJ'
-                        };
-                        
-                        // 경로에서 제품 버전 부분 추출
-                        const versionPattern = /\/release_version\/release\/product\/(mr\d+\.\d+\.\d+)/;
-                        const versionMatch = pathPart.match(versionPattern);
-                        const versionPath = versionMatch ? `/release_version/release/product/${versionMatch[1]}` : 'default';
-                        
-                        // 해당 버전의 디렉토리 공유 링크 찾기
-                        const dirShareId = directoryShareLinks[versionPath] || directoryShareLinks['default'];
-                        finalUrl = `https://nas.roboetech.com/sharing/${dirShareId}`;
+                        return;
                       }
                       
-                      // 접속 방법들 (실제 배포 폴더 공유 링크 우선)
-                      const accessUrls = [
-                        finalUrl,                                 // 실제 배포 폴더 공유 링크 (추천)
-                        fileStationUrl,                           // File Station 앱
-                        `https://nas.roboetech.com:5001`,         // DSM HTTPS 웹스테이션
-                        `http://nas.roboetech.com:5000`,          // DSM HTTP 웹스테이션
-                        `https://nas.roboetech.com/webman/index.cgi`, // 직접 웹맨 접근
-                      ];
                       
-                      console.log('Original NAS path:', nasPath);
-                      console.log('Final share URL:', finalUrl);
-                      console.log('File Station URL:', fileStationUrl);
-                      console.log('All access URLs:', accessUrls);
                       
-                      // 팝업 메시지 없이 바로 디렉토리 공유 링크로 접속
+                      // 공유 링크로 접속
                       window.open(finalUrl, '_blank');
                     }}
                     disabled={
@@ -526,29 +491,25 @@ const DeploymentDetailModal = ({
                           {(deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) ? 
                           /* 기존 API 기반 파일 목록 - V 파일(메인버전) 제외 및 빌드 타입별 필터링 */
                           deploymentInfo.allFiles.filter(file => {
-                            // 배포 이력에서만 V 파일(메인버전) 제외, 프로젝트 계층구조에서는 모든 파일 표시
-                            if (source === 'deployments' && file.startsWith('V')) return false;
+                            const projectName = deployment.project_name || '';
                             
-                            // 빌드 타입에 따른 파일 필터링 (배포 이력에서만 적용)
-                            if (source === 'deployments') {
-                              const projectName = deployment.project_name || '';
-                              
-                              if (projectName.includes('mr')) {
-                                // MR 빌드: mr 파일만
-                                return file.startsWith('mr');
-                              } else if (projectName.includes('fs')) {
-                                // FS 빌드: fe 파일만
-                                return file.startsWith('fe');
-                              } else if (projectName.includes('be')) {
-                                // BE 빌드: be 파일만
-                                return file.startsWith('be');
-                              } else {
-                                // 기타 빌드: 모든 컴포넌트 파일 표시
-                                return true;
-                              }
+                            // 빌드 타입 식별 - 프로젝트 이름의 마지막 부분을 분석
+                            const projectParts = projectName.split('/');
+                            const buildType = projectParts[projectParts.length - 1] || '';
+                            
+                            // 각 빌드별 해당 파일만 표시 (V 파일은 메인 버전이므로 제외)
+                            if (buildType.includes('mr') && buildType.includes('_release')) {
+                              // MR 빌드: mr로 시작하는 파일만 표시
+                              return file.startsWith('mr');
+                            } else if (buildType.includes('fs') && buildType.includes('_release')) {
+                              // FS 빌드: fe로 시작하는 파일만 표시 (frontend)
+                              return file.startsWith('fe');
+                            } else if (buildType.includes('be') && buildType.includes('_release')) {
+                              // BE 빌드: be로 시작하는 파일만 표시 (backend)
+                              return file.startsWith('be');
                             } else {
-                              // 프로젝트 계층 구조나 대시보드에서는 모든 파일 표시
-                              return true;
+                              // 기타 빌드나 프로젝트 계층구조에서는 V 파일(메인버전) 제외하고 모든 컴포넌트 파일 표시
+                              return !file.startsWith('V');
                             }
                           }).sort((a, b) => {
                             // 모로우, 백엔드, 프런트엔드 순서로 정렬
@@ -659,6 +620,19 @@ const DeploymentDetailModal = ({
                                               ? '암호화된 컴포넌트 파일' 
                                               : '컴포넌트 파일'}
                                       </p>
+                                      {/* 파일 정보 표시 */}
+                                      {fileExists && deploymentInfo?.fileInfoMap?.[file] && (
+                                        <div className={`flex items-center space-x-3 text-xs mt-1 ${colors.description}`}>
+                                          <span className="flex items-center">
+                                            📦 {formatFileSize(deploymentInfo.fileInfoMap[file].size)}
+                                          </span>
+                                          <span className="flex items-center">
+                                            📅 {formatFileDate(deploymentInfo.fileInfoMap[file].mtime)}
+                                          </span>
+                                        </div>
+                                      )}
+                                      {/* 디버깅용 */}
+                                      {console.log('DeploymentDetailModal - File info debug:', file, deploymentInfo?.fileInfoMap?.[file])}
                                     </div>
                                   </div>
                                   <button 
@@ -753,166 +727,10 @@ const DeploymentDetailModal = ({
                               </div>
                             );
                           }) : 
-                          /* 기본 컴포넌트 카드들 - 실제 파일이 없을 때 표시 */
-                          (() => {
-                            // 빌드 타입에 따라 표시할 컴포넌트 결정 (배포 이력에서만 적용)
-                            let componentsToShow = [];
-                            
-                            if (source === 'deployments') {
-                              const projectName = deployment.project_name || '';
-                              
-                              if (projectName.includes('mr')) {
-                                // MR 빌드: 모로우만
-                                componentsToShow = ['모로우'];
-                              } else if (projectName.includes('fs')) {
-                                // FS 빌드: 프런트엔드만  
-                                componentsToShow = ['프런트엔드'];
-                              } else if (projectName.includes('be')) {
-                                // BE 빌드: 백엔드만
-                                componentsToShow = ['백엔드'];
-                              } else {
-                                // 기타 빌드: 모든 컴포넌트 표시
-                                componentsToShow = ['모로우', '백엔드', '프런트엔드'];
-                              }
-                            } else {
-                              // 프로젝트 계층 구조나 대시보드에서는 모든 컴포넌트 표시
-                              componentsToShow = ['모로우', '백엔드', '프런트엔드'];
-                            }
-                            
-                            return componentsToShow;
-                          })().map((componentType, index) => {
-                            const prefix = componentType === '모로우' ? 'mr' :
-                                         componentType === '백엔드' ? 'be' :
-                                         componentType === '프런트엔드' ? 'fe' : 'comp';
-                            
-                            const version = deployment.version || deployment.project_name.match(/(\d+\.\d+\.\d+)/)?.[1] || '1.0.0';
-                            const date = new Date().toISOString().slice(0,10).replace(/-/g,'').slice(2,8);
-                            const time = String(Math.floor(Math.random() * 2400)).padStart(4, '0');
-                            const buildNum = deployment.build_number || Math.floor(Math.random() * 100);
-                            
-                            const fileName = `${prefix}${version}_${date}_${time}_${buildNum}.tar.gz`;
-                            
-                            const getFileTypeColors = (fileType) => {
-                              switch (fileType) {
-                                case '모로우':
-                                  return {
-                                    bg: 'bg-purple-50',
-                                    border: 'border-purple-200',
-                                    icon: 'text-purple-600',
-                                    title: 'text-purple-900',
-                                    subtitle: 'text-purple-700',
-                                    description: 'text-purple-600'
-                                  };
-                                case '백엔드':
-                                  return {
-                                    bg: 'bg-green-50',
-                                    border: 'border-green-200',
-                                    icon: 'text-green-600',
-                                    title: 'text-green-900',
-                                    subtitle: 'text-green-700',
-                                    description: 'text-green-600'
-                                  };
-                                case '프런트엔드':
-                                  return {
-                                    bg: 'bg-orange-50',
-                                    border: 'border-orange-200',
-                                    icon: 'text-orange-600',
-                                    title: 'text-orange-900',
-                                    subtitle: 'text-orange-700',
-                                    description: 'text-orange-600'
-                                  };
-                                default:
-                                  return {
-                                    bg: 'bg-gray-50',
-                                    border: 'border-gray-200',
-                                    icon: 'text-gray-600',
-                                    title: 'text-gray-900',
-                                    subtitle: 'text-gray-700',
-                                    description: 'text-gray-600'
-                                  };
-                              }
-                            };
-                            
-                            const colors = getFileTypeColors(componentType);
-                            // actualFiles에서 실제 파일명이 있는지 확인
-                            const actualFileName = deploymentInfo?.actualFiles?.[componentType === '모로우' ? 'morow' : componentType === '백엔드' ? 'backend' : 'frontend'];
-                            const fileExists = !!actualFileName;
-                            
-                            return (
-                              <div 
-                                key={index} 
-                                className={`border rounded-lg p-4 ${colors.bg} ${colors.border}`}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center space-x-3">
-                                    <Download className={`w-5 h-5 ${colors.icon}`} />
-                                    <div>
-                                      <p className={`font-medium ${colors.title}`}>
-                                        {componentType}
-                                        {!fileExists && (
-                                          <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">확인 필요</span>
-                                        )}
-                                      </p>
-                                      <p className={`text-sm ${colors.subtitle}`}>
-                                        {deploymentInfo?.actualFiles?.[componentType === '모로우' ? 'morow' : componentType === '백엔드' ? 'backend' : 'frontend'] || fileName}
-                                      </p>
-                                      <p className={`text-xs ${colors.description}`}>
-                                        {fileExists ? `${componentType} 컴포넌트 파일` : `${componentType} 컴포넌트 (파일 확인 필요)`}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <button 
-                                    className={`px-3 py-1 rounded-md text-sm font-medium flex items-center whitespace-nowrap ${
-                                      componentType === '모로우'
-                                        ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                                        : componentType === '백엔드'
-                                          ? 'bg-green-600 hover:bg-green-700 text-white'
-                                          : componentType === '프런트엔드'
-                                            ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                                            : 'bg-gray-600 hover:bg-gray-700 text-white'
-                                    }`}
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      
-                                      if (actualFileName) {
-                                        // 실제 파일명이 있으면 개별 파일 다운로드
-                                        const fileDownloadInfo = deploymentInfo.fileDownloadLinks?.[actualFileName] ||
-                                                                deploymentInfo.fileDownloadLinks?.[`${componentType === '모로우' ? 'morow' : componentType === '백엔드' ? 'backend' : 'frontend'}File`];
-                                        
-                                        if (fileDownloadInfo) {
-                                          const downloadUrl = fileDownloadInfo.downloadUrl;
-                                          const isDirectDownload = fileDownloadInfo.isDirectDownload;
-                                          
-                                          if (isDirectDownload) {
-                                            // 직접 다운로드 - iframe으로 다운로드하여 모달이 사라지지 않게 함
-                                            const iframe = document.createElement('iframe');
-                                            iframe.style.display = 'none';
-                                            iframe.src = downloadUrl;
-                                            document.body.appendChild(iframe);
-                                            setTimeout(() => document.body.removeChild(iframe), 5000);
-                                          } else {
-                                            // 공유 링크 - 새 탭에서 폴더 열기
-                                            window.open(downloadUrl, '_blank');
-                                          }
-                                        } else {
-                                          // 개별 파일 링크가 없으면 공유 폴더 열기
-                                          const shareUrl = deploymentInfo?.synologyShareUrl || 'https://nas.roboetech.com:5001/sharing/dir_lXUVkbLMJ';
-                                          window.open(shareUrl, '_blank');
-                                        }
-                                      } else {
-                                        // 실제 파일명이 없으면 공유 폴더 열기
-                                        const shareUrl = deploymentInfo?.synologyShareUrl || 'https://nas.roboetech.com:5001/sharing/dir_lXUVkbLMJ';
-                                        window.open(shareUrl, '_blank');
-                                      }
-                                    }}
-                                  >
-                                    다운로드
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
+                          /* 파일이 없을 때 메시지 표시 */
+                          <div className="text-center py-8">
+                            <div className="text-gray-500">배포 파일이 없습니다.</div>
+                          </div>}
                           
                         </div>
                       </div>
