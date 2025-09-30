@@ -20,7 +20,7 @@ import {
   MessageSquare,
   User
 } from 'lucide-react';
-import DeploymentDetailModal from './DeploymentDetailModal';
+import ProjectDetailModal from './ProjectDetailModal';
 
 const ProjectHierarchy = ({ 
   projects = [], 
@@ -503,7 +503,7 @@ const ProjectHierarchy = ({
       </div>
 
       {/* 배포 상세 모달 */}
-      <DeploymentDetailModal
+      <ProjectDetailModal
         deployment={selectedDeployment}
         isOpen={isModalOpen}
         onClose={() => {
