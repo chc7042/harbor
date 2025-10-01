@@ -13,6 +13,9 @@
 - `backend/src/services/deploymentPathService.test.js` - Unit tests for deploymentPathService
 - `backend/src/utils/pathDetection.test.js` - Unit tests for pathDetection utilities
 - `backend/src/utils/retryMechanism.test.js` - Unit tests for retry mechanism
+- `backend/src/services/alertingService.js` - Alerting service for monitoring deployment path detection failures
+- `backend/src/services/alertingService.test.js` - Unit tests for alerting service
+- `.taskmaster/docs/troubleshooting-nas-path-detection.md` - Comprehensive troubleshooting guide for common issues
 
 ### Notes
 
@@ -69,9 +72,9 @@
   - [x] 6.5 Verify all existing functionality still works
   - [x] 6.6 Load test with multiple simultaneous deployment queries
 
-- [ ] 7.0 Error Handling and Monitoring
-  - [ ] 7.1 Enhance logging for path detection steps with appropriate levels
-  - [ ] 7.2 Add metrics collection for fallback chain performance
-  - [ ] 7.3 Implement health check for deployment path detection
-  - [ ] 7.4 Add alerting for repeated path detection failures
-  - [ ] 7.5 Document troubleshooting guide for common issues
+- [x] 7.0 Error Handling and Monitoring
+  - [x] 7.1 Enhance logging for path detection steps with appropriate levels
+  - [x] 7.2 Add metrics collection for fallback chain performance
+  - [x] 7.3 Implement health check for deployment path detection
+  - [x] 7.4 Add alerting for repeated path detection failures
+  - [x] 7.5 Document troubleshooting guide for common issues

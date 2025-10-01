@@ -160,3 +160,19 @@ backups/
 # Lock files (keep yarn.lock but ignore others)
 package-lock.json
 pnpm-lock.yaml
+
+dev-debug.log
+.env
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+
+# Task files
+# tasks.json
+# tasks/ 
