@@ -12,7 +12,7 @@ RUN apk add --no-cache curl
 COPY frontend/package*.json ./
 
 # 의존성 설치 (개발 의존성 포함)
-RUN npm ci
+RUN npm install
 
 # 소스 코드 복사
 COPY frontend/ ./
@@ -33,7 +33,7 @@ RUN apk add --no-cache python3 make g++
 COPY frontend/package*.json ./
 
 # 의존성 설치
-RUN npm ci --only=production
+RUN npm install --only=production
 
 # 소스 코드 복사
 COPY frontend/ ./

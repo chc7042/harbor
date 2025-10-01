@@ -69,7 +69,6 @@ services:
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
-      - app_logs:/app/logs
       - nas_data:/nas:ro
     networks:
       - harbor-network

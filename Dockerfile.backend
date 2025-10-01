@@ -15,7 +15,7 @@ RUN apk add --no-cache \
 COPY backend/package*.json ./
 
 # 의존성 설치 (개발 의존성 포함)
-RUN npm ci
+RUN npm install
 
 # 소스 코드 복사
 COPY backend/ ./
@@ -42,7 +42,7 @@ WORKDIR /app
 
 # 패키지 파일 복사 및 프로덕션 의존성만 설치
 COPY backend/package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --only=production && npm cache clean --force
 
 # 소스 코드 복사
 COPY backend/src ./src
