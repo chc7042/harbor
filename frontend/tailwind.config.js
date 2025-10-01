@@ -82,6 +82,7 @@ export default {
       // 뉴욕 스타일 폰트
       fontFamily: {
         'sans': [
+          '"Noto Sans KR"',
           'Inter',
           'system-ui',
           '-apple-system',
@@ -98,6 +99,7 @@ export default {
           '"Noto Color Emoji"',
         ],
         'mono': [
+          '"Noto Sans KR"',
           'Menlo',
           'Monaco',
           'Consolas',
