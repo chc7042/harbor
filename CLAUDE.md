@@ -34,15 +34,38 @@ npm run lint            # Run ESLint
 npm run lint:fix        # Fix ESLint issues
 ```
 
-### Full System
+### Full System (Monorepo Commands)
 ```bash
 # Start both backend and frontend in development
 npm run dev             # Runs both backend and frontend concurrently
-docker-compose up       # Start with Docker (development)
-docker-compose -f docker-compose.prod.yml up  # Production deployment
+npm run install:all     # Install dependencies for both workspaces
+npm run build          # Build both backend and frontend
+npm run test           # Run tests for both workspaces
+npm run lint           # Lint both workspaces
+npm run lint:fix       # Fix lint issues in both workspaces
+npm run typecheck      # Run type checking for both workspaces
+npm run clean          # Clean all build artifacts and node_modules
+
+# Database operations
+npm run db:migrate      # Run database migrations
+npm run db:seed        # Seed database with test data
+npm run db:reset       # Reset database
+
+# Docker operations
+npm run docker:dev     # Start development environment with Docker
+npm run docker:prod    # Start production environment with Docker
+npm run docker:stop    # Stop Docker containers
+npm run docker:logs    # View Docker logs
 ```
 
 ## System Architecture
+
+### Monorepo Structure
+Harbor uses npm workspaces for managing the monorepo:
+- **Root workspace**: Shared scripts, dependencies, and configuration
+- **Backend workspace**: Express.js API server with LDAP authentication
+- **Frontend workspace**: React/Vite SPA with Tailwind CSS
+- **Shared tooling**: ESLint, Prettier, Husky, CommitLint across all workspaces
 
 ### Backend Structure
 - **Express API Server**: Main application server with JWT authentication
@@ -150,6 +173,12 @@ All API routes follow consistent patterns:
 - `websocketService.js`: WebSocket client with reconnection
 - `notificationService.js`: Browser notification integration
 
+### UI Component Patterns
+- **UserAvatar**: Gravatar integration with fallback to user initials using crypto-js for MD5 hashing
+- **Modal Components**: Consistent modal patterns for deployment details, project information
+- **Real-time Updates**: Components automatically refresh via WebSocket subscriptions
+- **Loading States**: Unified loading patterns with skeleton screens and spinners
+
 ### Styling Approach
 - Tailwind CSS for utility-first styling
 - "New York" design system implementation
@@ -194,3 +223,38 @@ When starting the development environment:
 5. **WebSocket** connections established automatically on frontend login
 
 The system includes comprehensive error handling for missing dependencies, allowing development without full infrastructure setup.
+
+## Development Conventions
+
+### Code Quality and Formatting
+- **ESLint**: Enforced across frontend and backend with consistent rules
+- **Prettier**: Automatic code formatting for JS, JSX, JSON, and Markdown
+- **Husky**: Git hooks for pre-commit linting and commit message validation
+- **lint-staged**: Runs linting and formatting only on staged files
+
+### Commit Message Convention
+Uses conventional commits with CommitLint enforcement:
+- `feat:` - New features
+- `fix:` - Bug fixes  
+- `docs:` - Documentation changes
+- `style:` - Code style changes (formatting, etc.)
+- `refactor:` - Code refactoring
+- `perf:` - Performance improvements
+- `test:` - Test additions or changes
+- `build:` - Build system changes
+- `ci:` - CI configuration changes
+- `chore:` - Maintenance tasks
+
+### Important Files and Directories
+- `database/migrations/` - PostgreSQL schema migrations
+- `monitoring/` - Prometheus, Grafana, and logging configurations  
+- `scripts/` - Development and deployment automation scripts
+- `docs/` - Project documentation and specifications
+- `.env.example` - Environment variable templates for development
+- `.env.prod.example` - Production environment configuration template
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
