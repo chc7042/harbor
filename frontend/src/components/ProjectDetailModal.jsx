@@ -11,7 +11,8 @@ import {
   CheckCircle,
   Download,
   RefreshCw,
-  HardDrive
+  HardDrive,
+  ChevronDown
 } from 'lucide-react';
 
 // 파일 크기 포맷팅 함수
@@ -43,6 +44,8 @@ const ProjectDetailModal = ({
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [deploymentInfo, setDeploymentInfo] = useState(null);
   const [loadingDeploymentInfo, setLoadingDeploymentInfo] = useState(false);
+  const [selectedJobType, setSelectedJobType] = useState('mr'); // 기본값: 모로우
+  const [jobLogs, setJobLogs] = useState({}); // 각 job별 로그 캐시
 
   const fetchDeploymentInfo = async () => {
     if (!deployment) return;
@@ -72,12 +75,34 @@ const ProjectDetailModal = ({
     }
   };
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (jobType = selectedJobType) => {
     if (!deployment) return;
+    
+    // 이미 해당 job의 로그가 캐시되어 있다면 사용
+    if (jobLogs[jobType]) {
+      setLogs(jobLogs[jobType]);
+      return;
+    }
     
     setLoadingLogs(true);
     try {
-      const response = await fetch(`/api/deployments/logs/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}`, {
+      let jobProjectName;
+      
+      if (jobType === 'mr') {
+        // 모로우는 실제 데이터 사용 - 기존 deployment.project_name 사용
+        jobProjectName = deployment.project_name;
+      } else {
+        // BE, FS는 아직 실제 Jenkins 데이터가 없으므로 빈 로그 반환
+        console.log(`${jobType} job은 아직 실제 Jenkins 데이터가 준비되지 않았습니다.`);
+        setLogs([]);
+        setJobLogs(prev => ({
+          ...prev,
+          [jobType]: []
+        }));
+        return;
+      }
+      
+      const response = await fetch(`/api/deployments/logs/${encodeURIComponent(jobProjectName)}/${deployment.build_number}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
         }
@@ -85,12 +110,22 @@ const ProjectDetailModal = ({
       
       if (response.ok) {
         const data = await response.json();
-        setLogs(data.data || []);
+        const fetchedLogs = data.data || [];
+        
+        // 로그 캐시에 저장
+        setJobLogs(prev => ({
+          ...prev,
+          [jobType]: fetchedLogs
+        }));
+        
+        setLogs(fetchedLogs);
       } else {
-        console.error('Failed to fetch logs');
+        console.error('Failed to fetch logs for job:', jobType);
+        setLogs([]);
       }
     } catch (error) {
-      console.error('Error fetching logs:', error);
+      console.error('Error fetching logs for job:', jobType, error);
+      setLogs([]);
     } finally {
       setLoadingLogs(false);
     }
@@ -134,6 +169,8 @@ const ProjectDetailModal = ({
       setCurrentDeploymentId(null);
       setLogs([]);
       setDeploymentInfo(null);
+      setJobLogs({});
+      setSelectedJobType('mr');
     }
   }, [isOpen, deployment]);
 
@@ -152,15 +189,24 @@ const ProjectDetailModal = ({
       setLoadingLogs(false);
       setLogs([]);
       setCopySuccess('');
+      setJobLogs({});
+      setSelectedJobType('mr');
     }
   }, [isOpen, deployment, currentDeploymentId]);
 
   // 로그 탭 활성화 시 로그 가져오기
   useEffect(() => {
-    if (activeTab === 'logs' && isOpen && deployment && currentDeploymentId === deployment.id && logs.length === 0) {
-      fetchLogs();
+    if (activeTab === 'logs' && isOpen && deployment && currentDeploymentId === deployment.id) {
+      fetchLogs(selectedJobType);
     }
-  }, [activeTab, isOpen, deployment, currentDeploymentId, logs.length]);
+  }, [activeTab, isOpen, deployment, currentDeploymentId, selectedJobType]);
+  
+  // Job 타입 변경 시 해당 로그 가져오기
+  useEffect(() => {
+    if (activeTab === 'logs' && isOpen && deployment) {
+      fetchLogs(selectedJobType);
+    }
+  }, [selectedJobType]);
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -296,13 +342,30 @@ const ProjectDetailModal = ({
         </div>
 
         {/* 탭 내용 */}
-        <div className="p-6 h-[60vh] overflow-y-auto">
+        <div className="flex-1 flex flex-col p-6 overflow-hidden" style={{ height: 'calc(90vh - 200px)' }}>
           {activeTab === 'logs' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-gray-900">빌드 로그</h3>
+            <div className="flex-1 flex flex-col space-y-4 h-full">
+              <div className="flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center space-x-4">
+                  <h3 className="text-lg font-medium text-gray-900">빌드 로그</h3>
+                  
+                  {/* Job 타입 선택 드롭다운 */}
+                  <div className="relative">
+                    <select
+                      value={selectedJobType}
+                      onChange={(e) => setSelectedJobType(e.target.value)}
+                      className="appearance-none bg-white border border-gray-300 rounded-md px-3 py-2 pr-8 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="mr">모로우 (MR)</option>
+                      <option value="fs">프런트엔드 (FS)</option>
+                      <option value="be">백엔드 (BE)</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+                </div>
+                
                 <button
-                  onClick={fetchLogs}
+                  onClick={() => fetchLogs(selectedJobType)}
                   disabled={loadingLogs}
                   className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                 >
@@ -311,29 +374,58 @@ const ProjectDetailModal = ({
                 </button>
               </div>
 
-              {loadingLogs ? (
-                <div className="text-center py-8">
-                  <div className="text-gray-500">로그 로딩 중...</div>
+              <div className="flex-1 flex flex-col space-y-3 min-h-0">
+                <div className="text-sm text-gray-600 flex-shrink-0">
+                  {selectedJobType === 'mr' ? '모로우 (MR)' : 
+                   selectedJobType === 'fs' ? '프런트엔드 (FS)' : '백엔드 (BE)'} 빌드 로그
                 </div>
-              ) : logs.length > 0 ? (
-                <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm max-h-96 overflow-y-auto">
-                  {logs.map((log, index) => (
-                    <div key={index} className="whitespace-pre-wrap break-words">
-                      {log.message}
+                <div className="flex-1 flex flex-col min-h-0" ref={(el) => {
+                  if (el) {
+                    console.log(`로그 컨테이너 외부 높이: ${el.clientHeight}px, selectedJobType: ${selectedJobType}, logs.length: ${logs.length}, loadingLogs: ${loadingLogs}`);
+                  }
+                }}>
+                  <div className="h-full bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-y-auto" ref={(el) => {
+                    if (el) {
+                      console.log(`로그 컨테이너 내부 높이: ${el.clientHeight}px, selectedJobType: ${selectedJobType}, logs.length: ${logs.length}, loadingLogs: ${loadingLogs}`);
+                    }
+                  }}>
+                  {loadingLogs ? (
+                    <div className="h-full flex items-center justify-center">
+                      <div className="text-gray-400">
+                        {selectedJobType === 'mr' ? '모로우' : 
+                         selectedJobType === 'fs' ? '프런트엔드' : '백엔드'} 로그 로딩 중...
+                      </div>
                     </div>
-                  ))}
+                  ) : logs.length > 0 ? (
+                    logs.map((log, index) => (
+                      <div key={index} className="whitespace-pre-wrap break-words">
+                        {log.message}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="h-full flex items-center justify-center">
+                      <div className="text-center text-gray-400">
+                        <div>
+                          {selectedJobType === 'mr' ? '모로우' : 
+                           selectedJobType === 'fs' ? '프런트엔드' : '백엔드'} 로그가 없습니다.
+                        </div>
+                        <div className="text-sm mt-1">
+                          {selectedJobType === 'mr' 
+                            ? '해당 job의 빌드가 완료되지 않았거나 로그가 생성되지 않았습니다.'
+                            : '아직 실제 Jenkins 데이터가 연동되지 않았습니다.'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  </div>
                 </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <div>로그가 없습니다.</div>
-                </div>
-              )}
+              </div>
             </div>
           )}
 
           {activeTab === 'artifacts' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
+            <div className="flex-1 flex flex-col space-y-4 h-full">
+              <div className="flex items-center justify-between flex-shrink-0">
                 <h3 className="text-lg font-medium text-gray-900">배포 버전</h3>
 
                 <div className="flex items-center space-x-4">
@@ -377,20 +469,12 @@ const ProjectDetailModal = ({
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      // 실제 배포 경로 사용, 없으면 fallback
-                      let nasPath = deploymentInfo?.nasPath || deploymentInfo?.deploymentPath;
+                      // 실제 배포 경로가 있을 때만 열기
+                      const shareUrl = deploymentInfo?.synologyShareUrl;
                       
-                      if (!nasPath) {
-                        const versionMatch = deployment.project_name.match(/(\d+\.\d+\.\d+)/);
-                        const version = versionMatch ? versionMatch[1] : '1.0.0';
-                        nasPath = `\\\\nas.roboetech.com\\release_version\\release\\product\\mr${version}\\250310\\${deployment.build_number}`;
+                      if (shareUrl) {
+                        window.open(shareUrl, '_blank');
                       }
-                      
-                      // 실제 시놀로지 공유 URL 사용
-                      const shareUrl = deploymentInfo?.synologyShareUrl || 
-                                     'https://nas.roboetech.com:5001/sharing/dir_lXUVkbLMJ';
-                      
-                      window.open(shareUrl, '_blank');
                     }}
                     disabled={
                       loadingDeploymentInfo || 
@@ -416,9 +500,9 @@ const ProjectDetailModal = ({
                 </div>
               </div>
 
-              <div className="space-y-3">
+              <div className="flex-1 flex flex-col space-y-3 overflow-hidden">
                 {loadingDeploymentInfo ? (
-                  <div className="text-center py-8">
+                  <div className="flex-1 flex items-center justify-center">
                     <div className="text-gray-500">배포 파일 로딩 중...</div>
                   </div>
                 ) : (
@@ -540,8 +624,9 @@ const ProjectDetailModal = ({
                                       e.stopPropagation();
                                       
                                       // 공유 폴더 열기
-                                      const shareUrl = deploymentInfo?.synologyShareUrl || 'https://nas.roboetech.com:5001/sharing/dir_lXUVkbLMJ';
-                                      window.open(shareUrl, '_blank');
+                                      if (deploymentInfo?.synologyShareUrl) {
+                                        window.open(deploymentInfo.synologyShareUrl, '_blank');
+                                      }
                                     }}
                                   >
                                     <HardDrive className="w-4 h-4 mr-1.5" />
@@ -556,185 +641,187 @@ const ProjectDetailModal = ({
                     </div>
 
                     {/* 배포 파일 섹션 (V 파일 제외) */}
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-medium text-gray-700 border-b pb-2">배포 파일</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {/* 실제 파일만 표시 (V 파일 제외) - 목 데이터 사용 안함 */}
-                        {(deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) ? 
-                        deploymentInfo.allFiles
-                          .filter(file => !file.startsWith('V')) // V 파일 제외
-                          .sort((a, b) => {
-                            // 모로우, 백엔드, 프런트엔드 순서로 정렬
-                            const getOrder = (file) => {
-                              if (file.startsWith('mr')) return 1; // Morrow
-                              if (file.startsWith('be')) return 2; // Backend  
-                              if (file.startsWith('fe')) return 3; // Frontend
-                              return 4; // 기타
-                            };
-                            return getOrder(a) - getOrder(b);
-                          }).map((file, index) => {
-                          const isEncrypted = file.includes('.enc.');
-                          const fileType = file.startsWith('mr') ? '모로우' :
-                                          file.startsWith('be') ? '백엔드' :
-                                          file.startsWith('fe') ? '프런트엔드' : '기타';
-                          
-                          // 파일이 실제로 NAS에 존재하는지 확인
-                          const fileExists = deploymentInfo.verifiedFiles ? deploymentInfo.verifiedFiles.includes(file) : true;
-                          
-                          // 파일 타입별 색상 정의
-                          const getFileTypeColors = (fileType) => {
-                            if (!fileExists) return {
-                              bg: 'bg-red-50',
-                              border: 'border-red-200',
-                              title: 'text-red-900',
-                              subtitle: 'text-red-700',
-                              description: 'text-red-600'
-                            };
-                            
-                            switch (fileType) {
-                              case '모로우':
-                                return {
-                                  bg: 'bg-purple-50',
-                                  border: 'border-purple-200',
-                                  title: 'text-purple-900',
-                                  subtitle: 'text-purple-700',
-                                  description: 'text-purple-600'
+                    <div className="flex-1 flex flex-col space-y-3 overflow-hidden">
+                      <h4 className="text-sm font-medium text-gray-700 border-b pb-2 flex-shrink-0">배포 파일</h4>
+                      <div className="flex-1 overflow-y-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {/* 실제 파일만 표시 (V 파일 제외) - 목 데이터 사용 안함 */}
+                          {(deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) ? 
+                            deploymentInfo.allFiles
+                              .filter(file => !file.startsWith('V')) // V 파일 제외
+                              .sort((a, b) => {
+                                // 모로우, 백엔드, 프런트엔드 순서로 정렬
+                                const getOrder = (file) => {
+                                  if (file.startsWith('mr')) return 1; // Morrow
+                                  if (file.startsWith('be')) return 2; // Backend  
+                                  if (file.startsWith('fe')) return 3; // Frontend
+                                  return 4; // 기타
                                 };
-                              case '백엔드':
-                                return {
-                                  bg: 'bg-green-50',
-                                  border: 'border-green-200',
-                                  title: 'text-green-900',
-                                  subtitle: 'text-green-700',
-                                  description: 'text-green-600'
+                                return getOrder(a) - getOrder(b);
+                              }).map((file, index) => {
+                                const isEncrypted = file.includes('.enc.');
+                                const fileType = file.startsWith('mr') ? '모로우' :
+                                                file.startsWith('be') ? '백엔드' :
+                                                file.startsWith('fe') ? '프런트엔드' : '기타';
+                                
+                                // 파일이 실제로 NAS에 존재하는지 확인
+                                const fileExists = deploymentInfo.verifiedFiles ? deploymentInfo.verifiedFiles.includes(file) : true;
+                                
+                                // 파일 타입별 색상 정의
+                                const getFileTypeColors = (fileType) => {
+                                  if (!fileExists) return {
+                                    bg: 'bg-red-50',
+                                    border: 'border-red-200',
+                                    title: 'text-red-900',
+                                    subtitle: 'text-red-700',
+                                    description: 'text-red-600'
+                                  };
+                                  
+                                  switch (fileType) {
+                                    case '모로우':
+                                      return {
+                                        bg: 'bg-purple-50',
+                                        border: 'border-purple-200',
+                                        title: 'text-purple-900',
+                                        subtitle: 'text-purple-700',
+                                        description: 'text-purple-600'
+                                      };
+                                    case '백엔드':
+                                      return {
+                                        bg: 'bg-green-50',
+                                        border: 'border-green-200',
+                                        title: 'text-green-900',
+                                        subtitle: 'text-green-700',
+                                        description: 'text-green-600'
+                                      };
+                                    case '프런트엔드':
+                                      return {
+                                        bg: 'bg-orange-50',
+                                        border: 'border-orange-200',
+                                        title: 'text-orange-900',
+                                        subtitle: 'text-orange-700',
+                                        description: 'text-orange-600'
+                                      };
+                                    default:
+                                      return {
+                                        bg: 'bg-gray-50',
+                                        border: 'border-gray-200',
+                                        title: 'text-gray-900',
+                                        subtitle: 'text-gray-700',
+                                        description: 'text-gray-600'
+                                      };
+                                  }
                                 };
-                              case '프런트엔드':
-                                return {
-                                  bg: 'bg-orange-50',
-                                  border: 'border-orange-200',
-                                  title: 'text-orange-900',
-                                  subtitle: 'text-orange-700',
-                                  description: 'text-orange-600'
-                                };
-                              default:
-                                return {
-                                  bg: 'bg-gray-50',
-                                  border: 'border-gray-200',
-                                  title: 'text-gray-900',
-                                  subtitle: 'text-gray-700',
-                                  description: 'text-gray-600'
-                                };
-                            }
-                          };
-                          
-                          const colors = getFileTypeColors(fileType);
-                          
-                          return (
-                            <div 
-                              key={index} 
-                              className={`border rounded-lg p-4 ${colors.bg} ${colors.border}`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                  <Download className={`w-5 h-5 ${colors.description}`} />
-                                  <div>
-                                    <p className={`font-medium ${colors.title}`}>
-                                      {fileType}
-                                      {!fileExists && (
-                                        <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded">파일 없음</span>
-                                      )}
-                                    </p>
-                                    <p className={`text-sm ${colors.subtitle}`}>
-                                      {file}
-                                    </p>
-                                    <p className={`text-xs ${colors.description}`}>
-                                      {!fileExists 
-                                        ? '파일이 NAS에서 확인되지 않습니다'
-                                        : fileType === '메인버전'
-                                          ? '메인 릴리즈 파일' 
-                                          : isEncrypted 
-                                            ? '암호화된 컴포넌트 파일' 
-                                            : '컴포넌트 파일'}
-                                    </p>
-                                    {/* 파일 정보 표시 */}
-                                    {fileExists && deploymentInfo?.fileInfoMap?.[file] && (
-                                      <div className={`flex items-center space-x-3 text-xs mt-1 ${colors.description}`}>
-                                        <span className="flex items-center">
-                                          📦 {formatFileSize(deploymentInfo.fileInfoMap[file].size)}
-                                        </span>
-                                        <span className="flex items-center">
-                                          📅 {formatFileDate(deploymentInfo.fileInfoMap[file].mtime)}
-                                        </span>
+                                
+                                const colors = getFileTypeColors(fileType);
+                                
+                                return (
+                                  <div 
+                                    key={index} 
+                                    className={`border rounded-lg p-4 ${colors.bg} ${colors.border}`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center space-x-3">
+                                        <Download className={`w-5 h-5 ${colors.description}`} />
+                                        <div>
+                                          <p className={`font-medium ${colors.title}`}>
+                                            {fileType}
+                                            {!fileExists && (
+                                              <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded">파일 없음</span>
+                                            )}
+                                          </p>
+                                          <p className={`text-sm ${colors.subtitle}`}>
+                                            {file}
+                                          </p>
+                                          <p className={`text-xs ${colors.description}`}>
+                                            {!fileExists 
+                                              ? '파일이 NAS에서 확인되지 않습니다'
+                                              : fileType === '메인버전'
+                                                ? '메인 릴리즈 파일' 
+                                                : isEncrypted 
+                                                  ? '암호화된 컴포넌트 파일' 
+                                                  : '컴포넌트 파일'}
+                                          </p>
+                                          {/* 파일 정보 표시 */}
+                                          {fileExists && deploymentInfo?.fileInfoMap?.[file] && (
+                                            <div className={`flex items-center space-x-3 text-xs mt-1 ${colors.description}`}>
+                                              <span className="flex items-center">
+                                                📦 {formatFileSize(deploymentInfo.fileInfoMap[file].size)}
+                                              </span>
+                                              <span className="flex items-center">
+                                                📅 {formatFileDate(deploymentInfo.fileInfoMap[file].mtime)}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
                                       </div>
-                                    )}
+                                      <button 
+                                        className={`px-3 py-1 rounded-md text-sm font-medium flex items-center whitespace-nowrap ${
+                                          !fileExists || !deploymentInfo.directoryVerified
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : fileType === '메인버전'
+                                              ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                              : fileType === '모로우'
+                                                ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                                                : fileType === '백엔드'
+                                                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                                                  : fileType === '프런트엔드'
+                                                    ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                                                    : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                        }`}
+                                        disabled={!fileExists || !deploymentInfo.directoryVerified}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          if (!fileExists || !deploymentInfo.directoryVerified) {
+                                            alert('파일이 NAS에 존재하지 않아 다운로드할 수 없습니다.');
+                                            return;
+                                          }
+                                          // 실제 파일명을 기반으로 다운로드 링크 찾기
+                                          const fileDownloadInfo = deploymentInfo.fileDownloadLinks?.[file];
+                                          const downloadUrl = fileDownloadInfo?.downloadUrl ||
+                                                            deploymentInfo.synologyShareUrl;
+                                          
+                                          if (downloadUrl) {
+                                            const isDirectDownload = fileDownloadInfo?.isDirectDownload || false;
+                                            
+                                            // 직접 다운로드 링크면 iframe으로, 공유 링크면 새 탭에서 열기
+                                            if (isDirectDownload) {
+                                              // 직접 다운로드 - iframe으로 다운로드하여 모달이 사라지지 않게 함
+                                              const iframe = document.createElement('iframe');
+                                              iframe.style.display = 'none';
+                                              iframe.src = downloadUrl;
+                                              document.body.appendChild(iframe);
+                                              setTimeout(() => document.body.removeChild(iframe), 5000);
+                                            } else {
+                                              // 공유 링크 - 새 탭에서 폴더 열기
+                                              window.open(downloadUrl, '_blank');
+                                            }
+                                          } else {
+                                            alert('다운로드 링크를 생성할 수 없습니다.');
+                                          }
+                                        }}
+                                        title={!fileExists ? '파일이 NAS에 존재하지 않습니다' : ''}
+                                      >
+                                        {!fileExists ? '파일 없음' : '다운로드'}
+                                      </button>
+                                    </div>
                                   </div>
-                                </div>
-                                <button 
-                                  className={`px-3 py-1 rounded-md text-sm font-medium flex items-center whitespace-nowrap ${
-                                    !fileExists || !deploymentInfo.directoryVerified
-                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                      : fileType === '메인버전'
-                                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                        : fileType === '모로우'
-                                          ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                                          : fileType === '백엔드'
-                                            ? 'bg-green-600 hover:bg-green-700 text-white'
-                                            : fileType === '프런트엔드'
-                                              ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                                              : 'bg-gray-600 hover:bg-gray-700 text-white'
-                                  }`}
-                                  disabled={!fileExists || !deploymentInfo.directoryVerified}
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    if (!fileExists || !deploymentInfo.directoryVerified) {
-                                      alert('파일이 NAS에 존재하지 않아 다운로드할 수 없습니다.');
-                                      return;
-                                    }
-                                    // 실제 파일명을 기반으로 다운로드 링크 찾기
-                                    const fileDownloadInfo = deploymentInfo.fileDownloadLinks?.[file];
-                                    const downloadUrl = fileDownloadInfo?.downloadUrl ||
-                                                      deploymentInfo.synologyShareUrl;
-                                    
-                                    if (downloadUrl) {
-                                      const isDirectDownload = fileDownloadInfo?.isDirectDownload || false;
-                                      
-                                      // 직접 다운로드 링크면 iframe으로, 공유 링크면 새 탭에서 열기
-                                      if (isDirectDownload) {
-                                        // 직접 다운로드 - iframe으로 다운로드하여 모달이 사라지지 않게 함
-                                        const iframe = document.createElement('iframe');
-                                        iframe.style.display = 'none';
-                                        iframe.src = downloadUrl;
-                                        document.body.appendChild(iframe);
-                                        setTimeout(() => document.body.removeChild(iframe), 5000);
-                                      } else {
-                                        // 공유 링크 - 새 탭에서 폴더 열기
-                                        window.open(downloadUrl, '_blank');
-                                      }
-                                    } else {
-                                      alert('다운로드 링크를 생성할 수 없습니다.');
-                                    }
-                                  }}
-                                  title={!fileExists ? '파일이 NAS에 존재하지 않습니다' : ''}
+                                );
+                              }) : 
+                              /* 실제 파일이 없으면 메시지 표시 - 목 데이터 사용 안함 */
+                              [(
+                                <div 
+                                  key="no-files-message"
+                                  className="col-span-full text-center py-8"
                                 >
-                                  {!fileExists ? '파일 없음' : '다운로드'}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        }) : 
-                        /* 실제 파일이 없으면 메시지 표시 - 목 데이터 사용 안함 */
-                        [(
-                          <div 
-                            key="no-files-message"
-                            className="col-span-full text-center py-8"
-                          >
-                            <p className="text-gray-500">NAS에서 배포 파일을 찾을 수 없습니다.</p>
-                            <p className="text-sm text-gray-400 mt-1">
-                              실제 배포가 완료된 후 파일이 표시됩니다.
-                            </p>
-                          </div>
-                        )]}
+                                  <p className="text-gray-500">NAS에서 배포 파일을 찾을 수 없습니다.</p>
+                                  <p className="text-sm text-gray-400 mt-1">
+                                    실제 배포가 완료된 후 파일이 표시됩니다.
+                                  </p>
+                                </div>
+                              )]}
+                        </div>
                       </div>
                     </div>
                   </>
