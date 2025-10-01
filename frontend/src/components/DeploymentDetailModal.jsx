@@ -230,19 +230,22 @@ const DeploymentDetailModal = ({
 
   const deploymentDate = formatDate(deployment.created_at);
 
-  const tabs = [
-    { id: 'logs', label: '로그', icon: Server },
-    { id: 'artifacts', label: '아티팩트', icon: Download }
-  ];
-
-
-
-
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className={`modal-content max-w-4xl max-h-[70vh] overflow-hidden ${className}`}
-        onClick={(e) => e.stopPropagation()}
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={(e) => {
+        // 백드롭 클릭 시에만 모달 닫기
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden"
+        onClick={(e) => {
+          // 모달 내부 클릭 시 이벤트 전파 중단
+          e.stopPropagation();
+        }}
       >
         {/* 헤더 */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -256,30 +259,30 @@ const DeploymentDetailModal = ({
                    deployment.project_name}
                 </h2>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(deployment.status)}`}>
-                  배포 {deployment.status === 'success' ? '성공' :
+                  <span className="font-noto-sans-kr">배포 {deployment.status === 'success' ? '성공' :
                         deployment.status === 'failed' ? '실패' :
-                        deployment.status === 'in_progress' ? '진행중' : '대기중'}
+                        deployment.status === 'in_progress' ? '진행중' : '대기중'}</span>
                 </span>
               </div>
               <div className="flex items-center space-x-6 text-sm mt-3">
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span className="text-gray-500">빌드</span>
+                  <span className="text-gray-500 font-noto-sans-kr">빌드</span>
                   <span className="font-mono bg-gray-100 px-2 py-0.5 rounded text-gray-900">#{deployment.build_number}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-500">배포자</span>
+                  <span className="text-gray-500 font-noto-sans-kr">배포자</span>
                   <span className="font-medium text-gray-900">{deployment.deployed_by}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                  <span className="text-gray-500">배포 시간</span>
+                  <span className="text-gray-500 font-noto-sans-kr">배포 시간</span>
                   <span className="text-gray-900">{deploymentDate.full}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  <span className="text-gray-500">소요 시간</span>
+                  <span className="text-gray-500 font-noto-sans-kr">소요 시간</span>
                   <span className="font-medium text-gray-900">{formatDuration(deployment.duration)}</span>
                 </div>
               </div>
@@ -294,88 +297,89 @@ const DeploymentDetailModal = ({
         </div>
 
         {/* 탭 네비게이션 */}
-        <div className="flex border-b border-gray-200">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6">
+            {['logs', 'artifacts'].map((tab) => (
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-primary-600 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                key={tab}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setActiveTab(tab);
+                }}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === tab
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                <span>{tab.label}</span>
+                <span className="font-noto-sans-kr">{tab === 'logs' ? '로그' : '빌드 결과'}</span>
               </button>
-            );
-          })}
+            ))}
+          </nav>
         </div>
 
 
         {/* 탭 콘텐츠 */}
-        <div className="flex-1 overflow-y-auto p-4 h-[320px]">
+        <div className="flex-1 flex flex-col p-6 overflow-hidden" style={{ height: 'calc(90vh - 200px)' }}>
 
           {activeTab === 'logs' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-primary-900">배포 로그</h3>
-                <div className="flex items-center space-x-2">
-                  <button 
-                    onClick={fetchLogs}
-                    className="btn-secondary text-sm"
-                    disabled={loadingLogs}
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${loadingLogs ? 'animate-spin' : ''}`} />
-                    새로고침
-                  </button>
-                  <button className="btn-secondary text-sm">
-                    <Download className="w-4 h-4 mr-2" />
-                    로그 다운로드
-                  </button>
-                </div>
+            <div className="flex-1 flex flex-col space-y-4 h-full">
+              <div className="flex items-center justify-between flex-shrink-0">
+                <h3 className="text-lg font-medium text-primary-900 font-noto-sans-kr">배포 로그</h3>
+                <button 
+                  onClick={() => {
+                    console.log('새로고침 버튼 클릭됨');
+                    fetchLogs();
+                  }}
+                  className="btn-secondary text-sm"
+                  disabled={loadingLogs}
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${loadingLogs ? 'animate-spin' : ''}`} />
+                  <span className="font-noto-sans-kr">새로고침</span>
+                </button>
               </div>
 
-              {loadingLogs ? (
-                <div className="bg-gray-900 text-gray-100 rounded-lg p-3 font-mono text-sm h-60 overflow-y-auto flex items-center justify-center">
-                  <div className="text-center">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-400" />
-                    <span className="text-gray-400">로그를 불러오는 중...</span>
+              <div className="flex-1 flex flex-col space-y-3 min-h-0">
+                <div className="flex-1 flex flex-col min-h-0">
+                  <div className="h-full bg-gray-900 text-gray-100 rounded-lg p-3 font-mono text-sm overflow-y-auto">
+                    {loadingLogs ? (
+                      <div className="h-full flex items-center justify-center">
+                        <div className="text-center">
+                          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-400" />
+                          <span className="text-gray-400 font-noto-sans-kr">로그를 불러오는 중...</span> 
+                        </div>
+                      </div>
+                    ) : logs.length > 0 ? (
+                      logs.map((log, index) => (
+                        <div key={index} className="mb-1">
+                          <span className="text-gray-400">{log.timestamp}</span>
+                          <span className={`ml-2 ${
+                            log.level === 'SUCCESS' ? 'text-green-400' :
+                            log.level === 'ERROR' ? 'text-red-400' :
+                            log.level === 'WARN' ? 'text-yellow-400' :
+                            'text-gray-100'
+                          }`}>
+                            [{log.level}]
+                          </span>
+                          <span className="ml-2">{log.message}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="h-full flex items-center justify-center">
+                        <span className="text-gray-400 font-noto-sans-kr">로그가 없습니다.</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              ) : (
-                <div className="bg-gray-900 text-gray-100 rounded-lg p-3 font-mono text-sm h-60 overflow-y-auto">
-                  {logs.length === 0 ? (
-                    <div className="flex items-center justify-center h-full">
-                      <span className="text-gray-400">로그가 없습니다.</span>
-                    </div>
-                  ) : (
-                    logs.map((log, index) => (
-                      <div key={index} className="mb-1">
-                        <span className="text-gray-400">{log.timestamp}</span>
-                        <span className={`ml-2 ${
-                          log.level === 'SUCCESS' ? 'text-green-400' :
-                          log.level === 'ERROR' ? 'text-red-400' :
-                          log.level === 'WARN' ? 'text-yellow-400' :
-                          'text-gray-100'
-                        }`}>
-                          [{log.level}]
-                        </span>
-                        <span className="ml-2">{log.message}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
+              </div>
             </div>
           )}
 
           {activeTab === 'artifacts' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-primary-900">릴리즈 아티팩트</h3>
+            <div className="flex-1 flex flex-col space-y-4 h-full">
+              <div className="flex items-center justify-between flex-shrink-0">
+                <h3 className="text-lg font-medium text-primary-900 font-noto-sans-kr">빌드 결과</h3>
                 <div className="flex items-center space-x-3">
                   {/* NAS 디렉토리 검증 상태 표시 */}
                   {deploymentInfo && (
@@ -475,17 +479,17 @@ const DeploymentDetailModal = ({
                 </div>
               </div>
 
-              <div className="space-y-3">
+              <div className="flex-1 flex flex-col space-y-3 overflow-hidden">
                 {loadingDeploymentInfo ? (
-                  <div className="text-center py-8">
-                    <div className="text-gray-500">배포 파일 로딩 중...</div>
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="text-gray-500 font-noto-sans-kr">배포 파일 로딩 중...</div>
                   </div>
                 ) : (
                   <>
-
                     {/* 배포 파일에 대한 개별 다운로드 카드 - 빌드 타입별 표시 */}
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-medium text-gray-700">배포 파일</h4>
+                    <div className="flex-1 flex flex-col space-y-3 overflow-hidden">
+                      <h4 className="text-sm font-medium text-gray-700 border-b pb-2 flex-shrink-0">배포 파일</h4>
+                      <div className="flex-1 overflow-y-auto">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {/* 실제 파일이 있으면 실제 파일 표시, 없으면 기본 컴포넌트 카드 표시 */}
                           {(deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) ? 
@@ -729,12 +733,11 @@ const DeploymentDetailModal = ({
                           }) : 
                           /* 파일이 없을 때 메시지 표시 */
                           <div className="text-center py-8">
-                            <div className="text-gray-500">배포 파일이 없습니다.</div>
+                            <div className="text-gray-500 font-noto-sans-kr">배포 파일이 없습니다.</div>
                           </div>}
-                          
                         </div>
                       </div>
-
+                    </div>
                   </>
                 )}
               </div>
