@@ -33,11 +33,21 @@ class LDAPService {
       if (process.env.NODE_ENV === 'development' && process.env.ENABLE_MOCK_AUTH === 'true') {
         console.log(`Using mock authentication for development - user: ${username}`);
 
-        // 모의 사용자 정보 생성
-        const mockUserInfo = {
-          dn: `uid=${username},ou=users,dc=dev,dc=com`,
+        // 실제 LDAP에서 사용자 정보 조회 시도
+        let ldapUserInfo = null;
+        try {
+          ldapUserInfo = await this.findUser(username);
+          console.log(`Found LDAP user info for ${username}:`, ldapUserInfo);
+        } catch (ldapError) {
+          console.log(`LDAP lookup failed for ${username}, using mock data:`, ldapError.message);
+        }
+
+        // LDAP에서 찾은 정보가 있으면 사용, 없으면 모의 정보 생성
+        const defaultDomain = process.env.LDAP_DEFAULT_EMAIL_DOMAIN || 'roboetech.com';
+        const mockUserInfo = ldapUserInfo || {
+          dn: `uid=${username},ou=users,dc=roboetech,dc=com`,
           username: username,
-          email: `${username}@dev.com`,
+          email: `${username}@${defaultDomain}`,
           fullName: username.split('.').map(name =>
             name.charAt(0).toUpperCase() + name.slice(1),
           ).join(' '),
