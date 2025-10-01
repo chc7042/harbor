@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ConnectionStatus from './ConnectionStatus';
 import NotificationSettings from './NotificationSettings';
+import UserAvatar from './UserAvatar';
 import toast from 'react-hot-toast';
 
 const Header = () => {
@@ -101,11 +102,7 @@ const Header = () => {
                 onClick={toggleDropdown}
                 className="flex items-center space-x-3 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-900 rounded-lg p-2"
               >
-                <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                  <span className="text-primary-700 font-medium">
-                    {user?.name?.charAt(0) || user?.username?.charAt(0) || 'U'}
-                  </span>
-                </div>
+                <UserAvatar user={user} size={32} />
                 <div className="hidden md:block text-left">
                   <p className="text-primary-900 font-medium">
                     {user?.name || user?.username}
@@ -140,20 +137,22 @@ const Header = () => {
                         className="dropdown-item"
                         onClick={handleProfileClick}
                       >
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        프로필
+                        <div className="flex items-center">
+                          <UserAvatar user={user} size={20} className="mr-3" />
+                          <span>프로필</span>
+                        </div>
                       </button>
                       <div className="border-t border-primary-200 my-1"></div>
                       <button
                         className="dropdown-item text-error-700 hover:bg-error-50"
                         onClick={handleLogout}
                       >
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                        </svg>
-                        로그아웃
+                        <div className="flex items-center">
+                          <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                          </svg>
+                          <span>로그아웃</span>
+                        </div>
                       </button>
                     </div>
                   </div>
@@ -187,11 +186,7 @@ const Header = () => {
             </div>
             <div className="space-y-4">
               <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
-                  <span className="text-2xl text-primary-700 font-medium">
-                    {user?.name?.charAt(0) || user?.username?.charAt(0) || 'U'}
-                  </span>
-                </div>
+                <UserAvatar user={user} size={64} />
                 <div>
                   <h3 className="text-lg font-medium text-primary-900">
                     {user?.name || user?.username}

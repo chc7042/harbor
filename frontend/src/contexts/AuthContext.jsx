@@ -62,6 +62,7 @@ export const AuthProvider = ({ children }) => {
     checkAuthStatus();
   }, []);
 
+
   const checkAuthStatus = async () => {
     try {
       const accessToken = localStorage.getItem('accessToken');
