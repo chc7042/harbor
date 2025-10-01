@@ -173,7 +173,7 @@ class LDAPConfig {
 
     // department가 없으면 기본값 설정
     if (!user.department) {
-      user.department = 'Unknown';
+      user.department = process.env.LDAP_DEFAULT_DEPARTMENT || 'Unknown';
     }
 
     // 빈 값 정리 (username은 필수이므로 제외)

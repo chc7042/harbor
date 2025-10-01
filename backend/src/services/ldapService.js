@@ -44,14 +44,16 @@ class LDAPService {
 
         // LDAP에서 찾은 정보가 있으면 사용, 없으면 모의 정보 생성
         const defaultDomain = process.env.LDAP_DEFAULT_EMAIL_DOMAIN || 'roboetech.com';
+        const mockDnTemplate = process.env.LDAP_DN_TEMPLATE || 'uid={{username}},ou=users,dc=roboetech,dc=com';
+        const mockDefaultDepartment = process.env.LDAP_DEFAULT_DEPARTMENT_FALLBACK || 'Development';
         const mockUserInfo = ldapUserInfo || {
-          dn: `uid=${username},ou=users,dc=roboetech,dc=com`,
+          dn: mockDnTemplate.replace('{{username}}', username),
           username: username,
           email: `${username}@${defaultDomain}`,
           fullName: username.split('.').map(name =>
             name.charAt(0).toUpperCase() + name.slice(1),
           ).join(' '),
-          department: 'Development',
+          department: mockDefaultDepartment,
         };
 
         // 모의 사용자 정보로 사용자 동기화
