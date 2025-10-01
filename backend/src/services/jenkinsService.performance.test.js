@@ -102,24 +102,24 @@ describe('JenkinsService Performance Tests - 30 Second Timeout Requirement', () 
       mockDeploymentPathService.findByProjectVersionBuild.mockResolvedValue(null);
 
       // Jenkins API with realistic delay (500ms)
-      jenkinsService.client.get.mockImplementation(() => 
-        new Promise(resolve => setTimeout(() => 
-          resolve({ data: { timestamp: buildTimestamp.getTime() } }), 500))
+      jenkinsService.client.get.mockImplementation(() =>
+        new Promise(resolve => setTimeout(() =>
+          resolve({ data: { timestamp: buildTimestamp.getTime() } }), 500)),
       );
 
       // NAS operations with realistic delays
       mockNASService.directoryExists.mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => resolve(true), 200))
+        new Promise(resolve => setTimeout(() => resolve(true), 200)),
       );
-      
+
       mockNASService.getDirectoryFiles.mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => 
-          resolve(['V3.0.0_250310_0843.tar.gz']), 300))
+        new Promise(resolve => setTimeout(() =>
+          resolve(['V3.0.0_250310_0843.tar.gz']), 300)),
       );
 
       // DB save with small delay
       mockDeploymentPathService.saveDeploymentPath.mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => resolve({}), 100))
+        new Promise(resolve => setTimeout(() => resolve({}), 100)),
       );
 
       // Act
@@ -132,7 +132,7 @@ describe('JenkinsService Performance Tests - 30 Second Timeout Requirement', () 
       expect(result).toBeDefined();
       expect(durationMs).toBeLessThan(30000); // Must complete within 30 seconds
       expect(durationMs).toBeGreaterThan(500); // Should take some time for full chain
-      
+
       // Verify all steps were called
       expect(mockDeploymentPathService.findByProjectVersionBuild).toHaveBeenCalled();
       expect(jenkinsService.client.get).toHaveBeenCalled();
@@ -150,9 +150,9 @@ describe('JenkinsService Performance Tests - 30 Second Timeout Requirement', () 
       mockDeploymentPathService.findByProjectVersionBuild.mockResolvedValue(null);
 
       // Very slow Jenkins API (10 seconds)
-      jenkinsService.client.get.mockImplementation(() => 
-        new Promise(resolve => setTimeout(() => 
-          resolve({ data: { timestamp: buildTimestamp.getTime() } }), 10000))
+      jenkinsService.client.get.mockImplementation(() =>
+        new Promise(resolve => setTimeout(() =>
+          resolve({ data: { timestamp: buildTimestamp.getTime() } }), 10000)),
       );
 
       // Fast NAS operations
@@ -182,17 +182,17 @@ describe('JenkinsService Performance Tests - 30 Second Timeout Requirement', () 
 
       // Fast Jenkins API
       jenkinsService.client.get.mockResolvedValue({
-        data: { timestamp: buildTimestamp.getTime() }
+        data: { timestamp: buildTimestamp.getTime() },
       });
 
       // Slow NAS operations (5 seconds each)
       mockNASService.directoryExists.mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => resolve(true), 5000))
+        new Promise(resolve => setTimeout(() => resolve(true), 5000)),
       );
-      
+
       mockNASService.getDirectoryFiles.mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => 
-          resolve(['V3.0.0_250310_0843.tar.gz']), 5000))
+        new Promise(resolve => setTimeout(() =>
+          resolve(['V3.0.0_250310_0843.tar.gz']), 5000)),
       );
 
       mockDeploymentPathService.saveDeploymentPath.mockResolvedValue({});
@@ -219,21 +219,21 @@ describe('JenkinsService Performance Tests - 30 Second Timeout Requirement', () 
 
       mockDeploymentPathService.findByProjectVersionBuild.mockResolvedValue(null);
       jenkinsService.client.get.mockResolvedValue({
-        data: { timestamp: buildTimestamp.getTime() }
+        data: { timestamp: buildTimestamp.getTime() },
       });
 
       // First two paths fail with delays, third succeeds
       mockNASService.directoryExists
-        .mockImplementationOnce(() => 
+        .mockImplementationOnce(() =>
           new Promise(resolve => setTimeout(() => resolve(false), 2000))) // 2s delay, then fail
-        .mockImplementationOnce(() => 
+        .mockImplementationOnce(() =>
           new Promise(resolve => setTimeout(() => resolve(false), 2000))) // 2s delay, then fail
-        .mockImplementationOnce(() => 
+        .mockImplementationOnce(() =>
           new Promise(resolve => setTimeout(() => resolve(true), 1000)));  // 1s delay, then succeed
 
       mockNASService.getDirectoryFiles.mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => 
-          resolve(['V3.0.0_250310_0843.tar.gz']), 1000))
+        new Promise(resolve => setTimeout(() =>
+          resolve(['V3.0.0_250310_0843.tar.gz']), 1000)),
       );
 
       mockDeploymentPathService.saveDeploymentPath.mockResolvedValue({});
@@ -248,7 +248,7 @@ describe('JenkinsService Performance Tests - 30 Second Timeout Requirement', () 
       expect(result).toBeDefined();
       expect(durationMs).toBeLessThan(30000); // Must complete within 30 seconds
       expect(durationMs).toBeGreaterThan(6000); // Should reflect multiple attempts (2+2+1+1 = 6s minimum)
-      
+
       // Verify all three paths were tried
       expect(mockNASService.directoryExists).toHaveBeenCalledTimes(3);
     }, 35000);
@@ -263,7 +263,7 @@ describe('JenkinsService Performance Tests - 30 Second Timeout Requirement', () 
 
       mockDeploymentPathService.findByProjectVersionBuild.mockResolvedValue(null);
       jenkinsService.client.get.mockResolvedValue({
-        data: { timestamp: buildTimestamp.getTime() }
+        data: { timestamp: buildTimestamp.getTime() },
       });
 
       // NAS operation fails twice, then succeeds (with retry mechanism)
@@ -284,7 +284,7 @@ describe('JenkinsService Performance Tests - 30 Second Timeout Requirement', () 
       // Assert
       expect(result).toBeDefined();
       expect(durationMs).toBeLessThan(30000); // Must complete within 30 seconds
-      
+
       // Should have retried the failed operation
       expect(mockNASService.directoryExists).toHaveBeenCalledTimes(3); // Original + 2 retries
     }, 35000);
@@ -334,19 +334,19 @@ describe('JenkinsService Performance Tests - 30 Second Timeout Requirement', () 
               downloadFile: 'cached-file.tar.gz',
               allFiles: [],
             });
-          }
+          },
         },
         {
           name: 'Full Chain Success',
           setup: () => {
             mockDeploymentPathService.findByProjectVersionBuild.mockResolvedValue(null);
             jenkinsService.client.get.mockResolvedValue({
-              data: { timestamp: new Date().getTime() }
+              data: { timestamp: new Date().getTime() },
             });
             mockNASService.directoryExists.mockResolvedValue(true);
             mockNASService.getDirectoryFiles.mockResolvedValue(['test.tar.gz']);
             mockDeploymentPathService.saveDeploymentPath.mockResolvedValue({});
-          }
+          },
         },
         {
           name: 'Legacy Fallback',
@@ -359,8 +359,8 @@ describe('JenkinsService Performance Tests - 30 Second Timeout Requirement', () 
               allFiles: [],
               deploymentPath: 'legacy-path',
             });
-          }
-        }
+          },
+        },
       ];
 
       const results = [];

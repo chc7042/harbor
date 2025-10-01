@@ -3,12 +3,14 @@ const logger = require('../config/logger');
 const { withJenkinsRetry, withNASRetry } = require('../utils/retryMechanism');
 const { getDeploymentPathService } = require('./deploymentPathService');
 const { getNASService } = require('./nasService');
-const { 
-  formatDateForNAS, 
-  generatePathCandidates, 
-  constructNASPath, 
+const { getMetricsService } = require('./metricsService');
+const { getAlertingService } = require('./alertingService');
+const {
+  formatDateForNAS,
+  generatePathCandidates,
+  constructNASPath,
   determineMainDownloadFile,
-  categorizeFiles
+  categorizeFiles,
 } = require('../utils/pathDetection');
 
 class JenkinsService {
@@ -444,47 +446,258 @@ class JenkinsService {
    * 5. 성공 시 DB에 저장
    */
   async extractDeploymentInfo(jobName, buildNumber) {
+    const startTime = Date.now();
+    const requestId = `${jobName}#${buildNumber}-${Date.now()}`;
+    const metricsService = getMetricsService();
+    const requestData = metricsService.recordDeploymentExtractionStart(jobName, buildNumber);
+
     try {
-      logger.info(`Starting deployment info extraction for ${jobName}#${buildNumber}`);
-      
+      logger.info(`[${requestId}] Starting deployment info extraction for ${jobName}#${buildNumber}`, {
+        jobName,
+        buildNumber,
+        requestId,
+        timestamp: new Date().toISOString(),
+      });
+
       // Step 1: DB 캐시 조회
+      logger.debug(`[${requestId}] Step 1: Checking database cache`, { step: 'cache_lookup' });
+      const cacheStartTime = Date.now();
       const cachedPath = await this.checkDatabaseCache(jobName, buildNumber);
+      const cacheTime = Date.now() - cacheStartTime;
+
       if (cachedPath) {
-        logger.info(`Found cached deployment path for ${jobName}#${buildNumber}`);
+        metricsService.recordCacheHit(cacheTime);
+        logger.info(`[${requestId}] Cache hit - found cached deployment path`, {
+          step: 'cache_hit',
+          nasPath: cachedPath.nasPath,
+          downloadFile: cachedPath.downloadFile,
+          cacheResponseTime: `${cacheTime}ms`,
+          totalTime: `${Date.now() - startTime}ms`,
+        });
+
+        metricsService.recordDeploymentExtractionComplete(requestData, { success: true });
+        
+        // Record success for alerting
+        const alertingService = getAlertingService();
+        alertingService.recordPathDetectionSuccess();
+        
         return cachedPath;
       }
 
+      metricsService.recordCacheMiss(cacheTime);
+      logger.debug(`[${requestId}] Cache miss - proceeding to dynamic path detection`, {
+        step: 'cache_miss',
+        cacheResponseTime: `${cacheTime}ms`,
+      });
+
       // Step 2: Jenkins API에서 빌드 타임스탬프 추출
+      logger.debug(`[${requestId}] Step 2: Extracting build timestamp from Jenkins API`, { step: 'jenkins_api' });
+      const apiStartTime = Date.now();
       const buildTimestamp = await this.getBuildTimestamp(jobName, buildNumber);
+      const apiTime = Date.now() - apiStartTime;
+
       if (!buildTimestamp) {
-        logger.warn(`Could not get build timestamp for ${jobName}#${buildNumber}`);
-        return this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
+        metricsService.recordApiCall(apiTime, false);
+        metricsService.recordLegacyFallback(Date.now() - startTime, 'jenkins_api_failed');
+        logger.warn(`[${requestId}] Jenkins API failed - falling back to build log extraction`, {
+          step: 'jenkins_api_failed',
+          apiResponseTime: `${apiTime}ms`,
+          fallbackReason: 'no_build_timestamp',
+        });
+
+        const legacyResult = await this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
+        metricsService.recordDeploymentExtractionComplete(requestData, { success: !!legacyResult });
+        
+        // Record alerting data for Jenkins API failure fallback
+        const alertingService = getAlertingService();
+        if (legacyResult) {
+          alertingService.recordPathDetectionSuccess();
+        } else {
+          await alertingService.recordPathDetectionFailure({
+            projectName: jobName,
+            version: 'unknown',
+            buildNumber,
+            reason: 'jenkins_api_and_legacy_both_failed',
+            responseTime: Date.now() - startTime,
+          });
+        }
+        
+        return legacyResult;
       }
+
+      metricsService.recordApiCall(apiTime, true);
+
+      logger.debug(`[${requestId}] Build timestamp extracted successfully`, {
+        step: 'jenkins_api_success',
+        buildTimestamp: buildTimestamp.toISOString(),
+        apiResponseTime: `${apiTime}ms`,
+      });
 
       // Step 3: 경로 후보 생성
+      logger.debug(`[${requestId}] Step 3: Generating NAS path candidates`, { step: 'path_generation' });
+      const pathGenStartTime = Date.now();
       const pathCandidates = await this.generateNASPathCandidates(jobName, buildNumber, buildTimestamp);
+      const pathGenTime = Date.now() - pathGenStartTime;
+
+      metricsService.recordPathGeneration(pathGenTime, pathCandidates.length);
+
       if (pathCandidates.length === 0) {
-        logger.warn(`No path candidates generated for ${jobName}#${buildNumber}`);
-        return this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
+        metricsService.recordLegacyFallback(Date.now() - startTime, 'no_path_candidates');
+        logger.warn(`[${requestId}] No path candidates generated - falling back to build log extraction`, {
+          step: 'path_generation_failed',
+          candidateCount: 0,
+          fallbackReason: 'no_path_candidates',
+        });
+
+        const legacyResult = await this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
+        metricsService.recordDeploymentExtractionComplete(requestData, { success: !!legacyResult });
+        
+        // Record alerting data for path generation failure fallback
+        const alertingService = getAlertingService();
+        if (legacyResult) {
+          alertingService.recordPathDetectionSuccess();
+        } else {
+          await alertingService.recordPathDetectionFailure({
+            projectName: jobName,
+            version: 'unknown',
+            buildNumber,
+            reason: 'no_path_candidates_and_legacy_failed',
+            responseTime: Date.now() - startTime,
+          });
+        }
+        
+        return legacyResult;
       }
+
+      logger.debug(`[${requestId}] Generated ${pathCandidates.length} path candidates`, {
+        step: 'path_generation_success',
+        candidateCount: pathCandidates.length,
+        candidates: pathCandidates.map(c => c.nasPath).slice(0, 3), // Log first 3 for debugging
+        pathGenTime: `${pathGenTime}ms`,
+      });
 
       // Step 4: NAS 디렉토리 스캔 및 검증
+      logger.debug(`[${requestId}] Step 4: Verifying NAS paths`, { step: 'nas_verification' });
+      const nasStartTime = Date.now();
       const verifiedPath = await this.verifyNASPaths(pathCandidates);
+      const nasTime = Date.now() - nasStartTime;
+
       if (!verifiedPath) {
-        logger.warn(`No verified NAS path found for ${jobName}#${buildNumber}`);
-        return this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
+        metricsService.recordNasVerification(nasTime, pathCandidates.length, 0);
+        metricsService.recordLegacyFallback(Date.now() - startTime, 'nas_verification_failed');
+        logger.warn(`[${requestId}] NAS verification failed - falling back to build log extraction`, {
+          step: 'nas_verification_failed',
+          nasResponseTime: `${nasTime}ms`,
+          candidatesChecked: pathCandidates.length,
+          fallbackReason: 'no_verified_path',
+        });
+
+        const legacyResult = await this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
+        metricsService.recordDeploymentExtractionComplete(requestData, { success: !!legacyResult });
+        
+        // Record alerting data for NAS verification failure fallback
+        const alertingService = getAlertingService();
+        if (legacyResult) {
+          alertingService.recordPathDetectionSuccess();
+        } else {
+          await alertingService.recordPathDetectionFailure({
+            projectName: jobName,
+            version: 'unknown',
+            buildNumber,
+            reason: 'nas_verification_and_legacy_both_failed',
+            responseTime: Date.now() - startTime,
+          });
+        }
+        
+        return legacyResult;
       }
 
-      // Step 5: 성공 시 DB에 저장
-      await this.saveDeploymentPathToCache(jobName, buildNumber, buildTimestamp, verifiedPath);
+      metricsService.recordNasVerification(nasTime, pathCandidates.length, 1);
+      logger.debug(`[${requestId}] NAS path verified successfully`, {
+        step: 'nas_verification_success',
+        verifiedPath: verifiedPath.nasPath,
+        fileCount: verifiedPath.allFiles?.length || 0,
+        mainFile: verifiedPath.downloadFile,
+        nasResponseTime: `${nasTime}ms`,
+      });
 
-      logger.info(`Successfully extracted deployment info for ${jobName}#${buildNumber}: ${verifiedPath.nasPath}`);
-      return verifiedPath;
+      // Step 5: 성공 시 DB에 저장
+      logger.debug(`[${requestId}] Step 5: Saving to database cache`, { step: 'cache_save' });
+      const saveStartTime = Date.now();
+      try {
+        await this.saveDeploymentPathToCache(jobName, buildNumber, buildTimestamp, verifiedPath);
+        const saveTime = Date.now() - saveStartTime;
+        metricsService.recordDbSave(saveTime, true);
+
+        const totalTime = Date.now() - startTime;
+        logger.info(`[${requestId}] Successfully extracted deployment info`, {
+          step: 'complete_success',
+          nasPath: verifiedPath.nasPath,
+          downloadFile: verifiedPath.downloadFile,
+          fileCount: verifiedPath.allFiles?.length || 0,
+          performance: {
+            totalTime: `${totalTime}ms`,
+            cacheTime: `${cacheTime}ms`,
+            apiTime: `${apiTime}ms`,
+            pathGenTime: `${pathGenTime}ms`,
+            nasTime: `${nasTime}ms`,
+            saveTime: `${saveTime}ms`,
+          },
+          pathCandidatesGenerated: pathCandidates.length,
+        });
+
+        metricsService.recordDeploymentExtractionComplete(requestData, { success: true });
+        
+        // Record success for alerting
+        const alertingService = getAlertingService();
+        alertingService.recordPathDetectionSuccess();
+        
+        return verifiedPath;
+      } catch (saveError) {
+        const saveTime = Date.now() - saveStartTime;
+        metricsService.recordDbSave(saveTime, false);
+        logger.warn(`[${requestId}] Failed to save to cache, but continuing with result`, {
+          step: 'cache_save_failed',
+          error: saveError.message,
+          saveTime: `${saveTime}ms`,
+        });
+
+        metricsService.recordDeploymentExtractionComplete(requestData, { success: true });
+        return verifiedPath;
+      }
 
     } catch (error) {
-      logger.error(`Error in new deployment info extraction for ${jobName}#${buildNumber}: ${error.message}`);
+      const totalTime = Date.now() - startTime;
+      metricsService.recordError('unknown', totalTime);
+      metricsService.recordLegacyFallback(totalTime, 'exception_caught');
+
+      logger.error(`[${requestId}] Error in deployment info extraction - falling back to legacy method`, {
+        step: 'error_fallback',
+        error: error.message,
+        errorStack: error.stack,
+        totalTime: `${totalTime}ms`,
+        fallbackReason: 'exception_caught',
+      });
+
       // 새로운 방식 실패 시 기존 방식으로 폴백
-      return this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
+      const legacyResult = await this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
+      metricsService.recordDeploymentExtractionComplete(requestData, { success: !!legacyResult });
+      
+      // Record alerting data for exception fallback
+      const alertingService = getAlertingService();
+      if (legacyResult) {
+        alertingService.recordPathDetectionSuccess();
+      } else {
+        await alertingService.recordPathDetectionFailure({
+          projectName: jobName,
+          version: 'unknown',
+          buildNumber,
+          reason: 'exception_and_legacy_both_failed',
+          responseTime: totalTime,
+        });
+      }
+      
+      return legacyResult;
     }
   }
 
@@ -494,22 +707,42 @@ class JenkinsService {
   async checkDatabaseCache(jobName, buildNumber) {
     try {
       const deploymentPathService = getDeploymentPathService();
-      
+
       // jobName에서 버전 추출
       const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
       if (!versionMatch) {
-        logger.warn(`Could not extract version from job name: ${jobName}`);
+        logger.warn('Cache lookup failed - could not extract version from job name', {
+          jobName,
+          buildNumber,
+          reason: 'invalid_job_name_format',
+        });
         return null;
       }
-      
+
       const version = versionMatch[1];
+      logger.debug('Searching database cache', {
+        jobName,
+        version,
+        buildNumber,
+        operation: 'cache_lookup',
+      });
+
       const cachedPath = await deploymentPathService.findByProjectVersionBuild(
-        jobName, 
-        version, 
-        buildNumber
+        jobName,
+        version,
+        buildNumber,
       );
 
       if (cachedPath) {
+        logger.debug('Database cache hit found', {
+          jobName,
+          version,
+          buildNumber,
+          cachedPath: cachedPath.nasPath,
+          createdAt: cachedPath.createdAt,
+          fileCount: cachedPath.allFiles?.length || 0,
+        });
+
         return {
           nasPath: cachedPath.nasPath,
           downloadFile: cachedPath.downloadFile,
@@ -517,10 +750,23 @@ class JenkinsService {
           deploymentPath: cachedPath.nasPath,
         };
       }
-      
+
+      logger.debug('Database cache miss', {
+        jobName,
+        version,
+        buildNumber,
+        operation: 'cache_miss',
+      });
+
       return null;
     } catch (error) {
-      logger.warn(`Database cache lookup failed for ${jobName}#${buildNumber}: ${error.message}`);
+      logger.error('Database cache lookup failed with error', {
+        jobName,
+        buildNumber,
+        error: error.message,
+        errorStack: error.stack,
+        operation: 'cache_error',
+      });
       return null;
     }
   }
@@ -534,17 +780,17 @@ class JenkinsService {
         // 중첩된 폴더 구조를 Jenkins API 경로로 변환
         const jobPath = jobName.split('/').map(part => `/job/${encodeURIComponent(part)}`).join('');
         const apiUrl = `/job/projects${jobPath}/${buildNumber}/api/json?tree=timestamp`;
-        
+
         logger.debug(`Fetching build timestamp from: ${apiUrl}`);
-        
+
         const response = await this.client.get(apiUrl);
-        
+
         if (response.data && response.data.timestamp) {
           const buildDate = new Date(response.data.timestamp);
           logger.debug(`Build timestamp for ${jobName}#${buildNumber}: ${buildDate.toISOString()}`);
           return buildDate;
         }
-        
+
         logger.warn(`No timestamp found in Jenkins API response for ${jobName}#${buildNumber}`);
         return null;
       } catch (error) {
@@ -565,14 +811,14 @@ class JenkinsService {
         logger.warn(`Could not extract version from job name: ${jobName}`);
         return [];
       }
-      
+
       const version = versionMatch[1];
-      
+
       // 빌드 날짜 기준으로 ±1일 범위의 날짜 후보들 생성
       const dateCandidates = generatePathCandidates(buildTimestamp, 1);
-      
+
       const pathCandidates = [];
-      
+
       // 각 날짜 후보에 대해 경로 생성
       for (const dateStr of dateCandidates) {
         try {
@@ -587,7 +833,7 @@ class JenkinsService {
           logger.warn(`Failed to construct NAS path for ${version}, ${dateStr}, ${buildNumber}: ${error.message}`);
         }
       }
-      
+
       logger.debug(`Generated ${pathCandidates.length} path candidates for ${jobName}#${buildNumber}`);
       return pathCandidates;
     } catch (error) {
@@ -602,36 +848,99 @@ class JenkinsService {
   async verifyNASPaths(pathCandidates) {
     try {
       const nasService = getNASService();
-      
+
+      let pathsChecked = 0;
+      let pathsSkipped = 0;
+      const verificationResults = [];
+
       for (const candidate of pathCandidates) {
         try {
-          logger.debug(`Verifying NAS path: ${candidate.nasPath}`);
-          
+          pathsChecked++;
+          const candidateStartTime = Date.now();
+
+          logger.debug(`Verifying NAS path candidate ${pathsChecked}/${pathCandidates.length}`, {
+            candidatePath: candidate.nasPath,
+            candidateDate: candidate.dateStr,
+            candidateBuild: candidate.buildNumber,
+            operation: 'nas_path_check',
+          });
+
           // 디렉토리 존재 여부 확인
+          const existsStartTime = Date.now();
           const exists = await withNASRetry(async () => {
             return await nasService.directoryExists(candidate.nasPath);
           }, {}, `NAS directoryExists: ${candidate.nasPath}`);
-          
+          const existsTime = Date.now() - existsStartTime;
+
           if (!exists) {
-            logger.debug(`Directory does not exist: ${candidate.nasPath}`);
+            pathsSkipped++;
+            logger.debug('NAS path does not exist - skipping', {
+              candidatePath: candidate.nasPath,
+              checkTime: `${existsTime}ms`,
+              result: 'not_found',
+              operation: 'nas_directory_check',
+            });
+            verificationResults.push({
+              path: candidate.nasPath,
+              result: 'not_found',
+              time: existsTime,
+            });
             continue;
           }
-          
+
+          logger.debug('NAS directory exists - checking files', {
+            candidatePath: candidate.nasPath,
+            checkTime: `${existsTime}ms`,
+            result: 'found',
+            operation: 'nas_directory_found',
+          });
+
           // 디렉토리 파일 목록 조회
+          const filesStartTime = Date.now();
           const files = await withNASRetry(async () => {
             return await nasService.getDirectoryFiles(candidate.nasPath);
           }, {}, `NAS getDirectoryFiles: ${candidate.nasPath}`);
+          const filesTime = Date.now() - filesStartTime;
+
           if (!files || files.length === 0) {
-            logger.debug(`No files found in directory: ${candidate.nasPath}`);
+            pathsSkipped++;
+            logger.debug('NAS directory is empty - skipping', {
+              candidatePath: candidate.nasPath,
+              filesCheckTime: `${filesTime}ms`,
+              result: 'empty_directory',
+              operation: 'nas_files_check',
+            });
+            verificationResults.push({
+              path: candidate.nasPath,
+              result: 'empty',
+              time: existsTime + filesTime,
+            });
             continue;
           }
-          
+
           // 파일 분류 및 메인 다운로드 파일 결정
           const categorized = categorizeFiles(files);
           const mainDownloadFile = determineMainDownloadFile(files);
-          
-          logger.info(`Verified NAS path: ${candidate.nasPath} with ${files.length} files`);
-          
+
+          const candidateTime = Date.now() - candidateStartTime;
+
+          logger.info('NAS path verification successful', {
+            verifiedPath: candidate.nasPath,
+            fileCount: files.length,
+            mainDownloadFile,
+            categorizedFiles: {
+              versionFiles: categorized.versionFiles?.length || 0,
+              mrFiles: categorized.mrFiles?.length || 0,
+              backendFiles: categorized.backendFiles?.length || 0,
+              frontendFiles: categorized.frontendFiles?.length || 0,
+              otherFiles: categorized.otherFiles?.length || 0,
+            },
+            verificationTime: `${candidateTime}ms`,
+            pathsChecked,
+            pathsSkipped,
+            operation: 'nas_verification_success',
+          });
+
           return {
             nasPath: candidate.nasPath,
             deploymentPath: candidate.nasPath,
@@ -639,17 +948,46 @@ class JenkinsService {
             allFiles: files,
             categorized,
           };
-          
+
         } catch (error) {
-          logger.warn(`Error verifying path ${candidate.nasPath}: ${error.message}`);
+          pathsSkipped++;
+          const candidateTime = Date.now() - candidateStartTime;
+
+          logger.warn('NAS path verification failed with error', {
+            candidatePath: candidate.nasPath,
+            error: error.message,
+            verificationTime: `${candidateTime}ms`,
+            pathsChecked,
+            pathsSkipped,
+            operation: 'nas_verification_error',
+          });
+
+          verificationResults.push({
+            path: candidate.nasPath,
+            result: 'error',
+            error: error.message,
+            time: candidateTime,
+          });
           continue;
         }
       }
-      
-      logger.warn(`No valid NAS paths found among ${pathCandidates.length} candidates`);
+
+      logger.warn('No valid NAS paths found after verification', {
+        totalCandidates: pathCandidates.length,
+        pathsChecked,
+        pathsSkipped,
+        verificationResults: verificationResults.slice(0, 5), // Log first 5 for debugging
+        operation: 'nas_verification_complete_failure',
+      });
+
       return null;
     } catch (error) {
-      logger.error(`Error during NAS path verification: ${error.message}`);
+      logger.error('Critical error during NAS path verification', {
+        error: error.message,
+        errorStack: error.stack,
+        candidateCount: pathCandidates.length,
+        operation: 'nas_verification_critical_error',
+      });
       return null;
     }
   }
@@ -660,16 +998,16 @@ class JenkinsService {
   async saveDeploymentPathToCache(jobName, buildNumber, buildTimestamp, verifiedPath) {
     try {
       const deploymentPathService = getDeploymentPathService();
-      
+
       // jobName에서 버전 추출
       const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
       if (!versionMatch) {
         logger.warn(`Could not extract version from job name for caching: ${jobName}`);
         return;
       }
-      
+
       const version = versionMatch[1];
-      
+
       const pathData = {
         projectName: jobName,
         version: version,
@@ -679,10 +1017,10 @@ class JenkinsService {
         downloadFile: verifiedPath.downloadFile,
         allFiles: verifiedPath.allFiles || [],
       };
-      
+
       await deploymentPathService.saveDeploymentPath(pathData);
       logger.info(`Saved deployment path to cache: ${jobName}#${buildNumber}`);
-      
+
     } catch (error) {
       logger.error(`Failed to save deployment path to cache for ${jobName}#${buildNumber}: ${error.message}`);
       // 캐시 저장 실패는 치명적이지 않으므로 에러를 던지지 않음
@@ -696,7 +1034,7 @@ class JenkinsService {
     try {
       // 먼저 Jenkins API에서 빌드 타임스탬프를 가져와 보기
       const buildTimestamp = await this.getBuildTimestamp(jobName, buildNumber);
-      
+
       if (buildTimestamp) {
         // 타임스탬프가 있으면 path detection 유틸리티 사용
         const pathCandidates = await this.generateNASPathCandidates(jobName, buildNumber, buildTimestamp);
@@ -704,17 +1042,17 @@ class JenkinsService {
           return pathCandidates[0]; // 첫 번째 후보 사용
         }
       }
-      
+
       // 타임스탬프를 가져올 수 없는 경우 현재 날짜 기반으로 추정
       const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
       if (versionMatch) {
         const version = versionMatch[1];
         const today = new Date();
-        
+
         try {
           const dateStr = formatDateForNAS(today);
           const nasPath = constructNASPath(version, dateStr, buildNumber);
-          
+
           logger.info(`Generated fallback path using current date: ${nasPath}`);
           return {
             nasPath,
@@ -726,7 +1064,7 @@ class JenkinsService {
           logger.warn(`Failed to generate fallback path: ${error.message}`);
         }
       }
-      
+
       return null;
     } catch (error) {
       logger.error(`Error generating dynamic fallback path for ${jobName}#${buildNumber}: ${error.message}`);
@@ -745,20 +1083,20 @@ class JenkinsService {
         logger.warn(`Could not parse NAS path format: ${nasPath}`);
         return null;
       }
-      
+
       const [, version, dateStr] = pathMatch;
-      
+
       // NAS 디렉토리에서 실제 파일 목록 조회 시도
       try {
         const nasService = getNASService();
         const files = await withNASRetry(async () => {
           return await nasService.getDirectoryFiles(nasPath);
         }, {}, `NAS getDirectoryFiles: ${nasPath}`);
-        
+
         if (files && files.length > 0) {
           const mainDownloadFile = determineMainDownloadFile(files);
           logger.info(`Found ${files.length} files in ${nasPath}, main file: ${mainDownloadFile}`);
-          
+
           return {
             downloadFile: mainDownloadFile,
             allFiles: files,
@@ -767,19 +1105,19 @@ class JenkinsService {
       } catch (nasError) {
         logger.debug(`Could not access NAS directory ${nasPath}: ${nasError.message}`);
       }
-      
+
       // NAS 접근 실패 시 패턴 기반 파일명 생성
       const expectedFiles = this.generateExpectedFilenamesByPattern(version, dateStr, buildNumber);
       if (expectedFiles.length > 0) {
         const mainFile = determineMainDownloadFile(expectedFiles);
         logger.info(`Generated expected files for ${nasPath}, main file: ${mainFile}`);
-        
+
         return {
           downloadFile: mainFile,
           allFiles: expectedFiles,
         };
       }
-      
+
       return null;
     } catch (error) {
       logger.error(`Error inferring files from path ${nasPath}: ${error.message}`);
@@ -792,25 +1130,25 @@ class JenkinsService {
    */
   generateExpectedFilenamesByPattern(version, dateStr, buildNumber) {
     const expectedFiles = [];
-    
+
     try {
       // V버전 파일 (메인 다운로드 파일) - 시간은 임의로 설정
       const timeStr = '1000'; // 기본 시간
       expectedFiles.push(`V${version}_${dateStr}_${timeStr}.tar.gz`);
-      
+
       // MR 파일들
       expectedFiles.push(`mr${version}_${dateStr}_${timeStr}_${buildNumber}.enc.tar.gz`);
-      
+
       // BE/FE 파일들 - 빌드번호는 다를 수 있으므로 패턴으로
       expectedFiles.push(`be${version}_${dateStr}_${timeStr}_${buildNumber + 1}.enc.tar.gz`);
       expectedFiles.push(`fe${version}_${dateStr}_${timeStr}_${buildNumber + 2}.enc.tar.gz`);
-      
+
       logger.debug(`Generated ${expectedFiles.length} expected files for ${version}_${dateStr}_${buildNumber}`);
-      
+
     } catch (error) {
       logger.warn(`Error generating expected filenames: ${error.message}`);
     }
-    
+
     return expectedFiles;
   }
 

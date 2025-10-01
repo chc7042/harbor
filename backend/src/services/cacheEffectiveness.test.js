@@ -24,8 +24,8 @@ jest.mock('axios', () => ({
       },
     },
     defaults: {
-      timeout: 30000
-    }
+      timeout: 30000,
+    },
   })),
 }));
 
@@ -66,8 +66,8 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
       totalRequests: 0,
       averageResponseTime: {
         cacheHit: [],
-        cacheMiss: []
-      }
+        cacheMiss: [],
+      },
     };
   });
 
@@ -80,7 +80,7 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
   // Helper function to simulate cache hit with tracking
   const simulateCacheHit = (jobName, buildNumber, responseTime = 50) => {
     const version = jobName.match(/(\d+\.\d+\.\d+)/)?.[1] || '3.0.0';
-    mockDeploymentPathService.findByProjectVersionBuild.mockImplementation(() => 
+    mockDeploymentPathService.findByProjectVersionBuild.mockImplementation(() =>
       new Promise(resolve => setTimeout(() => {
         cacheStats.hits++;
         cacheStats.totalRequests++;
@@ -88,9 +88,9 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
         resolve({
           nasPath: `\\\\nas.roboetech.com\\release_version\\release\\product\\mr${version}\\250310\\${buildNumber}`,
           downloadFile: `V${version}_250310_0843.tar.gz`,
-          allFiles: [`V${version}_250310_0843.tar.gz`]
+          allFiles: [`V${version}_250310_0843.tar.gz`],
         });
-      }, responseTime))
+      }, responseTime)),
     );
   };
 
@@ -98,35 +98,35 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
   const simulateCacheMiss = (jobName, buildNumber, apiTime = 1000, nasTime = 500) => {
     const version = jobName.match(/(\d+\.\d+\.\d+)/)?.[1] || '3.0.0';
     const totalTime = apiTime + nasTime;
-    
-    mockDeploymentPathService.findByProjectVersionBuild.mockImplementation(() => 
+
+    mockDeploymentPathService.findByProjectVersionBuild.mockImplementation(() =>
       new Promise(resolve => setTimeout(() => {
         cacheStats.misses++;
         cacheStats.totalRequests++;
         cacheStats.averageResponseTime.cacheMiss.push(totalTime);
         resolve(null);
-      }, 50))
+      }, 50)),
     );
 
     jenkinsService.client.get.mockImplementation(() =>
-      new Promise(resolve => setTimeout(() => 
-        resolve({ data: { timestamp: new Date().getTime() } }), apiTime))
+      new Promise(resolve => setTimeout(() =>
+        resolve({ data: { timestamp: new Date().getTime() } }), apiTime)),
     );
 
     mockNASService.directoryExists.mockImplementation(() =>
-      new Promise(resolve => setTimeout(() => resolve(true), nasTime / 2))
+      new Promise(resolve => setTimeout(() => resolve(true), nasTime / 2)),
     );
 
     mockNASService.getDirectoryFiles.mockImplementation(() =>
-      new Promise(resolve => setTimeout(() => 
-        resolve([`V${version}_250310_0843.tar.gz`]), nasTime / 2))
+      new Promise(resolve => setTimeout(() =>
+        resolve([`V${version}_250310_0843.tar.gz`]), nasTime / 2)),
     );
 
-    mockDeploymentPathService.saveDeploymentPath.mockImplementation(() => 
+    mockDeploymentPathService.saveDeploymentPath.mockImplementation(() =>
       new Promise(resolve => setTimeout(() => {
         cacheStats.saves++;
         resolve({});
-      }, 100))
+      }, 100)),
     );
   };
 
@@ -156,12 +156,12 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
 
       // Calculate hit rate
       const hitRate = (cacheStats.hits / cacheStats.totalRequests) * 100;
-      
+
       expect(hitRate).toBeGreaterThan(75); // Should achieve >75% hit rate
       expect(cacheStats.hits).toBe(9); // 3 jobs × 3 rounds
       expect(cacheStats.misses).toBe(3); // 3 initial cache misses
       expect(cacheStats.saves).toBe(3); // 3 saves after cache misses
-      
+
       console.log(`Cache Hit Rate: ${hitRate.toFixed(2)}% (${cacheStats.hits}/${cacheStats.totalRequests})`);
     });
 
@@ -175,7 +175,7 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
       const startMiss = Date.now();
       await jenkinsService.extractDeploymentInfo(jobName, buildNumber);
       const missTime = Date.now() - startMiss;
-      
+
       jest.clearAllMocks();
 
       // Subsequent requests - cache hits (fast)
@@ -228,7 +228,7 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
       }
 
       const hitRate = (totalHits / (totalHits + totalMisses)) * 100;
-      
+
       expect(hitRate).toBeGreaterThan(70); // Should maintain good hit rate across job types
       expect(totalHits).toBe(12); // 4 jobs × 3 hits each
       expect(totalMisses).toBe(4); // 4 initial misses
@@ -277,7 +277,7 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
       for (let i = 1; i <= 20; i++) {
         uniqueJobs.push({
           jobName: `3.0.${i}/mr3.0.${i}_release`,
-          buildNumber: 26 + i
+          buildNumber: 26 + i,
         });
       }
 
@@ -291,7 +291,7 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
       // Access random cached jobs (hits)
       const randomAccesses = 50;
       let hitCount = 0;
-      
+
       for (let i = 0; i < randomAccesses; i++) {
         const randomJob = uniqueJobs[Math.floor(Math.random() * uniqueJobs.length)];
         simulateCacheHit(randomJob.jobName, randomJob.buildNumber, 20);
@@ -301,7 +301,7 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
       }
 
       const finalHitRate = (hitCount / (uniqueJobs.length + hitCount)) * 100;
-      
+
       expect(finalHitRate).toBeGreaterThan(65); // Should maintain good hit rate even with many unique jobs
       expect(hitCount).toBe(randomAccesses);
 
@@ -316,23 +316,23 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
 
       // First request - guaranteed miss
       simulateCacheMiss(jobName, buildNumber, 1500, 750);
-      
+
       const result1 = await jenkinsService.extractDeploymentInfo(jobName, buildNumber);
-      
+
       expect(result1).toBeDefined();
       expect(result1.nasPath).toContain('mr3.0.0');
       expect(mockDeploymentPathService.findByProjectVersionBuild).toHaveBeenCalledWith(
-        jobName, '3.0.0', buildNumber
+        jobName, '3.0.0', buildNumber,
       );
       expect(mockDeploymentPathService.saveDeploymentPath).toHaveBeenCalled();
-      
+
       jest.clearAllMocks();
 
       // Second request - should hit cache
       simulateCacheHit(jobName, buildNumber, 40);
-      
+
       const result2 = await jenkinsService.extractDeploymentInfo(jobName, buildNumber);
-      
+
       expect(result2).toBeDefined();
       expect(result2.nasPath).toContain('mr3.0.0');
       expect(mockDeploymentPathService.findByProjectVersionBuild).toHaveBeenCalled();
@@ -373,7 +373,7 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
       expect(testTime).toBeLessThan(1000); // Cache-warmed requests should be very fast
       expect(improvementFactor).toBeGreaterThan(5); // Cache should provide significant improvement
 
-      console.log(`Cache Warming Results:`);
+      console.log('Cache Warming Results:');
       console.log(`  Warmup Time (${warmupJobs.length} misses): ${warmupTime}ms`);
       console.log(`  Cached Time (${warmupJobs.length} hits): ${testTime}ms`);
       console.log(`  Improvement Factor: ${improvementFactor.toFixed(1)}x`);
@@ -389,7 +389,7 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
         averageHitTime: 0,
         averageMissTime: 0,
         dataFreshness: new Map(),
-        errorRecoveryCount: 0
+        errorRecoveryCount: 0,
       };
 
       // Simulate various scenarios
@@ -408,7 +408,7 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
       for (const scenario of scenarios) {
         for (let i = 0; i < scenario.repeat; i++) {
           const startTime = Date.now();
-          
+
           if (scenario.type === 'miss') {
             simulateCacheMiss(scenario.jobName, scenario.buildNumber, 1100, 550);
             await jenkinsService.extractDeploymentInfo(scenario.jobName, scenario.buildNumber);
@@ -420,7 +420,7 @@ describe('JenkinsService DB Caching Effectiveness and Hit Rates', () => {
             analytics.cacheHits++;
             hitTimes.push(Date.now() - startTime);
           }
-          
+
           analytics.totalRequests++;
           jest.clearAllMocks();
         }

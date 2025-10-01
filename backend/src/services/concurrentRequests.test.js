@@ -24,8 +24,8 @@ jest.mock('axios', () => ({
       },
     },
     defaults: {
-      timeout: 30000
-    }
+      timeout: 30000,
+    },
   })),
 }));
 
@@ -69,7 +69,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
       const jobName = '3.0.0/mr3.0.0_release';
       const buildNumber = 26;
       const concurrentRequests = 20;
-      
+
       let cacheCallCount = 0;
       let saveCallCount = 0;
 
@@ -85,7 +85,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
             resolve({
               nasPath: '\\\\nas.roboetech.com\\release_version\\release\\product\\mr3.0.0\\250310\\26',
               downloadFile: 'V3.0.0_250310_0843.tar.gz',
-              allFiles: ['V3.0.0_250310_0843.tar.gz']
+              allFiles: ['V3.0.0_250310_0843.tar.gz'],
             });
           }
         }, 50));
@@ -93,19 +93,19 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
 
       // Mock Jenkins API and NAS for the first (cache miss) request
       jenkinsService.client.get.mockResolvedValue({
-        data: { timestamp: new Date('2025-03-10T17:39:00Z').getTime() }
+        data: { timestamp: new Date('2025-03-10T17:39:00Z').getTime() },
       });
       mockNASService.directoryExists.mockResolvedValue(true);
       mockNASService.getDirectoryFiles.mockResolvedValue(['V3.0.0_250310_0843.tar.gz']);
-      
+
       mockDeploymentPathService.saveDeploymentPath.mockImplementation(() => {
         saveCallCount++;
         return Promise.resolve({});
       });
 
       // Execute concurrent requests
-      const promises = Array(concurrentRequests).fill().map(() => 
-        jenkinsService.extractDeploymentInfo(jobName, buildNumber)
+      const promises = Array(concurrentRequests).fill().map(() =>
+        jenkinsService.extractDeploymentInfo(jobName, buildNumber),
       );
 
       const startTime = Date.now();
@@ -124,7 +124,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
 
       // Cache should be called for each request
       expect(cacheCallCount).toBe(concurrentRequests);
-      
+
       // Only one save operation should occur (race condition protection)
       expect(saveCallCount).toBeLessThanOrEqual(3); // Allow some minor race conditions
 
@@ -171,8 +171,8 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
       mockDeploymentPathService.saveDeploymentPath.mockResolvedValue({});
 
       // Execute all deployments concurrently
-      const promises = testCases.map(testCase => 
-        jenkinsService.extractDeploymentInfo(testCase.jobName, testCase.buildNumber)
+      const promises = testCases.map(testCase =>
+        jenkinsService.extractDeploymentInfo(testCase.jobName, testCase.buildNumber),
       );
 
       const startTime = Date.now();
@@ -201,7 +201,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
       const jobName = '3.0.0/mr3.0.0_release';
       const buildNumber = 26;
       const simultaneousRequests = 10;
-      
+
       let findCallCount = 0;
       let saveCallCount = 0;
       let jenkinsApiCallCount = 0;
@@ -224,7 +224,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
 
       mockNASService.directoryExists.mockResolvedValue(true);
       mockNASService.getDirectoryFiles.mockResolvedValue(['V3.0.0_250310_0843.tar.gz']);
-      
+
       // Track save operations
       mockDeploymentPathService.saveDeploymentPath.mockImplementation(() => {
         saveCallCount++;
@@ -232,8 +232,8 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
       });
 
       // Start all requests at the same time
-      const promises = Array(simultaneousRequests).fill().map(() => 
-        jenkinsService.extractDeploymentInfo(jobName, buildNumber)
+      const promises = Array(simultaneousRequests).fill().map(() =>
+        jenkinsService.extractDeploymentInfo(jobName, buildNumber),
       );
 
       const results = await Promise.all(promises);
@@ -247,11 +247,11 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
 
       // Cache should be checked for each request
       expect(findCallCount).toBe(simultaneousRequests);
-      
+
       // Jenkins API might be called multiple times due to simultaneous cache misses
       expect(jenkinsApiCallCount).toBeGreaterThan(0);
       expect(jenkinsApiCallCount).toBeLessThanOrEqual(simultaneousRequests);
-      
+
       // Save operations should occur but not excessively (some deduplication expected)
       expect(saveCallCount).toBeGreaterThan(0);
       expect(saveCallCount).toBeLessThanOrEqual(simultaneousRequests);
@@ -263,7 +263,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
       const jobName = '3.0.0/mr3.0.0_release';
       const buildNumber = 26;
       const totalRequests = 15;
-      
+
       let successCount = 0;
       let failureCount = 0;
 
@@ -292,12 +292,12 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
         nasPath: 'fallback-path',
         downloadFile: 'fallback-file.tar.gz',
         allFiles: [],
-        deploymentPath: 'fallback-path'
+        deploymentPath: 'fallback-path',
       });
 
       // Execute concurrent requests
-      const promises = Array(totalRequests).fill().map(() => 
-        jenkinsService.extractDeploymentInfo(jobName, buildNumber)
+      const promises = Array(totalRequests).fill().map(() =>
+        jenkinsService.extractDeploymentInfo(jobName, buildNumber),
       );
 
       const results = await Promise.allSettled(promises);
@@ -314,7 +314,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
       // All requests should either succeed or gracefully fallback
       expect(successCount + failureCount).toBe(totalRequests);
       expect(successCount).toBeGreaterThan(0); // At least some should succeed
-      
+
       // Fallback should be used for failed cases
       if (failureCount > 0) {
         expect(jenkinsService.extractDeploymentInfoFromBuildLog).toHaveBeenCalled();
@@ -329,7 +329,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
       const highLoad = 50;
       const jobName = '3.0.0/mr3.0.0_release';
       const buildNumber = 26;
-      
+
       // Mix of cache hits and misses
       let requestCount = 0;
       mockDeploymentPathService.findByProjectVersionBuild.mockImplementation(() => {
@@ -343,7 +343,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
             resolve({
               nasPath: '\\\\nas.roboetech.com\\release_version\\release\\product\\mr3.0.0\\250310\\26',
               downloadFile: 'V3.0.0_250310_0843.tar.gz',
-              allFiles: ['V3.0.0_250310_0843.tar.gz']
+              allFiles: ['V3.0.0_250310_0843.tar.gz'],
             });
           }
         }, 20)); // Fast cache operation
@@ -351,7 +351,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
 
       // Fast operations for cache misses
       jenkinsService.client.get.mockResolvedValue({
-        data: { timestamp: Date.now() }
+        data: { timestamp: Date.now() },
       });
       mockNASService.directoryExists.mockResolvedValue(true);
       mockNASService.getDirectoryFiles.mockResolvedValue(['V3.0.0_250310_0843.tar.gz']);
@@ -380,7 +380,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
 
       // Should handle high load efficiently
       expect(duration).toBeLessThan(15000); // 15 seconds max for 50 requests
-      
+
       // Calculate throughput
       const throughput = (highLoad / duration) * 1000; // requests per second
       expect(throughput).toBeGreaterThan(3); // At least 3 req/sec
@@ -398,22 +398,22 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
         mockDeploymentPathService.findByProjectVersionBuild.mockResolvedValue({
           nasPath: `\\\\nas.roboetech.com\\release_version\\release\\product\\mr3.0.${batch}\\250310\\26`,
           downloadFile: `V3.0.${batch}_250310_0843.tar.gz`,
-          allFiles: [`V3.0.${batch}_250310_0843.tar.gz`]
+          allFiles: [`V3.0.${batch}_250310_0843.tar.gz`],
         });
 
         const batchStartTime = Date.now();
-        
-        const promises = Array(batchSize).fill().map(() => 
-          jenkinsService.extractDeploymentInfo(`3.0.${batch}/mr3.0.${batch}_release`, 26)
+
+        const promises = Array(batchSize).fill().map(() =>
+          jenkinsService.extractDeploymentInfo(`3.0.${batch}/mr3.0.${batch}_release`, 26),
         );
 
         await Promise.all(promises);
-        
+
         const batchTime = Date.now() - batchStartTime;
         batchTimes.push(batchTime);
 
         console.log(`Batch ${batch + 1}: ${batchSize} requests in ${batchTime}ms`);
-        
+
         // Small delay between batches
         await new Promise(resolve => setTimeout(resolve, 100));
         jest.clearAllMocks();
@@ -429,7 +429,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
       expect(variation).toBeLessThan(50); // Less than 50% variation
       expect(avgBatchTime).toBeLessThan(2000); // Average batch should be under 2s
 
-      console.log(`Sustained Load Results:`);
+      console.log('Sustained Load Results:');
       console.log(`  Average batch time: ${avgBatchTime.toFixed(2)}ms`);
       console.log(`  Performance variation: ${variation.toFixed(2)}%`);
       console.log(`  Min/Max batch time: ${minBatchTime}ms / ${maxBatchTime}ms`);
@@ -440,7 +440,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
     test('should not accumulate memory leaks under concurrent load', async () => {
       const iterations = 20;
       const requestsPerIteration = 10;
-      
+
       // Track if mocks are being properly reset
       let totalMockCalls = 0;
 
@@ -451,22 +451,22 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
           return Promise.resolve({
             nasPath: `\\\\nas.roboetech.com\\release_version\\release\\product\\mr3.0.0\\250310\\${i}`,
             downloadFile: `V3.0.0_250310_${i}.tar.gz`,
-            allFiles: [`V3.0.0_250310_${i}.tar.gz`]
+            allFiles: [`V3.0.0_250310_${i}.tar.gz`],
           });
         });
 
-        const promises = Array(requestsPerIteration).fill().map(() => 
-          jenkinsService.extractDeploymentInfo('3.0.0/mr3.0.0_release', 26 + i)
+        const promises = Array(requestsPerIteration).fill().map(() =>
+          jenkinsService.extractDeploymentInfo('3.0.0/mr3.0.0_release', 26 + i),
         );
 
         const results = await Promise.all(promises);
-        
+
         // Verify all requests succeeded
         expect(results).toHaveLength(requestsPerIteration);
-        
+
         // Clear mocks to prevent memory accumulation
         jest.clearAllMocks();
-        
+
         // Force garbage collection hint
         if (global.gc) {
           global.gc();
@@ -475,7 +475,7 @@ describe('JenkinsService Concurrent Request Handling and Race Conditions', () =>
 
       // Total mock calls should equal iterations * requests per iteration
       expect(totalMockCalls).toBe(iterations * requestsPerIteration);
-      
+
       console.log(`Memory Management Test: ${iterations} iterations × ${requestsPerIteration} requests = ${totalMockCalls} total calls`);
     }, 25000);
   });

@@ -96,7 +96,7 @@ describe('JenkinsService Integration - Complete Fallback Chain', () => {
       expect(mockDeploymentPathService.findByProjectVersionBuild).toHaveBeenCalledWith(
         jobName,
         '3.0.0',
-        buildNumber
+        buildNumber,
       );
 
       // Should not proceed to other steps
@@ -150,11 +150,11 @@ describe('JenkinsService Integration - Complete Fallback Chain', () => {
       expect(mockDeploymentPathService.findByProjectVersionBuild).toHaveBeenCalledWith(
         jobName,
         '3.0.0',
-        buildNumber
+        buildNumber,
       );
 
       expect(jenkinsService.client.get).toHaveBeenCalledWith(
-        '/job/projects/job/3.0.0/job/mr3.0.0_release/26/api/json?tree=timestamp'
+        '/job/projects/job/3.0.0/job/mr3.0.0_release/26/api/json?tree=timestamp',
       );
 
       expect(mockNASService.directoryExists).toHaveBeenCalled();
@@ -178,7 +178,7 @@ describe('JenkinsService Integration - Complete Fallback Chain', () => {
       const jobName = '3.0.0/mr3.0.0_release';
       const buildNumber = 26;
       const buildTimestamp = new Date('2025-03-10T17:39:00Z');
-      
+
       const path1 = '\\\\nas.roboetech.com\\release_version\\release\\product\\mr3.0.0\\250310\\26'; // Build date
       const path2 = '\\\\nas.roboetech.com\\release_version\\release\\product\\mr3.0.0\\250309\\26'; // Day before
       const path3 = '\\\\nas.roboetech.com\\release_version\\release\\product\\mr3.0.0\\250311\\26'; // Day after
@@ -196,7 +196,7 @@ describe('JenkinsService Integration - Complete Fallback Chain', () => {
       // NAS verification - first two paths fail, third succeeds
       mockNASService.directoryExists
         .mockResolvedValueOnce(false) // path1 doesn't exist
-        .mockResolvedValueOnce(false) // path2 doesn't exist  
+        .mockResolvedValueOnce(false) // path2 doesn't exist
         .mockResolvedValueOnce(true);  // path3 exists
 
       mockNASService.getDirectoryFiles.mockResolvedValue(nasFiles);
@@ -248,7 +248,7 @@ describe('JenkinsService Integration - Complete Fallback Chain', () => {
       // Assert
       expect(result).toEqual(legacyResult);
       expect(jenkinsService.extractDeploymentInfoFromBuildLog).toHaveBeenCalledWith(jobName, buildNumber);
-      
+
       // New method steps should have been attempted
       expect(mockDeploymentPathService.findByProjectVersionBuild).toHaveBeenCalled();
       expect(jenkinsService.client.get).toHaveBeenCalled();
@@ -281,7 +281,7 @@ describe('JenkinsService Integration - Complete Fallback Chain', () => {
 
       // Assert
       expect(result.nasPath).toContain('mr3.0.0');
-      
+
       // Should have retried the NAS operation
       expect(mockNASService.directoryExists).toHaveBeenCalledTimes(2);
     });
@@ -293,7 +293,7 @@ describe('JenkinsService Integration - Complete Fallback Chain', () => {
 
       // Database operations fail
       mockDeploymentPathService.findByProjectVersionBuild.mockRejectedValue(
-        new Error('Database connection failed')
+        new Error('Database connection failed'),
       );
 
       // Mock legacy method success
@@ -346,7 +346,7 @@ describe('JenkinsService Integration - Complete Fallback Chain', () => {
       const jobName = '3.0.0/mr3.0.0_release';
       const buildNumber = 26;
       const buildTimestamp = new Date('2025-03-10T17:39:00Z');
-      
+
       const mixedFiles = [
         'be3.0.0_250310_0842_83.enc.tar.gz',  // Backend file
         'mr3.0.0_250310_1739_26.enc.tar.gz',  // MR file

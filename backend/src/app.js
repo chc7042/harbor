@@ -16,6 +16,7 @@ const nasRoutes = require('./routes/nas');
 const nasArchiveRoutes = require('./routes/nas-archive');
 const projectRoutes = require('./routes/projects');
 const fileRoutes = require('./routes/files');
+const metricsRoutes = require('./routes/metrics');
 const { errorHandler } = require('./middleware/error');
 const { initializeDatabase } = require('./config/database');
 const logger = require('./config/logger');
@@ -157,6 +158,7 @@ app.use('/api/ws', websocketRoutes);
 app.use('/api/nas', nasRoutes);
 app.use('/api/nas-archive', nasArchiveRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/metrics', metricsRoutes);
 
 // 404 핸들러
 app.use('*', (req, res) => {

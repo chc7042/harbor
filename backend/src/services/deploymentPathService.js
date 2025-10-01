@@ -478,6 +478,36 @@ class DeploymentPathService {
   }
 
   /**
+   * 최근 배포 경로 목록 조회 (모든 프로젝트)
+   * @param {number} limit - 조회할 개수 (기본값: 10)
+   * @returns {Promise<Array>} - 최근 배포 경로 목록
+   */
+  async getRecentPaths(limit = 10) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+      throw new AppError('Limit must be an integer between 1 and 1000', 400);
+    }
+
+    try {
+      const result = await this.executeWithRetry(
+        `SELECT * FROM ${this.tableName} 
+         ORDER BY verified_at DESC 
+         LIMIT $1`,
+        [limit],
+        'getRecentPaths',
+      );
+
+      logger.debug(`Found ${result.rows.length} recent deployment paths`);
+
+      return result.rows.map(row => this.formatDeploymentPath(row));
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw this.handleDatabaseError(error, 'getRecentPaths');
+    }
+  }
+
+  /**
    * 데이터베이스 행을 표준 형식으로 변환
    * @param {Object} row - 데이터베이스 행 객체
    * @returns {Object} - 형식화된 배포 경로 객체
