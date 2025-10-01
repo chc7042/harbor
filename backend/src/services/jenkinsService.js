@@ -1,5 +1,15 @@
 const axios = require('axios');
 const logger = require('../config/logger');
+const { withJenkinsRetry, withNASRetry } = require('../utils/retryMechanism');
+const { getDeploymentPathService } = require('./deploymentPathService');
+const { getNASService } = require('./nasService');
+const { 
+  formatDateForNAS, 
+  generatePathCandidates, 
+  constructNASPath, 
+  determineMainDownloadFile,
+  categorizeFiles
+} = require('../utils/pathDetection');
 
 class JenkinsService {
   constructor() {
@@ -40,7 +50,7 @@ class JenkinsService {
   }
 
   async getJobs() {
-    try {
+    return withJenkinsRetry(async () => {
       // projects 폴더의 하위 폴더들 조회
       const url = '/job/projects/api/json?tree=jobs[name,url]';
       logger.debug(`Fetching Jenkins project folders from URL: ${url}`);
@@ -86,11 +96,7 @@ class JenkinsService {
 
       logger.info(`Total jobs found: ${allJobs.length}`);
       return allJobs;
-    } catch (error) {
-      logger.error('Failed to fetch Jenkins jobs from projects folder:', error.message);
-      logger.error(`Error status: ${error.response?.status}, URL: /job/projects/api/json`);
-      throw new Error('Jenkins projects 폴더의 작업 목록을 가져올 수 없습니다.');
-    }
+    }, {}, 'Jenkins getJobs');
   }
 
   async getAllJobs() {
@@ -250,7 +256,7 @@ class JenkinsService {
   }
 
   async getBuildDetails(jobName, buildNumber) {
-    try {
+    return withJenkinsRetry(async () => {
       // projects 폴더 하위의 작업 빌드 상세 조회
       const response = await this.client.get(`/job/projects/job/${encodeURIComponent(jobName)}/${buildNumber}/api/json?depth=2`);
       const build = response.data;
@@ -272,14 +278,11 @@ class JenkinsService {
         result: build.result,
         queueId: build.queueId,
       };
-    } catch (error) {
-      logger.error(`Failed to fetch build details for ${jobName}#${buildNumber}:`, error.message);
-      throw new Error(`Jenkins 빌드 ${jobName}#${buildNumber} 상세 정보를 가져올 수 없습니다.`);
-    }
+    }, {}, `Jenkins getBuildDetails: ${jobName}#${buildNumber}`);
   }
 
   async getBuildLog(jobName, buildNumber) {
-    try {
+    return withJenkinsRetry(async () => {
       // 중첩된 폴더 구조를 Jenkins API 경로로 변환
       // 예: "3.0.0/mr3.0.0_release" -> "/job/projects/job/3.0.0/job/mr3.0.0_release"
       const jobPath = jobName.split('/').map(part => `/job/${encodeURIComponent(part)}`).join('');
@@ -298,10 +301,7 @@ class JenkinsService {
       logger.info(`Parsed ${logs.length} log entries for ${jobName}#${buildNumber}`);
 
       return logs;
-    } catch (error) {
-      logger.error(`Failed to fetch build log for ${jobName}#${buildNumber}:`, error.message);
-      throw new Error(`Jenkins 빌드 ${jobName}#${buildNumber} 로그를 가져올 수 없습니다.`);
-    }
+    }, {}, `Jenkins getBuildLog: ${jobName}#${buildNumber}`);
   }
 
   /**
@@ -436,7 +436,386 @@ class JenkinsService {
   }
 
   /**
-   * Jenkins 로그에서 실제 배포 경로와 다운로드 파일 정보 추출
+   * 새로운 fallback chain을 사용한 배포 정보 추출
+   * 1. DB에서 캐시된 경로 조회
+   * 2. Jenkins API에서 빌드 타임스탬프 추출
+   * 3. 날짜 기반 경로 후보 생성
+   * 4. NAS 디렉토리 스캔 및 검증
+   * 5. 성공 시 DB에 저장
+   */
+  async extractDeploymentInfo(jobName, buildNumber) {
+    try {
+      logger.info(`Starting deployment info extraction for ${jobName}#${buildNumber}`);
+      
+      // Step 1: DB 캐시 조회
+      const cachedPath = await this.checkDatabaseCache(jobName, buildNumber);
+      if (cachedPath) {
+        logger.info(`Found cached deployment path for ${jobName}#${buildNumber}`);
+        return cachedPath;
+      }
+
+      // Step 2: Jenkins API에서 빌드 타임스탬프 추출
+      const buildTimestamp = await this.getBuildTimestamp(jobName, buildNumber);
+      if (!buildTimestamp) {
+        logger.warn(`Could not get build timestamp for ${jobName}#${buildNumber}`);
+        return this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
+      }
+
+      // Step 3: 경로 후보 생성
+      const pathCandidates = await this.generateNASPathCandidates(jobName, buildNumber, buildTimestamp);
+      if (pathCandidates.length === 0) {
+        logger.warn(`No path candidates generated for ${jobName}#${buildNumber}`);
+        return this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
+      }
+
+      // Step 4: NAS 디렉토리 스캔 및 검증
+      const verifiedPath = await this.verifyNASPaths(pathCandidates);
+      if (!verifiedPath) {
+        logger.warn(`No verified NAS path found for ${jobName}#${buildNumber}`);
+        return this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
+      }
+
+      // Step 5: 성공 시 DB에 저장
+      await this.saveDeploymentPathToCache(jobName, buildNumber, buildTimestamp, verifiedPath);
+
+      logger.info(`Successfully extracted deployment info for ${jobName}#${buildNumber}: ${verifiedPath.nasPath}`);
+      return verifiedPath;
+
+    } catch (error) {
+      logger.error(`Error in new deployment info extraction for ${jobName}#${buildNumber}: ${error.message}`);
+      // 새로운 방식 실패 시 기존 방식으로 폴백
+      return this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
+    }
+  }
+
+  /**
+   * DB에서 캐시된 배포 경로 조회
+   */
+  async checkDatabaseCache(jobName, buildNumber) {
+    try {
+      const deploymentPathService = getDeploymentPathService();
+      
+      // jobName에서 버전 추출
+      const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
+      if (!versionMatch) {
+        logger.warn(`Could not extract version from job name: ${jobName}`);
+        return null;
+      }
+      
+      const version = versionMatch[1];
+      const cachedPath = await deploymentPathService.findByProjectVersionBuild(
+        jobName, 
+        version, 
+        buildNumber
+      );
+
+      if (cachedPath) {
+        return {
+          nasPath: cachedPath.nasPath,
+          downloadFile: cachedPath.downloadFile,
+          allFiles: cachedPath.allFiles || [],
+          deploymentPath: cachedPath.nasPath,
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      logger.warn(`Database cache lookup failed for ${jobName}#${buildNumber}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Jenkins API에서 빌드 타임스탬프 추출
+   */
+  async getBuildTimestamp(jobName, buildNumber) {
+    return withJenkinsRetry(async () => {
+      try {
+        // 중첩된 폴더 구조를 Jenkins API 경로로 변환
+        const jobPath = jobName.split('/').map(part => `/job/${encodeURIComponent(part)}`).join('');
+        const apiUrl = `/job/projects${jobPath}/${buildNumber}/api/json?tree=timestamp`;
+        
+        logger.debug(`Fetching build timestamp from: ${apiUrl}`);
+        
+        const response = await this.client.get(apiUrl);
+        
+        if (response.data && response.data.timestamp) {
+          const buildDate = new Date(response.data.timestamp);
+          logger.debug(`Build timestamp for ${jobName}#${buildNumber}: ${buildDate.toISOString()}`);
+          return buildDate;
+        }
+        
+        logger.warn(`No timestamp found in Jenkins API response for ${jobName}#${buildNumber}`);
+        return null;
+      } catch (error) {
+        logger.error(`Failed to get build timestamp for ${jobName}#${buildNumber}: ${error.message}`);
+        return null;
+      }
+    }, {}, `getBuildTimestamp: ${jobName}#${buildNumber}`);
+  }
+
+  /**
+   * 빌드 정보를 바탕으로 NAS 경로 후보들 생성
+   */
+  async generateNASPathCandidates(jobName, buildNumber, buildTimestamp) {
+    try {
+      // jobName에서 버전 추출
+      const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
+      if (!versionMatch) {
+        logger.warn(`Could not extract version from job name: ${jobName}`);
+        return [];
+      }
+      
+      const version = versionMatch[1];
+      
+      // 빌드 날짜 기준으로 ±1일 범위의 날짜 후보들 생성
+      const dateCandidates = generatePathCandidates(buildTimestamp, 1);
+      
+      const pathCandidates = [];
+      
+      // 각 날짜 후보에 대해 경로 생성
+      for (const dateStr of dateCandidates) {
+        try {
+          const nasPath = constructNASPath(version, dateStr, buildNumber);
+          pathCandidates.push({
+            nasPath,
+            dateStr,
+            version,
+            buildNumber,
+          });
+        } catch (error) {
+          logger.warn(`Failed to construct NAS path for ${version}, ${dateStr}, ${buildNumber}: ${error.message}`);
+        }
+      }
+      
+      logger.debug(`Generated ${pathCandidates.length} path candidates for ${jobName}#${buildNumber}`);
+      return pathCandidates;
+    } catch (error) {
+      logger.error(`Error generating path candidates for ${jobName}#${buildNumber}: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * NAS 경로들을 검증하고 첫 번째로 존재하는 경로의 파일 목록 반환
+   */
+  async verifyNASPaths(pathCandidates) {
+    try {
+      const nasService = getNASService();
+      
+      for (const candidate of pathCandidates) {
+        try {
+          logger.debug(`Verifying NAS path: ${candidate.nasPath}`);
+          
+          // 디렉토리 존재 여부 확인
+          const exists = await withNASRetry(async () => {
+            return await nasService.directoryExists(candidate.nasPath);
+          }, {}, `NAS directoryExists: ${candidate.nasPath}`);
+          
+          if (!exists) {
+            logger.debug(`Directory does not exist: ${candidate.nasPath}`);
+            continue;
+          }
+          
+          // 디렉토리 파일 목록 조회
+          const files = await withNASRetry(async () => {
+            return await nasService.getDirectoryFiles(candidate.nasPath);
+          }, {}, `NAS getDirectoryFiles: ${candidate.nasPath}`);
+          if (!files || files.length === 0) {
+            logger.debug(`No files found in directory: ${candidate.nasPath}`);
+            continue;
+          }
+          
+          // 파일 분류 및 메인 다운로드 파일 결정
+          const categorized = categorizeFiles(files);
+          const mainDownloadFile = determineMainDownloadFile(files);
+          
+          logger.info(`Verified NAS path: ${candidate.nasPath} with ${files.length} files`);
+          
+          return {
+            nasPath: candidate.nasPath,
+            deploymentPath: candidate.nasPath,
+            downloadFile: mainDownloadFile,
+            allFiles: files,
+            categorized,
+          };
+          
+        } catch (error) {
+          logger.warn(`Error verifying path ${candidate.nasPath}: ${error.message}`);
+          continue;
+        }
+      }
+      
+      logger.warn(`No valid NAS paths found among ${pathCandidates.length} candidates`);
+      return null;
+    } catch (error) {
+      logger.error(`Error during NAS path verification: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * 검증된 배포 경로를 DB 캐시에 저장
+   */
+  async saveDeploymentPathToCache(jobName, buildNumber, buildTimestamp, verifiedPath) {
+    try {
+      const deploymentPathService = getDeploymentPathService();
+      
+      // jobName에서 버전 추출
+      const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
+      if (!versionMatch) {
+        logger.warn(`Could not extract version from job name for caching: ${jobName}`);
+        return;
+      }
+      
+      const version = versionMatch[1];
+      
+      const pathData = {
+        projectName: jobName,
+        version: version,
+        buildNumber: buildNumber,
+        buildDate: buildTimestamp,
+        nasPath: verifiedPath.nasPath,
+        downloadFile: verifiedPath.downloadFile,
+        allFiles: verifiedPath.allFiles || [],
+      };
+      
+      await deploymentPathService.saveDeploymentPath(pathData);
+      logger.info(`Saved deployment path to cache: ${jobName}#${buildNumber}`);
+      
+    } catch (error) {
+      logger.error(`Failed to save deployment path to cache for ${jobName}#${buildNumber}: ${error.message}`);
+      // 캐시 저장 실패는 치명적이지 않으므로 에러를 던지지 않음
+    }
+  }
+
+  /**
+   * 동적 폴백 경로 생성 (하드코딩된 날짜 매핑 대신 사용)
+   */
+  async generateDynamicFallbackPath(jobName, buildNumber) {
+    try {
+      // 먼저 Jenkins API에서 빌드 타임스탬프를 가져와 보기
+      const buildTimestamp = await this.getBuildTimestamp(jobName, buildNumber);
+      
+      if (buildTimestamp) {
+        // 타임스탬프가 있으면 path detection 유틸리티 사용
+        const pathCandidates = await this.generateNASPathCandidates(jobName, buildNumber, buildTimestamp);
+        if (pathCandidates.length > 0) {
+          return pathCandidates[0]; // 첫 번째 후보 사용
+        }
+      }
+      
+      // 타임스탬프를 가져올 수 없는 경우 현재 날짜 기반으로 추정
+      const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
+      if (versionMatch) {
+        const version = versionMatch[1];
+        const today = new Date();
+        
+        try {
+          const dateStr = formatDateForNAS(today);
+          const nasPath = constructNASPath(version, dateStr, buildNumber);
+          
+          logger.info(`Generated fallback path using current date: ${nasPath}`);
+          return {
+            nasPath,
+            dateStr,
+            version,
+            buildNumber,
+          };
+        } catch (error) {
+          logger.warn(`Failed to generate fallback path: ${error.message}`);
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      logger.error(`Error generating dynamic fallback path for ${jobName}#${buildNumber}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * NAS 경로에서 파일 목록을 추론하여 동적으로 파일명 생성
+   */
+  async inferFilesFromPath(nasPath, jobName, buildNumber) {
+    try {
+      // NAS 경로에서 날짜 및 버전 정보 추출
+      const pathMatch = nasPath.match(/\\mr(\d+\.\d+\.\d+)\\(\d{6})\\(\d+)$/);
+      if (!pathMatch) {
+        logger.warn(`Could not parse NAS path format: ${nasPath}`);
+        return null;
+      }
+      
+      const [, version, dateStr] = pathMatch;
+      
+      // NAS 디렉토리에서 실제 파일 목록 조회 시도
+      try {
+        const nasService = getNASService();
+        const files = await withNASRetry(async () => {
+          return await nasService.getDirectoryFiles(nasPath);
+        }, {}, `NAS getDirectoryFiles: ${nasPath}`);
+        
+        if (files && files.length > 0) {
+          const mainDownloadFile = determineMainDownloadFile(files);
+          logger.info(`Found ${files.length} files in ${nasPath}, main file: ${mainDownloadFile}`);
+          
+          return {
+            downloadFile: mainDownloadFile,
+            allFiles: files,
+          };
+        }
+      } catch (nasError) {
+        logger.debug(`Could not access NAS directory ${nasPath}: ${nasError.message}`);
+      }
+      
+      // NAS 접근 실패 시 패턴 기반 파일명 생성
+      const expectedFiles = this.generateExpectedFilenamesByPattern(version, dateStr, buildNumber);
+      if (expectedFiles.length > 0) {
+        const mainFile = determineMainDownloadFile(expectedFiles);
+        logger.info(`Generated expected files for ${nasPath}, main file: ${mainFile}`);
+        
+        return {
+          downloadFile: mainFile,
+          allFiles: expectedFiles,
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      logger.error(`Error inferring files from path ${nasPath}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * 버전, 날짜, 빌드번호 기반으로 예상 파일명들 생성
+   */
+  generateExpectedFilenamesByPattern(version, dateStr, buildNumber) {
+    const expectedFiles = [];
+    
+    try {
+      // V버전 파일 (메인 다운로드 파일) - 시간은 임의로 설정
+      const timeStr = '1000'; // 기본 시간
+      expectedFiles.push(`V${version}_${dateStr}_${timeStr}.tar.gz`);
+      
+      // MR 파일들
+      expectedFiles.push(`mr${version}_${dateStr}_${timeStr}_${buildNumber}.enc.tar.gz`);
+      
+      // BE/FE 파일들 - 빌드번호는 다를 수 있으므로 패턴으로
+      expectedFiles.push(`be${version}_${dateStr}_${timeStr}_${buildNumber + 1}.enc.tar.gz`);
+      expectedFiles.push(`fe${version}_${dateStr}_${timeStr}_${buildNumber + 2}.enc.tar.gz`);
+      
+      logger.debug(`Generated ${expectedFiles.length} expected files for ${version}_${dateStr}_${buildNumber}`);
+      
+    } catch (error) {
+      logger.warn(`Error generating expected filenames: ${error.message}`);
+    }
+    
+    return expectedFiles;
+  }
+
+  /**
+   * Jenkins 로그에서 실제 배포 경로와 다운로드 파일 정보 추출 (기존 방식 - 폴백용)
    */
   async extractDeploymentInfoFromBuildLog(jobName, buildNumber) {
     try {
@@ -455,7 +834,9 @@ class JenkinsService {
       logger.debug(`Extracting deployment info from log: ${fullPath}`);
 
       try {
-        const response = await this.client.get(fullPath);
+        const response = await withJenkinsRetry(async () => {
+          return await this.client.get(fullPath);
+        }, {}, `Jenkins getBuildLog: ${targetJobName}#${buildNumber}`);
         const logContent = response.data;
         const lines = logContent.split('\n');
 
@@ -530,55 +911,23 @@ class JenkinsService {
         }
       }
 
-      // 경로를 찾지 못한 경우 기본 경로 생성
+      // 경로를 찾지 못한 경우 동적 경로 생성
       if (!deploymentInfo.nasPath) {
-        // jobName에서 버전 추출 (예: "3.0.0/mr3.0.0_release" -> "3.0.0")
-        const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
-        if (versionMatch) {
-          const version = versionMatch[1];
-
-          // 버전별 실제 배포 날짜 사용 - 실제 NAS 경로 기반
-          let dateStr;
-          if (version === '3.0.0') {
-            dateStr = '250310'; // 3.0.0 빌드들은 250310에 배포됨
-          } else if (version === '1.2.0' && buildNumber <= 66) {
-            dateStr = '250929'; // 1.2.0 빌드들은 250929에 배포됨
-          } else if (version === '1.0.0') {
-            dateStr = '241017'; // 1.0.0 빌드들은 241017에 배포됨
-          } else {
-            const today = new Date();
-            dateStr = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
-          }
-
-          deploymentInfo.nasPath = `\\\\nas.roboetech.com\\release_version\\release\\product\\mr${version}\\${dateStr}\\${buildNumber}`;
-          deploymentInfo.deploymentPath = deploymentInfo.nasPath;
-
-          logger.info(`Generated fallback NAS path: ${deploymentInfo.nasPath} (date: ${dateStr})`);
+        const fallbackPath = await this.generateDynamicFallbackPath(jobName, buildNumber);
+        if (fallbackPath) {
+          deploymentInfo.nasPath = fallbackPath.nasPath;
+          deploymentInfo.deploymentPath = fallbackPath.nasPath;
+          logger.info(`Generated dynamic fallback NAS path: ${deploymentInfo.nasPath}`);
         }
       }
 
-      // 메인 다운로드 파일이 설정되지 않은 경우 버전별 실제 파일명 생성
-      if (!deploymentInfo.downloadFile) {
-        const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
-        if (versionMatch) {
-          const version = versionMatch[1];
-
-          // 버전별 실제 파일명 설정
-          if (version === '3.0.0') {
-            deploymentInfo.downloadFile = 'V3.0.0_250310_0843.tar.gz';
-            deploymentInfo.allFiles = [
-              'V3.0.0_250310_0843.tar.gz',
-              'mr3.0.0_250310_1739_26.enc.tar.gz',
-              'be3.0.0_250310_0842_83.enc.tar.gz',
-              'fe3.0.0_250310_0843_49.enc.tar.gz',
-            ];
-          } else if (version === '1.2.0' && buildNumber <= 54) {
-            deploymentInfo.downloadFile = 'V1.2.0_250929_1058.tar.gz';
-            deploymentInfo.allFiles = [deploymentInfo.downloadFile];
-          } else if (version === '1.0.0') {
-            deploymentInfo.downloadFile = 'V1.0.0_241017_1234.tar.gz';
-            deploymentInfo.allFiles = [deploymentInfo.downloadFile];
-          }
+      // 메인 다운로드 파일이 설정되지 않은 경우 동적 파일명 추론
+      if (!deploymentInfo.downloadFile && deploymentInfo.nasPath) {
+        const dynamicFiles = await this.inferFilesFromPath(deploymentInfo.nasPath, jobName, buildNumber);
+        if (dynamicFiles) {
+          deploymentInfo.downloadFile = dynamicFiles.downloadFile;
+          deploymentInfo.allFiles = dynamicFiles.allFiles;
+          logger.info(`Inferred download file: ${deploymentInfo.downloadFile}`);
         }
       }
 

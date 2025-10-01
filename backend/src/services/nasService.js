@@ -5,6 +5,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const logger = require('../config/logger');
 const { AppError } = require('../middleware/error');
+const { withNASRetry } = require('../utils/retryMechanism');
 
 const execAsync = promisify(exec);
 
@@ -103,22 +104,24 @@ class NASService {
    * 연결 테스트
    */
   async testConnection() {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Connection timeout'));
-      }, this.connectionTimeout);
+    return withNASRetry(async () => {
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Connection timeout'));
+        }, this.connectionTimeout);
 
-      this.smbClient.readdir('', (err, files) => {
-        clearTimeout(timeout);
+        this.smbClient.readdir('', (err, files) => {
+          clearTimeout(timeout);
 
-        if (err) {
-          reject(err);
-        } else {
-          logger.info(`NAS root directory contains ${files ? files.length : 0} items`);
-          resolve(true);
-        }
+          if (err) {
+            reject(err);
+          } else {
+            logger.info(`NAS root directory contains ${files ? files.length : 0} items`);
+            resolve(true);
+          }
+        });
       });
-    });
+    }, {}, 'NAS connection test');
   }
 
   /**
@@ -188,31 +191,33 @@ class NASService {
       return this.listDirectoryWithSmbclient(dirPath);
     }
 
-    return new Promise((resolve, reject) => {
-      this.smbClient.readdir(dirPath, (err, files) => {
-        if (err) {
-          logger.error(`Failed to list directory ${dirPath}:`, err.message);
-          reject(new AppError(`Directory listing failed: ${err.message}`, 500));
-        } else {
-          resolve(files || []);
-        }
+    return withNASRetry(async () => {
+      return new Promise((resolve, reject) => {
+        this.smbClient.readdir(dirPath, (err, files) => {
+          if (err) {
+            logger.error(`Failed to list directory ${dirPath}:`, err.message);
+            reject(new AppError(`Directory listing failed: ${err.message}`, 500));
+          } else {
+            resolve(files || []);
+          }
+        });
       });
-    });
+    }, {}, `NAS directory listing: ${dirPath}`);
   }
 
   /**
    * smbclient를 사용한 디렉토리 목록 조회
    */
   async listDirectoryWithSmbclient(dirPath = '') {
-    const host = process.env.NAS_HOST || 'nas.roboetech.com';
-    const share = process.env.NAS_SHARE || 'release_version';
-    const username = process.env.NAS_USERNAME || 'nasadmin';
-    const password = process.env.NAS_PASSWORD || 'Cmtes123';
+    return withNASRetry(async () => {
+      const host = process.env.NAS_HOST || 'nas.roboetech.com';
+      const share = process.env.NAS_SHARE || 'release_version';
+      const username = process.env.NAS_USERNAME || 'nasadmin';
+      const password = process.env.NAS_PASSWORD || 'Cmtes123';
 
-    const cdCommand = dirPath ? `cd "${dirPath}"; ` : '';
-    const command = `smbclient //${host}/${share} -U ${username}%${password} -c "${cdCommand}ls" 2>/dev/null`;
+      const cdCommand = dirPath ? `cd "${dirPath}"; ` : '';
+      const command = `smbclient //${host}/${share} -U ${username}%${password} -c "${cdCommand}ls" 2>/dev/null`;
 
-    try {
       const { stdout } = await execAsync(command);
       const files = [];
 
@@ -237,10 +242,7 @@ class NASService {
       }
 
       return files.map(f => f.name);
-    } catch (error) {
-      logger.error(`smbclient directory listing failed for ${dirPath}:`, error.message);
-      return []; // Return empty array instead of throwing to continue search
-    }
+    }, {}, `smbclient directory listing: ${dirPath}`);
   }
 
   /**

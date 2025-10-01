@@ -1,4 +1,4 @@
-const logger = require('../config/logger');
+// const logger = require('../config/logger'); // Not currently used, but may be needed for future debugging
 
 /**
  * Path detection utilities for NAS 경로 자동 탐지
@@ -47,7 +47,7 @@ function formatDateForNAS(timestamp) {
  * @param {number} [dayRange=1] - 날짜 범위 (기본값: ±1일)
  * @returns {string[]} - YYMMDD 형식의 날짜 후보 배열 (우선순위 순)
  * @example
- * generatePathCandidates(new Date('2025-03-10')) 
+ * generatePathCandidates(new Date('2025-03-10'))
  * // returns ['250310', '250309', '250311']
  */
 function generatePathCandidates(buildDate, dayRange = 1) {
@@ -57,7 +57,7 @@ function generatePathCandidates(buildDate, dayRange = 1) {
 
   const candidates = [];
   const baseDate = new Date(buildDate);
-  
+
   if (isNaN(baseDate.getTime())) {
     throw new Error('Invalid build date');
   }
@@ -126,19 +126,19 @@ function constructNASPath(version, dateStr, buildNumber, options = {}) {
 const FILE_PATTERNS = {
   // V버전 파일 패턴 (메인 다운로드 파일)
   VERSION_FILE: /^V\d+\.\d+\.\d+_\d{6}_\d{4}\.tar\.gz$/,
-  
-  // MR 릴리즈 파일 패턴 
+
+  // MR 릴리즈 파일 패턴
   MR_RELEASE: /^mr\d+\.\d+\.\d+_\d{6}_\d{4}_\d+\.enc\.tar\.gz$/,
-  
+
   // BE 백엔드 파일 패턴
   BACKEND_FILE: /^be\d+\.\d+\.\d+_\d{6}_\d{4}_\d+\.enc\.tar\.gz$/,
-  
+
   // FE 프론트엔드 파일 패턴
   FRONTEND_FILE: /^fe\d+\.\d+\.\d+_\d{6}_\d{4}_\d+\.enc\.tar\.gz$/,
-  
+
   // 일반 tar.gz 파일 패턴
   TAR_FILE: /\.tar\.gz$/,
-  
+
   // 암호화된 tar.gz 파일 패턴
   ENCRYPTED_TAR: /\.enc\.tar\.gz$/,
 };

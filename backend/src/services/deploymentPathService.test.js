@@ -27,15 +27,15 @@ describe('DeploymentPathService', () => {
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
-    
+
     // Setup mock implementations
     mockQuery = query;
     mockGetPoolStatus = getPoolStatus;
     mockLogger = logger;
-    
+
     // Create new service instance
     service = new DeploymentPathService();
-    
+
     // Mock successful database connection by default
     mockGetPoolStatus.mockReturnValue({ status: 'active' });
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
@@ -68,7 +68,7 @@ describe('DeploymentPathService', () => {
 
       expect(result).toBe(false);
       expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Database connection check failed')
+        expect.stringContaining('Database connection check failed'),
       );
     });
 
@@ -80,7 +80,7 @@ describe('DeploymentPathService', () => {
 
       expect(result).toBe(false);
       expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Database connection check failed')
+        expect.stringContaining('Database connection check failed'),
       );
     });
   });
@@ -273,7 +273,7 @@ describe('DeploymentPathService', () => {
         .mockRejectedValueOnce(new Error('Temporary connection issue'))
         .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }) // checkDatabaseConnection call
         .mockResolvedValue(mockResult); // actual retry call
-      
+
       mockGetPoolStatus.mockReturnValue({ status: 'active' });
 
       const result = await service.executeWithRetry('SELECT 1', [], 'test operation');
@@ -281,7 +281,7 @@ describe('DeploymentPathService', () => {
       expect(result).toBe(mockResult);
       expect(mockQuery).toHaveBeenCalledTimes(3); // Initial attempt + checkConnection + retry
       expect(mockLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('test operation succeeded on retry attempt')
+        expect.stringContaining('test operation succeeded on retry attempt'),
       );
     });
 
@@ -291,12 +291,12 @@ describe('DeploymentPathService', () => {
       mockQuery.mockRejectedValue(error);
 
       await expect(
-        service.executeWithRetry('INSERT INTO test', [], 'test operation')
+        service.executeWithRetry('INSERT INTO test', [], 'test operation'),
       ).rejects.toThrow();
 
       expect(mockQuery).toHaveBeenCalledTimes(1);
       expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Non-retryable error')
+        expect.stringContaining('Non-retryable error'),
       );
     });
 
@@ -306,12 +306,12 @@ describe('DeploymentPathService', () => {
       mockGetPoolStatus.mockReturnValue({ status: 'active' });
 
       await expect(
-        service.executeWithRetry('SELECT 1', [], 'test operation')
+        service.executeWithRetry('SELECT 1', [], 'test operation'),
       ).rejects.toThrow();
 
       expect(mockQuery).toHaveBeenCalledTimes(3); // Initial + 2 retries
       expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('test operation failed after 3 attempts')
+        expect.stringContaining('test operation failed after 3 attempts'),
       );
     });
   });
@@ -352,7 +352,7 @@ describe('DeploymentPathService', () => {
 
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('SELECT * FROM deployment_paths'),
-        ['3.0.0/mr3.0.0_release', '3.0.0', 26]
+        ['3.0.0/mr3.0.0_release', '3.0.0', 26],
       );
     });
 
@@ -363,13 +363,13 @@ describe('DeploymentPathService', () => {
 
       expect(result).toBeNull();
       expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('No cached path found')
+        expect.stringContaining('No cached path found'),
       );
     });
 
     it('should throw AppError for invalid parameters', async () => {
       await expect(
-        service.findByProjectVersionBuild('', '1.0.0', 1)
+        service.findByProjectVersionBuild('', '1.0.0', 1),
       ).rejects.toThrow(AppError);
     });
   });
@@ -421,7 +421,7 @@ describe('DeploymentPathService', () => {
           validPathData.nasPath,
           validPathData.downloadFile,
           JSON.stringify(validPathData.allFiles),
-        ])
+        ]),
       );
     });
 
@@ -462,7 +462,7 @@ describe('DeploymentPathService', () => {
           pathDataWithStringDate.nasPath,
           pathDataWithStringDate.downloadFile,
           JSON.stringify(pathDataWithStringDate.allFiles),
-        ])
+        ]),
       );
     });
 
@@ -473,7 +473,7 @@ describe('DeploymentPathService', () => {
       };
 
       await expect(
-        service.saveDeploymentPath(invalidPathData)
+        service.saveDeploymentPath(invalidPathData),
       ).rejects.toThrow(AppError);
     });
 
@@ -485,7 +485,7 @@ describe('DeploymentPathService', () => {
       };
 
       await expect(
-        service.saveDeploymentPath(invalidPathData)
+        service.saveDeploymentPath(invalidPathData),
       ).rejects.toThrow(AppError);
     });
 
@@ -496,7 +496,7 @@ describe('DeploymentPathService', () => {
       };
 
       await expect(
-        service.saveDeploymentPath(invalidPathData)
+        service.saveDeploymentPath(invalidPathData),
       ).rejects.toThrow(AppError);
     });
   });
@@ -529,17 +529,17 @@ describe('DeploymentPathService', () => {
 
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('WHERE project_name = $1'),
-        ['3.0.0/mr3.0.0_release', 5]
+        ['3.0.0/mr3.0.0_release', 5],
       );
     });
 
     it('should throw AppError for invalid limit', async () => {
       await expect(
-        service.getRecentPathsByProject('test-project', 0)
+        service.getRecentPathsByProject('test-project', 0),
       ).rejects.toThrow(AppError);
 
       await expect(
-        service.getRecentPathsByProject('test-project', 1001)
+        service.getRecentPathsByProject('test-project', 1001),
       ).rejects.toThrow(AppError);
     });
   });
@@ -548,7 +548,7 @@ describe('DeploymentPathService', () => {
     it('should return paths within date range', async () => {
       const startDate = new Date('2025-03-01');
       const endDate = new Date('2025-03-31');
-      
+
       const mockRows = [
         {
           id: '123e4567-e89b-12d3-a456-426614174000',
@@ -572,7 +572,7 @@ describe('DeploymentPathService', () => {
       expect(result).toHaveLength(1);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('WHERE build_date BETWEEN $1 AND $2'),
-        [startDate, endDate]
+        [startDate, endDate],
       );
     });
 
@@ -586,13 +586,13 @@ describe('DeploymentPathService', () => {
 
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('WHERE build_date BETWEEN $1 AND $2'),
-        [new Date(startDate), new Date(endDate)]
+        [new Date(startDate), new Date(endDate)],
       );
     });
 
     it('should throw AppError for invalid date format', async () => {
       await expect(
-        service.getPathsByDateRange('invalid-date', '2025-03-31')
+        service.getPathsByDateRange('invalid-date', '2025-03-31'),
       ).rejects.toThrow(AppError);
     });
 
@@ -601,7 +601,7 @@ describe('DeploymentPathService', () => {
       const endDate = new Date('2025-03-01');
 
       await expect(
-        service.getPathsByDateRange(startDate, endDate)
+        service.getPathsByDateRange(startDate, endDate),
       ).rejects.toThrow(AppError);
     });
 
@@ -610,7 +610,7 @@ describe('DeploymentPathService', () => {
       const endDate = new Date('2025-12-31');
 
       await expect(
-        service.getPathsByDateRange(startDate, endDate)
+        service.getPathsByDateRange(startDate, endDate),
       ).rejects.toThrow(AppError);
     });
   });
@@ -623,11 +623,11 @@ describe('DeploymentPathService', () => {
 
       expect(result).toBe(true);
       expect(mockLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('Deleted deployment path cache')
+        expect.stringContaining('Deleted deployment path cache'),
       );
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('DELETE FROM deployment_paths'),
-        ['3.0.0/mr3.0.0_release', '3.0.0', 26]
+        ['3.0.0/mr3.0.0_release', '3.0.0', 26],
       );
     });
 
@@ -638,7 +638,7 @@ describe('DeploymentPathService', () => {
 
       expect(result).toBe(false);
       expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('No deployment path found to delete')
+        expect.stringContaining('No deployment path found to delete'),
       );
     });
   });
@@ -651,21 +651,21 @@ describe('DeploymentPathService', () => {
 
       expect(result).toBe(5);
       expect(mockLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('Cleaned up 5 old deployment path cache entries')
+        expect.stringContaining('Cleaned up 5 old deployment path cache entries'),
       );
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('WHERE verified_at < CURRENT_TIMESTAMP'),
-        ['90']
+        ['90'],
       );
     });
 
     it('should throw AppError for invalid daysOld parameter', async () => {
       await expect(
-        service.cleanupOldPaths(0)
+        service.cleanupOldPaths(0),
       ).rejects.toThrow(AppError);
 
       await expect(
-        service.cleanupOldPaths(4000)
+        service.cleanupOldPaths(4000),
       ).rejects.toThrow(AppError);
     });
   });
@@ -691,7 +691,7 @@ describe('DeploymentPathService', () => {
       expect(result.unique_versions).toBe(8);
       expect(result.oldest_build_date).toBe(mockStats.oldest_build_date);
       expect(mockLogger.debug).toHaveBeenCalledWith(
-        'Retrieved deployment path cache statistics'
+        'Retrieved deployment path cache statistics',
       );
     });
 
@@ -788,7 +788,7 @@ describe('DeploymentPathService', () => {
 
       expect(result.allFiles).toEqual([]);
       expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to parse all_files JSON')
+        expect.stringContaining('Failed to parse all_files JSON'),
       );
     });
 

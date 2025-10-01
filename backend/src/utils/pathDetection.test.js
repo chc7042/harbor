@@ -57,35 +57,35 @@ describe('pathDetection utilities', () => {
     it('should generate date candidates with default range (±1 day)', () => {
       const buildDate = new Date('2025-03-10');
       const candidates = generatePathCandidates(buildDate);
-      
+
       expect(candidates).toEqual(['250310', '250309', '250311']);
     });
 
     it('should generate date candidates with custom range', () => {
       const buildDate = new Date('2025-03-10');
       const candidates = generatePathCandidates(buildDate, 2);
-      
+
       expect(candidates).toEqual(['250310', '250309', '250311', '250308', '250312']);
     });
 
     it('should handle month boundaries correctly', () => {
       const buildDate = new Date('2025-03-01');
       const candidates = generatePathCandidates(buildDate);
-      
+
       expect(candidates).toEqual(['250301', '250228', '250302']);
     });
 
     it('should handle year boundaries correctly', () => {
       const buildDate = new Date('2025-01-01');
       const candidates = generatePathCandidates(buildDate);
-      
+
       expect(candidates).toEqual(['250101', '241231', '250102']);
     });
 
     it('should handle leap year boundaries', () => {
       const buildDate = new Date('2024-02-29'); // 2024 is a leap year
       const candidates = generatePathCandidates(buildDate);
-      
+
       expect(candidates).toEqual(['240229', '240228', '240301']);
     });
 
@@ -93,7 +93,7 @@ describe('pathDetection utilities', () => {
       // Edge case where the same date might be generated multiple times
       const buildDate = new Date('2025-03-10');
       const candidates = generatePathCandidates(buildDate, 0);
-      
+
       expect(candidates).toEqual(['250310']);
     });
 
@@ -327,7 +327,7 @@ describe('pathDetection utilities', () => {
   describe('extractBuildInfoFromFilename', () => {
     it('should extract info from VERSION_FILE', () => {
       const info = extractBuildInfoFromFilename('V3.0.0_250310_0843.tar.gz');
-      
+
       expect(info).toEqual({
         version: '3.0.0',
         date: '250310',
@@ -339,7 +339,7 @@ describe('pathDetection utilities', () => {
 
     it('should extract info from MR_RELEASE file', () => {
       const info = extractBuildInfoFromFilename('mr3.0.0_250310_1739_26.enc.tar.gz');
-      
+
       expect(info).toEqual({
         version: '3.0.0',
         date: '250310',
@@ -352,7 +352,7 @@ describe('pathDetection utilities', () => {
 
     it('should extract info from BACKEND_FILE', () => {
       const info = extractBuildInfoFromFilename('be3.0.0_250310_0842_83.enc.tar.gz');
-      
+
       expect(info).toEqual({
         version: '3.0.0',
         date: '250310',
@@ -365,7 +365,7 @@ describe('pathDetection utilities', () => {
 
     it('should extract info from FRONTEND_FILE', () => {
       const info = extractBuildInfoFromFilename('fe3.0.0_250310_0843_49.enc.tar.gz');
-      
+
       expect(info).toEqual({
         version: '3.0.0',
         date: '250310',
@@ -458,10 +458,10 @@ describe('pathDetection utilities', () => {
 
       // 2. Construct NAS paths
       const pathCandidates = dateCandidates.map(dateStr =>
-        constructNASPath(version, dateStr, buildNumber)
+        constructNASPath(version, dateStr, buildNumber),
       );
       expect(pathCandidates).toContain(
-        '\\\\nas.roboetech.com\\release_version\\release\\product\\mr3.0.0\\250310\\26'
+        '\\\\nas.roboetech.com\\release_version\\release\\product\\mr3.0.0\\250310\\26',
       );
 
       // 3. Prioritize paths
