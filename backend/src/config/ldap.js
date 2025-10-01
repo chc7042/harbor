@@ -73,6 +73,14 @@ class LDAPConfig {
       url: this.config.url,
       timeout: this.config.timeout,
       connectTimeout: this.config.connectTimeout,
+      reconnect: {
+        initialDelay: 100,
+        maxDelay: 1000,
+        failAfter: 3
+      },
+      strictDN: false,
+      bindDN: this.config.bindDN,
+      bindCredentials: this.config.bindCredentials
     };
 
     // LDAPS 또는 StartTLS 설정
@@ -137,9 +145,40 @@ class LDAPConfig {
       dn: ldapEntry.dn,
     };
 
-    // 빈 값 정리
+    // username이 없으면 dn에서 추출
+    if (!user.username && user.dn) {
+      const dnParts = user.dn.split(',');
+      for (const part of dnParts) {
+        if (part.trim().startsWith('uid=')) {
+          user.username = part.trim().substring(4);
+          break;
+        } else if (part.trim().startsWith('cn=')) {
+          user.username = part.trim().substring(3);
+          break;
+        }
+      }
+    }
+
+    // 이메일이 없는 경우 기본 도메인으로 생성
+    if (!user.email && user.username && process.env.LDAP_DEFAULT_EMAIL_DOMAIN) {
+      user.email = `${user.username}@${process.env.LDAP_DEFAULT_EMAIL_DOMAIN}`;
+    }
+
+    // fullName이 없으면 username 사용
+    if (!user.fullName && user.username) {
+      user.fullName = user.username.split('.').map(name =>
+        name.charAt(0).toUpperCase() + name.slice(1)
+      ).join(' ');
+    }
+
+    // department가 없으면 기본값 설정
+    if (!user.department) {
+      user.department = 'Unknown';
+    }
+
+    // 빈 값 정리 (username은 필수이므로 제외)
     Object.keys(user).forEach(key => {
-      if (user[key] === undefined || user[key] === '') {
+      if (key !== 'username' && (user[key] === undefined || user[key] === '')) {
         delete user[key];
       }
     });
