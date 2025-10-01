@@ -3,9 +3,14 @@ const logger = require('../config/logger');
 
 class JenkinsService {
   constructor() {
-    this.baseURL = process.env.JENKINS_URL || 'https://jenkins.roboetech.com';
-    this.username = process.env.JENKINS_USERNAME || 'admin';
-    this.password = process.env.JENKINS_PASSWORD || 'jenkins';
+    this.baseURL = process.env.JENKINS_URL;
+    this.username = process.env.JENKINS_USERNAME;
+    this.password = process.env.JENKINS_PASSWORD;
+
+    // Jenkins 인증 정보가 설정되지 않은 경우 에러
+    if (!this.baseURL || !this.username || !this.password) {
+      throw new Error('Jenkins configuration is required: JENKINS_URL, JENKINS_USERNAME, JENKINS_PASSWORD must be set');
+    }
     this.auth = Buffer.from(`${this.username}:${this.password}`).toString('base64');
 
     this.client = axios.create({
@@ -461,7 +466,7 @@ class JenkinsService {
         deploymentPath: null,
       };
 
-      // NAS 배포 경로 패턴들
+      // NAS 배포 경로 패턴들 (실제 로그에서 추출)
       const nasPathPatterns = [
         // \\nas.roboetech.com\release_version\release\product\mr3.0.0\250310\26
         /\\\\nas\.roboetech\.com\\release_version\\release\\product\\[^\\]+\\[^\\]+\\[^\\]+/gi,
@@ -525,240 +530,22 @@ class JenkinsService {
         }
       }
 
-      // 경로를 찾지 못한 경우 기본 경로 생성
+      // 로그에서 정보를 찾지 못한 경우 빈 값으로 남겨둠 (목 데이터 제거)
       if (!deploymentInfo.nasPath) {
-        // jobName에서 버전 추출 (예: "3.0.0/mr3.0.0_release" -> "3.0.0")
-        const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
-        if (versionMatch) {
-          const version = versionMatch[1];
-          
-          // 버전별 실제 배포 날짜 사용 - 실제 NAS 경로 기반
-          let dateStr;
-          if (version === '3.0.0') {
-            dateStr = '250310'; // 3.0.0 빌드들은 250310에 배포됨
-          } else if (version === '1.2.0' && buildNumber <= 66) {
-            dateStr = '250929'; // 1.2.0 빌드들은 250929에 배포됨
-          } else if (version === '1.0.0') {
-            dateStr = '241017'; // 1.0.0 빌드들은 241017에 배포됨
-          } else {
-            const today = new Date();
-            dateStr = `${today.getFullYear().toString().slice(-2)}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
-          }
-
-          deploymentInfo.nasPath = `\\\\nas.roboetech.com\\release_version\\release\\product\\mr${version}\\${dateStr}\\${buildNumber}`;
-          deploymentInfo.deploymentPath = deploymentInfo.nasPath;
-
-          logger.info(`Generated fallback NAS path: ${deploymentInfo.nasPath} (date: ${dateStr})`);
-        }
+        logger.warn(`No deployment path found in build log for ${jobName}#${buildNumber}`);
       }
 
-      // 메인 다운로드 파일이 설정되지 않은 경우 버전별 실제 파일명 생성
       if (!deploymentInfo.downloadFile) {
-        const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
-        if (versionMatch) {
-          const version = versionMatch[1];
-          
-          // 버전별 실제 파일명 설정
-          if (version === '3.0.0') {
-            deploymentInfo.downloadFile = `V3.0.0_250310_0843.tar.gz`;
-            deploymentInfo.allFiles = [
-              'V3.0.0_250310_0843.tar.gz',
-              'mr3.0.0_250310_1739_26.enc.tar.gz',
-              'be3.0.0_250310_0842_83.enc.tar.gz',
-              'fe3.0.0_250310_0843_49.enc.tar.gz'
-            ];
-          } else if (version === '1.2.0' && buildNumber <= 54) {
-            deploymentInfo.downloadFile = `V1.2.0_250929_1058.tar.gz`;
-            deploymentInfo.allFiles = [deploymentInfo.downloadFile];
-          } else if (version === '1.0.0') {
-            deploymentInfo.downloadFile = `V1.0.0_241017_1234.tar.gz`;
-            deploymentInfo.allFiles = [deploymentInfo.downloadFile];
-          }
-        }
+        logger.warn(`No download file found in build log for ${jobName}#${buildNumber}`);
       }
 
       return deploymentInfo;
 
       } catch (fsError) {
         // fs 빌드 로그를 가져올 수 없는 경우 (404 등)
-        logger.warn(`Cannot access FS build log for ${fsJobName}#${buildNumber}: ${fsError.message}`);
-        logger.info(`Generating fallback deployment info for ${jobName}#${buildNumber}`);
+        logger.warn(`Cannot access build log for ${jobName}#${buildNumber}: ${fsError.message}`);
 
-        // 폴백 배포 정보 생성 - 실제 NAS에서 파일 정보 조회 시도
-        const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
-        if (versionMatch) {
-          const version = versionMatch[1];
-
-          // 실제 NAS 경로 패턴을 기반으로 추정
-          // 예: \\nas.roboetech.com\release_version\release\product\mr3.0.0\250310\26
-
-          // mr 빌드 로그에서 실제 빌드 날짜/시간 추출 시도
-          let actualDateStr = null;
-          let actualTimeStr = null;
-
-          try {
-            // mr 빌드 로그에서 실제 배포 정보 추출 시도
-            const mrJobPath = jobName.split('/').map(part => `/job/${encodeURIComponent(part)}`).join('');
-            const mrLogPath = `/job/projects${mrJobPath}/${buildNumber}/consoleText`;
-
-            logger.debug(`Trying to get actual build info from MR log: ${mrLogPath}`);
-            const mrResponse = await this.client.get(mrLogPath);
-            const mrLogContent = mrResponse.data;
-
-            // 로그에서 실제 배포 날짜/시간 패턴 찾기
-            // 예: "2025-03-10 08:43" 또는 "250310_0843" 등의 패턴
-            const datePatterns = [
-              /(\d{2})(\d{2})(\d{2})[_\-](\d{2})(\d{2})/g,  // 250310_0843
-              /(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/g, // 2025-03-10 08:43
-              /배포.*?(\d{2})(\d{2})(\d{2})/g,              // 배포 경로에서 날짜 추출
-            ];
-
-            for (const pattern of datePatterns) {
-              pattern.lastIndex = 0;
-              const match = pattern.exec(mrLogContent);
-              if (match) {
-                if (match[0].includes('_') || match[0].includes('-')) {
-                  // 250310_0843 또는 2025-03-10 08:43 형식
-                  actualDateStr = match[1] + match[2] + match[3];
-                  actualTimeStr = match[4] + match[5];
-                } else {
-                  // 기타 패턴
-                  actualDateStr = match[1] + match[2] + match[3];
-                }
-                logger.info(`Found actual build date from MR log: ${actualDateStr}, time: ${actualTimeStr}, matched pattern: ${match[0]}`);
-                break;
-              }
-            }
-          } catch (mrError) {
-            logger.warn(`Could not get MR build log: ${mrError.message}`);
-          }
-
-          // NAS에서 실제 파일들 찾기
-          let actualVFile = null;
-          let actualMrFile = null;
-          let actualFeFile = null;
-          let actualBeFile = null;
-          
-          try {
-            // NAS 경로 구성: release/product/mr{version}/{date}/{buildNumber} (release_version는 share 이름)
-            const dateFolder = actualDateStr || '250310'; // Jenkins 로그에서 찾은 날짜 또는 추정값
-            const nasPath = `release/product/mr${version}/${dateFolder}/${buildNumber}`;
-            
-            logger.info(`Searching for actual files in NAS directory: ${nasPath}`);
-            
-            // NAS에서 실제 파일 목록 가져오기
-            const { getNASService } = require('./nasService');
-            const nasService = getNASService();
-            const files = await nasService.getDirectoryFiles(nasPath);
-            
-            // 각 타입별로 실제 파일 찾기
-            actualVFile = files.find(f => 
-              f.startsWith(`V${version}_`) && 
-              f.endsWith('.tar.gz') && 
-              !f.includes('.enc.')
-            );
-            
-            actualMrFile = files.find(f => 
-              f.startsWith(`mr${version}_`) && 
-              f.endsWith('.enc.tar.gz')
-            );
-            
-            actualFeFile = files.find(f => 
-              f.startsWith(`fe${version}_`) && 
-              f.endsWith('.enc.tar.gz')
-            );
-            
-            actualBeFile = files.find(f => 
-              f.startsWith(`be${version}_`) && 
-              f.endsWith('.enc.tar.gz')
-            );
-            
-            if (actualVFile) {
-              logger.info(`Found actual V file in NAS: ${actualVFile}`);
-              // 실제 파일명에서 날짜/시간 추출
-              const fileMatch = actualVFile.match(/V\d+\.\d+\.\d+_(\d{6})_(\d{4})\.tar\.gz/);
-              if (fileMatch) {
-                actualDateStr = fileMatch[1];
-                actualTimeStr = fileMatch[2];
-                logger.info(`Extracted actual date/time from V file: ${actualDateStr}_${actualTimeStr}`);
-              }
-            }
-            
-            if (actualMrFile) {
-              logger.info(`Found actual MR file in NAS: ${actualMrFile}`);
-            }
-            
-            if (actualFeFile) {
-              logger.info(`Found actual FE file in NAS: ${actualFeFile}`);
-            }
-            
-            if (actualBeFile) {
-              logger.info(`Found actual BE file in NAS: ${actualBeFile}`);
-            }
-            
-            if (!actualVFile && !actualMrFile && !actualFeFile && !actualBeFile) {
-              logger.warn(`No files found in NAS directory ${nasPath}`);
-            }
-          } catch (nasError) {
-            logger.warn(`Could not search NAS for actual files: ${nasError.message}`);
-          }
-
-          // NAS에서 실제 파일을 찾지 못한 경우 추정값 사용
-          if (!actualVFile) {
-            const knownPatterns = {
-              '3.0.0': { 
-                '26': { date: '250310', time: '0843' },
-                '25': { date: '250309', time: '0843' },
-                '24': { date: '250308', time: '0843' }
-              },
-              '2.0.0': { 
-                '22': { date: '250301', time: '0843' },
-                '21': { date: '250228', time: '0843' }
-              },
-              '1.2.0': { 
-                '66': { date: '250201', time: '0843' }
-              },
-            };
-
-            const knownPattern = knownPatterns[version]?.[buildNumber];
-            if (knownPattern) {
-              actualDateStr = knownPattern.date;
-              actualTimeStr = knownPattern.time;
-              logger.info(`Using known pattern for ${version} build ${buildNumber}: ${actualDateStr}_${actualTimeStr}`);
-            } else if (!actualDateStr) {
-              actualDateStr = '250310';
-              actualTimeStr = '0843';
-              logger.info(`Using default build date: ${actualDateStr}, time: ${actualTimeStr}`);
-            }
-          }
-
-          // 4개 파일 생성 (be, fe, mr, V 형식)
-          const baseFileName = `${actualDateStr}_${actualTimeStr}`;
-          
-          // 모든 경우에 V 파일을 메인 다운로드 파일로 사용
-          const downloadFileName = actualVFile || `V${version}_${baseFileName}.tar.gz`;
-
-          // 모든 배포 파일들 (실제 파일 우선, 없으면 추정 파일명)
-          const allFiles = [
-            downloadFileName,                                                        // 메인 배포 파일
-            actualVFile || `V${version}_${baseFileName}.tar.gz`,                     // V 파일
-            actualBeFile || `be${version}_${baseFileName}_${buildNumber}.enc.tar.gz`, // Backend
-            actualFeFile || `fe${version}_${baseFileName}_${buildNumber}.enc.tar.gz`, // Frontend
-            actualMrFile || `mr${version}_${baseFileName}_${buildNumber}.enc.tar.gz`,  // MR
-          ].filter((file, index, arr) => arr.indexOf(file) === index); // 중복 제거
-
-          const fallbackInfo = {
-            nasPath: `\\\\nas.roboetech.com\\release_version\\release\\product\\mr${version}\\${actualDateStr}\\${buildNumber}`,
-            downloadFile: downloadFileName,
-            allFiles: allFiles,
-            deploymentPath: `\\\\nas.roboetech.com\\release_version\\release\\product\\mr${version}\\${actualDateStr}\\${buildNumber}`,
-          };
-
-          logger.info('Generated fallback deployment info with actual dates:', fallbackInfo);
-          return fallbackInfo;
-        }
-
-        // 버전을 추출할 수 없는 경우 빈 정보 반환
+        // 목 데이터 제거 - 실제 로그에서만 정보 추출
         return {
           nasPath: null,
           downloadFile: null,
