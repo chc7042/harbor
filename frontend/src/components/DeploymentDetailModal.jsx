@@ -414,7 +414,8 @@ const DeploymentDetailModal = ({
                     className={`text-sm flex items-center whitespace-nowrap ${
                       loadingDeploymentInfo || 
                       (!deploymentInfo?.downloadFile && 
-                       !deploymentInfo?.allFiles?.length)
+                       (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0)) ||
+                      (!deploymentInfo?.directoryVerified)
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed border border-gray-300 opacity-60 hover:bg-gray-300 hover:text-gray-500 px-4 py-2 rounded-md'
                         : 'btn-secondary'
                     }`}
@@ -458,22 +459,26 @@ const DeploymentDetailModal = ({
                     disabled={
                       loadingDeploymentInfo || 
                       (!deploymentInfo?.downloadFile && 
-                       !deploymentInfo?.allFiles?.length)
+                       (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0)) ||
+                      (!deploymentInfo?.directoryVerified)
                     }
                   >
                     <HardDrive className={`w-4 h-4 mr-2 ${
                       loadingDeploymentInfo || 
                       (!deploymentInfo?.downloadFile && 
-                       !deploymentInfo?.allFiles?.length)
+                       (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0)) ||
+                      (!deploymentInfo?.directoryVerified)
                         ? 'text-gray-400'
                         : ''
                     }`} />
                     {loadingDeploymentInfo 
                       ? '경로 확인중...' 
                       : (!deploymentInfo?.downloadFile && 
-                         !deploymentInfo?.allFiles?.length)
+                         (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0))
                         ? '파일 없음'
-                        : '공유 폴더 열기'
+                        : !deploymentInfo?.directoryVerified
+                          ? 'NAS 접근 불가'
+                          : '공유 폴더 열기'
                     }
                   </button>
                 </div>
@@ -732,9 +737,17 @@ const DeploymentDetailModal = ({
                             );
                           }) : 
                           /* 파일이 없을 때 메시지 표시 */
-                          <div className="text-center py-8">
-                            <div className="text-gray-500 font-noto-sans-kr">배포 파일이 없습니다.</div>
-                          </div>}
+                          [(
+                            <div 
+                              key="no-files-message"
+                              className="col-span-full flex flex-col items-center justify-center py-12"
+                            >
+                              <p className="text-gray-500 font-noto-sans-kr text-lg font-medium mb-2">배포 파일이 없습니다.</p>
+                              <p className="text-sm text-gray-400">
+                                실제 배포가 완료된 후 파일이 표시됩니다.
+                              </p>
+                            </div>
+                          )]}
                         </div>
                       </div>
                     </div>

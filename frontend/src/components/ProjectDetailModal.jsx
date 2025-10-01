@@ -462,7 +462,7 @@ const ProjectDetailModal = ({
                     className={`text-sm flex items-center whitespace-nowrap ${
                       loadingDeploymentInfo || 
                       (!deploymentInfo?.downloadFile && 
-                       !deploymentInfo?.allFiles?.length)
+                       (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0))
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed border border-gray-300 opacity-60 hover:bg-gray-300 hover:text-gray-500 px-4 py-2 rounded-md'
                         : 'btn-secondary'
                     }`}
@@ -479,20 +479,20 @@ const ProjectDetailModal = ({
                     disabled={
                       loadingDeploymentInfo || 
                       (!deploymentInfo?.downloadFile && 
-                       !deploymentInfo?.allFiles?.length)
+                       (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0))
                     }
                   >
                     <HardDrive className={`w-4 h-4 mr-2 ${
                       loadingDeploymentInfo || 
                       (!deploymentInfo?.downloadFile && 
-                       !deploymentInfo?.allFiles?.length)
+                       (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0))
                         ? 'text-gray-400'
                         : ''
                     }`} />
                     {loadingDeploymentInfo 
                       ? '경로 확인중...' 
                       : (!deploymentInfo?.downloadFile && 
-                         !deploymentInfo?.allFiles?.length)
+                         (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0))
                         ? '파일 없음'
                         : '공유 폴더 열기'
                     }
@@ -813,10 +813,10 @@ const ProjectDetailModal = ({
                               [(
                                 <div 
                                   key="no-files-message"
-                                  className="col-span-full text-center py-8"
+                                  className="col-span-full flex flex-col items-center justify-center py-12"
                                 >
-                                  <p className="text-gray-500">NAS에서 배포 파일을 찾을 수 없습니다.</p>
-                                  <p className="text-sm text-gray-400 mt-1">
+                                  <p className="text-gray-500 text-lg font-medium mb-2">배포 파일이 없습니다.</p>
+                                  <p className="text-sm text-gray-400">
                                     실제 배포가 완료된 후 파일이 표시됩니다.
                                   </p>
                                 </div>
