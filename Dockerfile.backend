@@ -9,7 +9,8 @@ WORKDIR /app
 RUN apk add --no-cache \
     openldap-dev \
     postgresql-client \
-    curl
+    curl \
+    samba-client
 
 # 패키지 파일들을 먼저 복사 (캐시 최적화)
 COPY backend/package*.json ./
@@ -36,7 +37,8 @@ RUN apk add --no-cache \
     openldap-dev \
     postgresql-client \
     curl \
-    dumb-init
+    dumb-init \
+    samba-client
 
 WORKDIR /app
 
@@ -59,7 +61,8 @@ RUN apk add --no-cache \
     openldap-dev \
     postgresql-client \
     curl \
-    dumb-init
+    dumb-init \
+    samba-client
 
 WORKDIR /app
 
