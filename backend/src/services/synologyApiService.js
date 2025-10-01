@@ -15,7 +15,7 @@ class SynologyApiService {
   async login() {
     try {
       logger.info(`Attempting Synology login to ${this.baseUrl}`);
-      
+
       const response = await axios.get(`${this.baseUrl}/webapi/auth.cgi`, {
         params: {
           api: 'SYNO.API.Auth',
@@ -24,13 +24,13 @@ class SynologyApiService {
           account: 'nasadmin',
           passwd: 'Cmtes123',
           session: 'FileStation',
-          format: 'sid'
+          format: 'sid',
         },
-        timeout: 10000
+        timeout: 10000,
       });
 
       logger.info(`Synology API response status: ${response.status}`);
-      logger.info(`Synology API response data:`, response.data);
+      logger.info('Synology API response data:', response.data);
 
       if (response.data && response.data.success) {
         this.sessionId = response.data.data.sid;
@@ -41,13 +41,13 @@ class SynologyApiService {
         const errorCode = response.data?.error?.code;
         const errorMessage = response.data?.error?.message || 'Unknown error';
         logger.error(`Synology API login failed - Error code: ${errorCode}, Message: ${errorMessage}`);
-        logger.error(`Full response data:`, response.data);
+        logger.error('Full response data:', response.data);
         throw new Error(`Login failed: ${errorCode} - ${errorMessage}`);
       }
     } catch (error) {
       if (error.response) {
         logger.error(`Synology API HTTP error: ${error.response.status} - ${error.response.statusText}`);
-        logger.error(`Response data:`, error.response.data);
+        logger.error('Response data:', error.response.data);
       } else if (error.request) {
         logger.error('Synology API network error - no response received');
         logger.error('Request details:', error.request);
@@ -80,7 +80,7 @@ class SynologyApiService {
       logger.info(`Creating share link for path: ${path}`);
       logger.info(`Using session ID: ${this.sessionId ? 'Present' : 'Missing'}`);
 
-      const response = await axios.post(`${this.baseUrl}/webapi/entry.cgi`, 
+      const response = await axios.post(`${this.baseUrl}/webapi/entry.cgi`,
         new URLSearchParams({
           api: 'SYNO.FileStation.Sharing',
           version: 3,
@@ -92,51 +92,51 @@ class SynologyApiService {
           enable_upload: 'false',
           enable_browse: 'true',
           date_expired: '',
-          date_available: ''
+          date_available: '',
         }), {
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/x-www-form-urlencoded',
           },
-          timeout: 10000
+          timeout: 10000,
         });
 
       logger.info(`Share creation response status: ${response.status}`);
-      logger.info(`Share creation response data:`, JSON.stringify(response.data, null, 2));
+      logger.info('Share creation response data:', JSON.stringify(response.data, null, 2));
 
       if (response.data && response.data.success) {
         const shareData = response.data.data;
-        logger.info(`Share data object:`, JSON.stringify(shareData, null, 2));
-        
+        logger.info('Share data object:', JSON.stringify(shareData, null, 2));
+
         // Check if share already exists or was newly created
         if (shareData && shareData.links && shareData.links.length > 0) {
           const linkInfo = shareData.links[0];
-          logger.info(`Share link info:`, JSON.stringify(linkInfo, null, 2));
-          
+          logger.info('Share link info:', JSON.stringify(linkInfo, null, 2));
+
           const shareUrl = linkInfo.url;
           const shareId = linkInfo.id;
-          
+
           logger.info(`Share link created for ${path}: ${shareUrl}`);
           return {
             success: true,
             shareUrl: shareUrl,
             shareId: shareId,
-            path: path
+            path: path,
           };
         } else {
-          logger.error(`Share creation succeeded but no links returned. Full response:`, JSON.stringify(response.data, null, 2));
-          throw new Error(`Share creation succeeded but no links in response`);
+          logger.error('Share creation succeeded but no links returned. Full response:', JSON.stringify(response.data, null, 2));
+          throw new Error('Share creation succeeded but no links in response');
         }
       } else {
         const errorCode = response.data?.error?.code;
         const errorMessage = response.data?.error?.message || 'Unknown error';
         logger.error(`Share creation failed - Error code: ${errorCode}, Message: ${errorMessage}`);
-        logger.error(`Full response data:`, response.data);
+        logger.error('Full response data:', response.data);
         throw new Error(`Share creation failed: ${errorCode} - ${errorMessage}`);
       }
     } catch (error) {
       if (error.response) {
         logger.error(`Share creation HTTP error: ${error.response.status} - ${error.response.statusText}`);
-        logger.error(`Response data:`, error.response.data);
+        logger.error('Response data:', error.response.data);
       } else if (error.request) {
         logger.error('Share creation network error - no response received');
       }
@@ -144,7 +144,7 @@ class SynologyApiService {
       return {
         success: false,
         error: error.message,
-        path: path
+        path: path,
       };
     }
   }
@@ -165,13 +165,13 @@ class SynologyApiService {
           version: 2,
           method: 'list',
           folder_path: path,
-          _sid: this.sessionId
+          _sid: this.sessionId,
         },
-        timeout: 10000
+        timeout: 10000,
       });
 
       logger.info(`Path check response status: ${response.status}`);
-      logger.info(`Path check response data:`, response.data);
+      logger.info('Path check response data:', response.data);
 
       if (response.data && response.data.success) {
         logger.info(`Path exists: ${path}`);
@@ -199,7 +199,7 @@ class SynologyApiService {
         api: 'SYNO.FileStation.Sharing',
         version: 3,
         method: 'list',
-        _sid: this.sessionId
+        _sid: this.sessionId,
       };
 
       if (path) {
@@ -208,13 +208,13 @@ class SynologyApiService {
 
       const response = await axios.get(`${this.baseUrl}/webapi/entry.cgi`, {
         params: params,
-        timeout: 10000
+        timeout: 10000,
       });
 
       if (response.data && response.data.success) {
         return {
           success: true,
-          shares: response.data.data.shares || []
+          shares: response.data.data.shares || [],
         };
       } else {
         throw new Error(`Failed to get share links: ${response.data?.error?.code || 'Unknown error'}`);
@@ -224,7 +224,7 @@ class SynologyApiService {
       return {
         success: false,
         error: error.message,
-        shares: []
+        shares: [],
       };
     }
   }
@@ -246,9 +246,9 @@ class SynologyApiService {
           method: 'list',
           folder_path: folderPath,
           additional: '["size","time","type"]',
-          _sid: this.sessionId
+          _sid: this.sessionId,
         },
-        timeout: 10000
+        timeout: 10000,
       });
 
       if (response.data && response.data.success) {
@@ -256,8 +256,8 @@ class SynologyApiService {
         logger.info(`Found ${files.length} files in directory: ${folderPath}`);
         // 첫 번째 파일의 구조를 로그로 확인
         if (files.length > 0) {
-          logger.info(`Sample file structure:`, JSON.stringify(files[0], null, 2));
-          logger.info(`Full response data:`, JSON.stringify(response.data, null, 2));
+          logger.info('Sample file structure:', JSON.stringify(files[0], null, 2));
+          logger.info('Full response data:', JSON.stringify(response.data, null, 2));
         }
         return {
           success: true,
@@ -268,8 +268,8 @@ class SynologyApiService {
             size: file.additional?.size || file.size || 0,
             mtime: file.additional?.time?.mtime || file.time?.mtime || file.mtime || null,
             type: file.additional?.type || file.type || null,
-            additional: file.additional // 원본 additional 데이터도 포함
-          }))
+            additional: file.additional, // 원본 additional 데이터도 포함
+          })),
         };
       } else {
         throw new Error(`Failed to list directory files: ${response.data?.error?.code || 'Unknown error'}`);
@@ -279,7 +279,7 @@ class SynologyApiService {
       return {
         success: false,
         error: error.message,
-        files: []
+        files: [],
       };
     }
   }
@@ -304,31 +304,31 @@ class SynologyApiService {
       // 파일명 패턴 매칭
       files.forEach(file => {
         const fileName = file.name;
-        
+
         // 파일 정보 저장 (additional 데이터 확인)
         logger.info(`Processing file: ${fileName}, full file object:`, JSON.stringify(file, null, 2));
         fileInfoMap[fileName] = {
           size: file.additional?.size || file.size || 0,
           mtime: file.additional?.time?.mtime || file.time?.mtime || file.mtime || null,
-          type: file.additional?.type || file.type || null
+          type: file.additional?.type || file.type || null,
         };
         logger.info(`File info for ${fileName}:`, fileInfoMap[fileName]);
-        
+
         // 메인 파일 패턴: V{version}_{date}_*.tar.gz
         if (fileName.match(new RegExp(`^V${version.replace(/\./g, '\\.')}_${date}_\\d+\\.tar\\.gz$`))) {
           fileMap.main = fileName;
         }
-        
+
         // Morow 파일 패턴: mr{version}_{date}_*_*.enc.tar.gz
         if (fileName.match(new RegExp(`^mr${version.replace(/\./g, '\\.')}_${date}_\\d+_\\d+\\.enc\\.tar\\.gz$`))) {
           fileMap.morow = fileName;
         }
-        
+
         // Backend 파일 패턴: be{version}_{date}_*_*.enc.tar.gz
         if (fileName.match(new RegExp(`^be${version.replace(/\./g, '\\.')}_${date}_\\d+_\\d+\\.enc\\.tar\\.gz$`))) {
           fileMap.backend = fileName;
         }
-        
+
         // Frontend 파일 패턴: fe{version}_{date}_*_*.enc.tar.gz
         if (fileName.match(new RegExp(`^fe${version.replace(/\./g, '\\.')}_${date}_\\d+_\\d+\\.enc\\.tar\\.gz$`))) {
           fileMap.frontend = fileName;
@@ -336,19 +336,19 @@ class SynologyApiService {
       });
 
       logger.info(`Found actual file names for version ${version}, date ${date}:`, fileMap);
-      
+
       return {
         success: true,
         fileMap: fileMap,
         fileInfoMap: fileInfoMap, // 파일 정보 추가
-        allFiles: files.map(f => f.name)
+        allFiles: files.map(f => f.name),
       };
     } catch (error) {
       logger.error('Failed to find actual file names:', error.message);
       return {
         success: false,
         error: error.message,
-        fileMap: {}
+        fileMap: {},
       };
     }
   }
@@ -365,24 +365,24 @@ class SynologyApiService {
 
       // FileStation Download API 사용
       const downloadUrl = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${encodeURIComponent(filePath)}&mode=download&_sid=${this.sessionId}`;
-      
+
       // URL 테스트
-      const testResponse = await axios.head(downloadUrl, { 
+      const testResponse = await axios.head(downloadUrl, {
         timeout: 5000,
         validateStatus: function (status) {
           return status < 500; // 400 이상도 허용하여 상세한 응답 확인
-        }
+        },
       });
-      
+
       logger.info(`Direct download URL test status: ${testResponse.status}`);
       logger.info(`Direct download URL content-type: ${testResponse.headers['content-type']}`);
-      
+
       if (testResponse.status === 200 && testResponse.headers['content-type'] !== 'text/html') {
         return {
           success: true,
           downloadUrl: downloadUrl,
           path: filePath,
-          isDirectDownload: true
+          isDirectDownload: true,
         };
       } else {
         throw new Error(`Direct download not available (status: ${testResponse.status}, content-type: ${testResponse.headers['content-type']})`);
@@ -391,7 +391,7 @@ class SynologyApiService {
       logger.warn(`Direct download URL creation failed for ${filePath}: ${error.message}`);
       return {
         success: false,
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -415,7 +415,7 @@ class SynologyApiService {
 
       // 직접 다운로드가 안 되면 공유 링크 생성을 시도
       logger.info(`Falling back to share link creation for ${filePath}`);
-      const response = await axios.post(`${this.baseUrl}/webapi/entry.cgi`, 
+      const response = await axios.post(`${this.baseUrl}/webapi/entry.cgi`,
         new URLSearchParams({
           api: 'SYNO.FileStation.Sharing',
           version: 3,
@@ -425,30 +425,30 @@ class SynologyApiService {
           password: '',
           enable_download: 'true',
           enable_upload: 'false',
-          enable_browse: 'false'  // 파일 공유는 브라우징 비활성화
+          enable_browse: 'false',  // 파일 공유는 브라우징 비활성화
         }), {
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/x-www-form-urlencoded',
           },
-          timeout: 10000
+          timeout: 10000,
         });
 
       logger.info(`File share creation response status: ${response.status}`);
-      logger.info(`File share creation response:`, JSON.stringify(response.data, null, 2));
-      
+      logger.info('File share creation response:', JSON.stringify(response.data, null, 2));
+
       if (response.data && !response.data.success) {
-        logger.error(`Synology API error:`, response.data.error);
+        logger.error('Synology API error:', response.data.error);
       }
 
       if (response.data && response.data.success) {
         const shareData = response.data.data;
-        
+
         if (shareData && shareData.links && shareData.links.length > 0) {
           const linkInfo = shareData.links[0];
-          
+
           // 파일 공유 링크는 직접 다운로드 URL로 변환
           const directDownloadUrl = `${linkInfo.url}?mode=download`;
-          
+
           logger.info(`File share link created for ${filePath}: ${directDownloadUrl}`);
           return {
             success: true,
@@ -456,22 +456,22 @@ class SynologyApiService {
             shareUrl: linkInfo.url,
             shareId: linkInfo.id,
             path: filePath,
-            isDirectDownload: true
+            isDirectDownload: true,
           };
         }
       }
-      
+
       // 파일별 공유 링크 생성 실패 시 세션 기반 다운로드 URL 생성
-      logger.warn(`File share creation failed, using session-based download URL`);
+      logger.warn('File share creation failed, using session-based download URL');
       const sessionDownloadUrl = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${encodeURIComponent(filePath)}&mode=download&_sid=${this.sessionId}`;
-      
+
       return {
         success: true,
         downloadUrl: sessionDownloadUrl,
         path: filePath,
         isDirectDownload: true,
         sessionBased: true,
-        warning: 'Using session-based download URL'
+        warning: 'Using session-based download URL',
       };
 
     } catch (error) {
@@ -479,7 +479,7 @@ class SynologyApiService {
       return {
         success: false,
         error: error.message,
-        path: filePath
+        path: filePath,
       };
     }
   }
@@ -494,9 +494,9 @@ class SynologyApiService {
     // 여러 가능한 경로들을 시도 (가장 가능성 높은 순서대로)
     // 기본 smbclient 경로가 작동하므로 해당 경로 기준으로 시놀로지 절대경로 추측
     const possiblePaths = [
-      `/`,  // 루트 테스트
-      `/volume1`,  // 볼륨 테스트
-      `/volume1/release_version`,  // 공유 폴더 테스트
+      '/',  // 루트 테스트
+      '/volume1',  // 볼륨 테스트
+      '/volume1/release_version',  // 공유 폴더 테스트
       `/volume1/release_version/release/product/mr${version}/${date}/${buildNumber}`,
       `/volume1/release_version/product/mr${version}/${date}/${buildNumber}`,
       `/release_version/release/product/mr${version}/${date}/${buildNumber}`,
@@ -507,17 +507,17 @@ class SynologyApiService {
       `/volume1/nas/release/product/mr${version}/${date}/${buildNumber}`,
       `/volume1/public/release/product/mr${version}/${date}/${buildNumber}`,
       `/nas/release/product/mr${version}/${date}/${buildNumber}`,
-      `/shared/release/product/mr${version}/${date}/${buildNumber}`
+      `/shared/release/product/mr${version}/${date}/${buildNumber}`,
     ];
-    
+
     let workingPath = null;
-    
+
     try {
       // 각 경로를 순서대로 확인
       for (const testPath of possiblePaths) {
         logger.info(`Testing path: ${testPath}`);
         const pathCheck = await this.checkPathExists(testPath);
-        
+
         if (pathCheck.success && pathCheck.exists) {
           logger.info(`Found working path: ${testPath}`);
           workingPath = testPath;
@@ -526,55 +526,55 @@ class SynologyApiService {
           logger.warn(`Path not accessible: ${testPath} - Error: ${pathCheck.error}`);
         }
       }
-      
+
       if (!workingPath) {
         logger.error(`None of the possible paths are accessible for version ${version}, date ${date}, build ${buildNumber}`);
         return {
           success: false,
-          error: `No accessible path found for the specified version`,
-          path: possiblePaths[0]
+          error: 'No accessible path found for the specified version',
+          path: possiblePaths[0],
         };
       }
 
       // 기존 공유 링크가 있는지 확인
       const existingShares = await this.getShareLinks(workingPath);
-      
+
       if (existingShares.success && existingShares.shares.length > 0) {
         const share = existingShares.shares[0];
         const shareUrl = `${this.baseUrl}/sharing/${share.id}`;
-        
+
         logger.info(`Found existing share link for ${workingPath}: ${shareUrl}`);
         return {
           success: true,
           shareUrl: shareUrl,
           shareId: share.id,
           path: workingPath,
-          isNew: false
+          isNew: false,
         };
       }
 
       // 기존 공유 링크가 없으면 새로 생성
       logger.info(`No existing share found for ${workingPath}, creating new one...`);
       const newShare = await this.createShareLink(workingPath);
-      
+
       if (newShare.success) {
         newShare.isNew = true;
       }
-      
+
       return newShare;
     } catch (error) {
       logger.error(`Failed to get or create share link for ${version}:`, error.message);
       return {
         success: false,
         error: error.message,
-        path: possiblePaths[0]
+        path: possiblePaths[0],
       };
     }
   }
 
   /**
    * 특정 파일에 대한 다운로드 링크 생성 (버전 정보 기반)
-   * @param {string} version - 버전 (예: "3.0.0")  
+   * @param {string} version - 버전 (예: "3.0.0")
    * @param {string} date - 날짜 (예: "250310")
    * @param {string} buildNumber - 빌드 번호 (예: "26")
    * @param {string} fileName - 다운로드할 파일명 (예: "V3.0.0_250310_0830.tar.gz")
@@ -593,7 +593,7 @@ class SynologyApiService {
       // 먼저 폴더가 존재하는지 확인
       for (const testPath of basePaths) {
         const pathCheck = await this.checkPathExists(testPath);
-        
+
         if (pathCheck.success && pathCheck.exists) {
           workingPath = testPath;
           logger.info(`Found working directory: ${testPath}`);
@@ -605,7 +605,7 @@ class SynologyApiService {
         return {
           success: false,
           error: `No accessible directory found for version ${version}`,
-          path: null
+          path: null,
         };
       }
 
@@ -622,13 +622,13 @@ class SynologyApiService {
           downloadUrl: downloadResult.downloadUrl,
           path: downloadResult.path,
           fileName: fileName,
-          isDirectDownload: true
+          isDirectDownload: true,
         };
       } else {
         // 직접 다운로드가 실패하면 폴더 공유 링크 생성 (fallback)
-        logger.warn(`Direct download failed, creating folder share link as fallback`);
+        logger.warn('Direct download failed, creating folder share link as fallback');
         const folderShareResult = await this.getOrCreateVersionShareLink(version, date, buildNumber);
-        
+
         if (folderShareResult.success) {
           return {
             success: true,
@@ -637,7 +637,7 @@ class SynologyApiService {
             path: folderShareResult.path,
             fileName: fileName,
             isDirectDownload: false,
-            fallbackReason: downloadResult.error
+            fallbackReason: downloadResult.error,
           };
         } else {
           return folderShareResult;
@@ -649,7 +649,7 @@ class SynologyApiService {
         success: false,
         error: error.message,
         path: workingPath,
-        fileName: fileName
+        fileName: fileName,
       };
     }
   }
@@ -667,9 +667,9 @@ class SynologyApiService {
           version: 6,
           method: 'logout',
           session: 'FileStation',
-          _sid: this.sessionId
+          _sid: this.sessionId,
         },
-        timeout: 5000
+        timeout: 5000,
       });
 
       logger.info('Synology API logout successful');

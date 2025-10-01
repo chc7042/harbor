@@ -981,11 +981,11 @@ router.get('/deployment-info/:projectName/:buildNumber',
           logger.warn(`빌드 로그 접근 실패 - ${projectName}#${buildNumber}: ${error.message}`);
           buildStatus = 'UNKNOWN';
         }
-        
+
         // 실패한 배포인 경우 파일 검색 없이 기본 정보만 반환
         if (buildStatus === 'FAILURE' || buildStatus === 'FAILED' || buildStatus === 'ABORTED') {
           logger.info(`배포 실패 상태(${buildStatus})로 인해 파일 검색 생략 - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
-          
+
           return res.json({
             success: true,
             data: {
@@ -999,9 +999,9 @@ router.get('/deployment-info/:projectName/:buildNumber',
               verifiedFiles: [],
               directoryVerified: false,
               downloadFileVerified: false,
-              message: `배포가 실패했습니다 (${buildStatus}). 아티팩트 파일이 생성되지 않았습니다.`
+              message: `배포가 실패했습니다 (${buildStatus}). 아티팩트 파일이 생성되지 않았습니다.`,
             },
-            message: '배포 정보를 조회했습니다.'
+            message: '배포 정보를 조회했습니다.',
           });
         }
 
@@ -1042,21 +1042,21 @@ router.get('/deployment-info/:projectName/:buildNumber',
                 if (!fileExists) {
                   logger.warn(`Download file ${deploymentInfo.downloadFile} not found in directory ${unixPath}`);
                   logger.info(`Available files in directory: ${files.join(', ')}`);
-                  
+
                   // V{version}_{date} 패턴으로 파일 찾기 (시간 무관)
                   const versionDateMatch = deploymentInfo.downloadFile.match(/V(\d+\.\d+\.\d+)_(\d{6})/);
                   if (versionDateMatch) {
                     const version = versionDateMatch[1];
                     const date = versionDateMatch[2];
                     const pattern = `V${version}_${date}`;
-                    
+
                     logger.info(`Looking for files with pattern: ${pattern}*`);
-                    
+
                     // 같은 버전과 날짜로 시작하는 파일 찾기 (시간은 무관)
                     const alternativeFile = files.find(f =>
-                      f.startsWith(pattern) && f.endsWith('.tar.gz') && !f.includes('.enc.')
+                      f.startsWith(pattern) && f.endsWith('.tar.gz') && !f.includes('.enc.'),
                     );
-                    
+
                     if (alternativeFile) {
                       deploymentInfo.downloadFile = alternativeFile;
                       deploymentInfo.downloadFileVerified = true;
@@ -1075,24 +1075,24 @@ router.get('/deployment-info/:projectName/:buildNumber',
               } else {
                 // allFiles가 비어있는 경우, NAS에서 직접 배포 파일 찾기
                 deploymentInfo.allFiles = [];
-                
+
                 // 버전 정보 추출
                 const versionMatch = projectName.match(/(\d+\.\d+\.\d+)/);
                 if (versionMatch) {
                   const version = versionMatch[1];
-                  
+
                   // NAS에서 해당 버전 관련 파일들 찾기
                   const versionFiles = files.filter(file => {
                     const isDeploymentFile = file.endsWith('.tar.gz') || file.endsWith('.enc.tar.gz');
                     const hasVersionInName = file.includes(version);
                     return isDeploymentFile && hasVersionInName;
                   });
-                  
+
                   deploymentInfo.allFiles = versionFiles;
                   deploymentInfo.verifiedAllFiles = versionFiles;
-                  
+
                   logger.info(`Found ${versionFiles.length} version-related files in NAS: ${versionFiles.join(', ')}`);
-                  
+
                   // 메인 다운로드 파일도 다시 설정 (V{version}로 시작하는 비암호화 파일 우선)
                   if (!deploymentInfo.downloadFileVerified) {
                     const mainFile = versionFiles.find(f => f.startsWith('V') && !f.includes('.enc.'));
@@ -1166,14 +1166,14 @@ router.get('/deployment-info/:projectName/:buildNumber',
             const pathMatch = deploymentInfo.nasPath.match(/mr(\d+\.\d+\.\d+)\\(\d+)\\(\d+)/);
             if (pathMatch) {
               const [, version, date, buildNum] = pathMatch;
-              
+
               logger.info(`Creating Synology links for version ${version}, date ${date}, build ${buildNum}`);
-              
+
               // 0. 실제 파일명 찾기
               const folderPath = `/release_version/release/product/mr${version}/${date}/${buildNum}`;
               const actualFileNamesResult = await Promise.race([
                 synologyApiService.findActualFileNames(folderPath, version, date),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('File listing timeout')), 10000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error('File listing timeout')), 10000)),
               ]);
 
               let actualFileNames = {};
@@ -1183,42 +1183,42 @@ router.get('/deployment-info/:projectName/:buildNumber',
                 fileInfoMap = actualFileNamesResult.fileInfoMap || {};
                 logger.info(`Found actual file names: ${JSON.stringify(actualFileNames)}`);
                 logger.info(`Found file info: ${JSON.stringify(fileInfoMap)}`);
-                
+
                 // 실제 파일명으로 업데이트
                 if (actualFileNames.main) {
                   deploymentInfo.downloadFile = actualFileNames.main;
                   deploymentInfo.downloadFileVerified = true;
                 }
-                
+
                 // 추가 파일 정보 업데이트
                 deploymentInfo.actualFiles = {
                   main: actualFileNames.main || null,
                   morow: actualFileNames.morow || null,
                   backend: actualFileNames.backend || null,
-                  frontend: actualFileNames.frontend || null
+                  frontend: actualFileNames.frontend || null,
                 };
-                
+
                 // 파일 정보 추가 (크기, 수정일)
                 deploymentInfo.fileInfoMap = fileInfoMap;
-                
+
                 // allFiles 배열을 실제 파일명으로 업데이트
                 deploymentInfo.allFiles = Object.values(deploymentInfo.actualFiles).filter(file => file !== null);
                 logger.info(`Updated allFiles with actual file names: ${JSON.stringify(deploymentInfo.allFiles)}`);
               } else {
                 logger.warn(`Failed to find actual file names: ${actualFileNamesResult.error}`);
               }
-              
+
               // 1. 폴더 공유 링크 생성 (기존)
               const shareResult = await Promise.race([
                 synologyApiService.getOrCreateVersionShareLink(version, date, buildNum),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 10000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 10000)),
               ]);
-              
+
               if (shareResult.success) {
                 deploymentInfo.synologyShareUrl = shareResult.shareUrl;
                 deploymentInfo.synologyShareId = shareResult.shareId;
                 deploymentInfo.shareCreated = shareResult.isNew;
-                
+
                 logger.info(`Synology folder share link ${shareResult.isNew ? 'created' : 'found'}: ${shareResult.shareUrl}`);
               } else {
                 logger.warn(`Failed to create Synology folder share link: ${shareResult.error}`);
@@ -1227,26 +1227,26 @@ router.get('/deployment-info/:projectName/:buildNumber',
 
               // 2. 개별 파일 다운로드 링크 생성 (새로운 기능)
               deploymentInfo.fileDownloadLinks = {};
-              
+
               // 메인 다운로드 파일에 대한 직접 다운로드 링크
               if (deploymentInfo.downloadFile && deploymentInfo.downloadFileVerified) {
                 try {
                   const fileDownloadResult = await Promise.race([
                     synologyApiService.getOrCreateFileDownloadLink(version, date, buildNum, deploymentInfo.downloadFile),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('File download link timeout')), 10000))
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('File download link timeout')), 10000)),
                   ]);
-                  
+
                   if (fileDownloadResult.success) {
                     deploymentInfo.fileDownloadLinks[deploymentInfo.downloadFile] = {
                       downloadUrl: fileDownloadResult.downloadUrl || fileDownloadResult.shareUrl,
                       isDirectDownload: fileDownloadResult.isDirectDownload,
-                      fileName: fileDownloadResult.fileName
+                      fileName: fileDownloadResult.fileName,
                     };
-                    
+
                     // 메인 파일의 다운로드 링크를 별도로 저장
                     deploymentInfo.mainFileDownloadUrl = fileDownloadResult.downloadUrl || fileDownloadResult.shareUrl;
                     deploymentInfo.isMainFileDirectDownload = fileDownloadResult.isDirectDownload;
-                    
+
                     logger.info(`Main file download link created: ${deploymentInfo.mainFileDownloadUrl} (direct: ${fileDownloadResult.isDirectDownload})`);
                   }
                 } catch (error) {
@@ -1257,27 +1257,27 @@ router.get('/deployment-info/:projectName/:buildNumber',
               // 3. 실제 파일들에 대한 다운로드 링크 생성 (actualFiles 사용)
               if (deploymentInfo.actualFiles) {
                 const fileTypes = ['morow', 'backend', 'frontend'];
-                
+
                 for (const fileType of fileTypes) {
                   const fileName = deploymentInfo.actualFiles[fileType];
                   if (fileName) {
                     try {
                       const fileDownloadResult = await Promise.race([
                         synologyApiService.getOrCreateFileDownloadLink(version, date, buildNum, fileName),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('File download link timeout')), 5000))
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('File download link timeout')), 5000)),
                       ]);
-                      
+
                       if (fileDownloadResult.success) {
                         deploymentInfo.fileDownloadLinks[fileName] = {
                           downloadUrl: fileDownloadResult.downloadUrl || fileDownloadResult.shareUrl,
                           isDirectDownload: fileDownloadResult.isDirectDownload,
                           fileName: fileDownloadResult.fileName,
-                          fileType: fileType
+                          fileType: fileType,
                         };
-                        
+
                         // 파일 타입별로도 저장 (프론트엔드에서 쉽게 접근하기 위해)
                         deploymentInfo.fileDownloadLinks[`${fileType}File`] = deploymentInfo.fileDownloadLinks[fileName];
-                        
+
                         logger.info(`${fileType} file download link created for ${fileName}: ${fileDownloadResult.downloadUrl || fileDownloadResult.shareUrl} (direct: ${fileDownloadResult.isDirectDownload})`);
                       }
                     } catch (error) {
@@ -1287,7 +1287,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
                   }
                 }
               }
-              
+
             } else {
               logger.warn(`Could not extract version info from NAS path: ${deploymentInfo.nasPath}`);
             }
@@ -1299,12 +1299,12 @@ router.get('/deployment-info/:projectName/:buildNumber',
         }
 
         logger.info(`Jenkins 배포 정보 조회 완료 - 사용자: ${req.user.username}, 프로젝트: ${projectName}, 빌드: ${buildNumber}, 디렉토리 검증: ${deploymentInfo.directoryVerified}`);
-        
+
         // 최종 응답 데이터 로깅 (fileInfoMap 포함)
-        logger.info(`Final deploymentInfo response data:`, JSON.stringify({
+        logger.info('Final deploymentInfo response data:', JSON.stringify({
           fileInfoMap: deploymentInfo.fileInfoMap,
           actualFiles: deploymentInfo.actualFiles,
-          allFiles: deploymentInfo.allFiles
+          allFiles: deploymentInfo.allFiles,
         }, null, 2));
 
         res.json({
@@ -1321,7 +1321,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
           message: '배포 정보 조회에 실패했습니다.',
           error: error.message,
           projectName: projectName,
-          buildNumber: buildNumber
+          buildNumber: buildNumber,
         });
       }
     } catch (error) {

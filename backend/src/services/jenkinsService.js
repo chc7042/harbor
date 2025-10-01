@@ -442,7 +442,7 @@ class JenkinsService {
     try {
       // MR 빌드 로그에서 배포 정보 추출 (fs 빌드 대신 MR 빌드에서 실제 배포 정보 확인)
       let targetJobName = jobName;
-      
+
       // fs 잡인 경우 대응되는 mr 잡을 찾아서 사용
       if (jobName.includes('fs')) {
         targetJobName = jobName.replace(/fs(\d+\.\d+\.\d+)/, 'mr$1');
@@ -536,7 +536,7 @@ class JenkinsService {
         const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
         if (versionMatch) {
           const version = versionMatch[1];
-          
+
           // 버전별 실제 배포 날짜 사용 - 실제 NAS 경로 기반
           let dateStr;
           if (version === '3.0.0') {
@@ -562,21 +562,21 @@ class JenkinsService {
         const versionMatch = jobName.match(/(\d+\.\d+\.\d+)/);
         if (versionMatch) {
           const version = versionMatch[1];
-          
+
           // 버전별 실제 파일명 설정
           if (version === '3.0.0') {
-            deploymentInfo.downloadFile = `V3.0.0_250310_0843.tar.gz`;
+            deploymentInfo.downloadFile = 'V3.0.0_250310_0843.tar.gz';
             deploymentInfo.allFiles = [
               'V3.0.0_250310_0843.tar.gz',
               'mr3.0.0_250310_1739_26.enc.tar.gz',
               'be3.0.0_250310_0842_83.enc.tar.gz',
-              'fe3.0.0_250310_0843_49.enc.tar.gz'
+              'fe3.0.0_250310_0843_49.enc.tar.gz',
             ];
           } else if (version === '1.2.0' && buildNumber <= 54) {
-            deploymentInfo.downloadFile = `V1.2.0_250929_1058.tar.gz`;
+            deploymentInfo.downloadFile = 'V1.2.0_250929_1058.tar.gz';
             deploymentInfo.allFiles = [deploymentInfo.downloadFile];
           } else if (version === '1.0.0') {
-            deploymentInfo.downloadFile = `V1.0.0_241017_1234.tar.gz`;
+            deploymentInfo.downloadFile = 'V1.0.0_241017_1234.tar.gz';
             deploymentInfo.allFiles = [deploymentInfo.downloadFile];
           }
         }

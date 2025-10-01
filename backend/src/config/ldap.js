@@ -76,11 +76,11 @@ class LDAPConfig {
       reconnect: {
         initialDelay: 100,
         maxDelay: 1000,
-        failAfter: 3
+        failAfter: 3,
       },
       strictDN: false,
       bindDN: this.config.bindDN,
-      bindCredentials: this.config.bindCredentials
+      bindCredentials: this.config.bindCredentials,
     };
 
     // LDAPS 또는 StartTLS 설정
@@ -167,7 +167,7 @@ class LDAPConfig {
     // fullName이 없으면 username 사용
     if (!user.fullName && user.username) {
       user.fullName = user.username.split('.').map(name =>
-        name.charAt(0).toUpperCase() + name.slice(1)
+        name.charAt(0).toUpperCase() + name.slice(1),
       ).join(' ');
     }
 
