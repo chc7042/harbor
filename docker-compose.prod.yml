@@ -43,6 +43,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3002
+      NODE_OPTIONS: "--openssl-legacy-provider"
 
       # Database configuration
       DB_HOST: harbor-postgres-prod
