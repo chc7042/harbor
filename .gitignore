@@ -155,7 +155,7 @@ package-lock.json
 pnpm-lock.yaml
 
 dev-debug.log
-.env
+
 # Editor directories and files
 .idea
 .vscode

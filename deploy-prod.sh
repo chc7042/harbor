@@ -33,15 +33,15 @@ sleep 10
 
 # 헬스체크
 echo "🏥 헬스체크 수행 중..."
-if curl -f http://harbor.roboetech.com:8080/health > /dev/null 2>&1; then
+if curl -f http://harbor.roboetech.com/health > /dev/null 2>&1; then
     echo "✅ Harbor 애플리케이션이 정상적으로 실행 중입니다!"
-    echo "🌐 접속 URL: http://harbor.roboetech.com:8080"
+    echo "🌐 접속 URL: http://harbor.roboetech.com"
 else
     echo "⚠️  헬스체크 실패 - 서비스 로그를 확인해주세요:"
     echo "   docker compose -f docker-compose.prod.yml logs backend"
 fi
 
 # 임시 .env 파일 정리
-rm -f .env
+#rm -f .env
 
 echo "✨ 배포 완료!"

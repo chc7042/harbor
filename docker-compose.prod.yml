@@ -46,21 +46,21 @@ services:
       NODE_OPTIONS: "--openssl-legacy-provider"
 
       # Database configuration
-      DB_HOST: harbor-postgres-prod
-      DB_PORT: 5432
-      DB_NAME: harbor_prod
-      DB_USER: harbor_user
-      DB_PASSWORD: harbor_production_password_2024
+      DB_HOST: ${DB_HOST:-harbor-postgres-prod}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-harbor_prod}
+      DB_USER: ${DB_USER:-harbor_user}
+      DB_PASSWORD: ${DB_PASSWORD}
       DB_SSL: false
 
       # JWT configuration
-      JWT_SECRET: harbor_production_jwt_secret_key_2024_very_secure_random_string
-      JWT_REFRESH_SECRET: harbor_production_refresh_secret_key_2024_very_secure_random
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
 
       # Frontend URL for CORS
-      FRONTEND_URL: http://harbor.roboetech.com:8080
+      FRONTEND_URL: http://harbor.roboetech.com
 
       # LDAP configuration
       LDAP_URL: ${LDAP_URL}
@@ -142,7 +142,7 @@ services:
       dockerfile: Dockerfile.frontend
       target: production
       args:
-        - VITE_API_URL=${VITE_API_URL:-http://harbor.roboetech.com:3002}
+        - VITE_API_URL=${VITE_API_URL:-http://harbor.roboetech.com}
     container_name: harbor-frontend-prod
     restart: unless-stopped
     networks:
@@ -178,7 +178,7 @@ services:
     networks:
       - harbor-network
     ports:
-      - "8080:80"
+      - "80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
