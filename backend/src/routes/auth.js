@@ -6,10 +6,13 @@ const { JWTUtils, SessionManager, authenticateToken, auditLog, createErrorRespon
 
 const router = express.Router();
 
-// 로그인 시도 제한 (5분간 5회)
+// 로그인 시도 제한 (환경변수 우선)
+const isRateLimitingDisabled = process.env.DISABLE_RATE_LIMITING === 'true';
+const loginRateLimit = parseInt(process.env.RATE_LIMIT_LOGIN) || 5;
+
 const loginLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5분
-  max: 5,
+  max: isRateLimitingDisabled ? 999999 : loginRateLimit,
   message: {
     success: false,
     error: {
@@ -19,6 +22,7 @@ const loginLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  trustProxy: true, // Required when behind reverse proxy
 });
 
 // 토큰 갱신 제한 (1분간 10회)
@@ -105,7 +109,12 @@ const refreshTokenValidation = [
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/login', loginLimiter, loginValidation, async (req, res) => {
+// Conditionally apply rate limiter based on environment
+const loginMiddleware = isRateLimitingDisabled ? 
+  [loginValidation] : 
+  [loginLimiter, loginValidation];
+
+router.post('/login', ...loginMiddleware, async (req, res) => {
   try {
     // 입력 값 검증
     const errors = validationResult(req);

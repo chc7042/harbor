@@ -27,6 +27,9 @@ const { getNASScanner } = require('./services/nasScanner');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust proxy for proper client IP handling behind reverse proxy
+app.set('trust proxy', true);
+
 // 보안 미들웨어
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -41,23 +44,33 @@ app.use(helmet({
   }
 }));
 
-// Rate limiting
+// Rate limiting - Check if disabled
+const isRateLimitingDisabled = process.env.DISABLE_RATE_LIMITING === 'true';
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15분
-  max: 1000, // 최대 1000 요청
+  max: isRateLimitingDisabled ? 999999 : 1000, // 최대 1000 요청 또는 무제한
   message: '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.',
   standardHeaders: true,
   legacyHeaders: false,
+  trustProxy: true, // Required when behind reverse proxy
 });
-app.use(limiter);
 
-// 로그인 특별 제한 (개발환경에서는 완화)
+if (!isRateLimitingDisabled) {
+  app.use(limiter);
+}
+
+// 로그인 특별 제한 (환경변수 우선)
+const loginRateLimit = parseInt(process.env.RATE_LIMIT_LOGIN) || 
+  (process.env.NODE_ENV === 'development' ? 100 : 5);
+
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15분
-  max: process.env.NODE_ENV === 'development' ? 100 : 5, // 개발환경: 100회, 프로덕션: 5회
+  max: loginRateLimit,
   message: '로그인 시도 횟수를 초과했습니다. 15분 후 다시 시도해주세요.',
   standardHeaders: true,
   legacyHeaders: false,
+  trustProxy: true, // Required when behind reverse proxy
 });
 
 // CORS 설정
@@ -149,7 +162,11 @@ app.get('/health', (req, res) => {
 app.use('/api/health', healthRoutes);
 
 // API 라우트
-app.use('/api/auth', authLimiter, authRoutes);
+if (isRateLimitingDisabled) {
+  app.use('/api/auth', authRoutes);
+} else {
+  app.use('/api/auth', authLimiter, authRoutes);
+}
 app.use('/api/deployments', deploymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/projects', projectRoutes);
