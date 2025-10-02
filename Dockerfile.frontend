@@ -39,8 +39,10 @@ RUN npm install
 COPY frontend/ ./
 
 # 환경 변수 설정 (빌드 타임)
-ARG VITE_API_URL=http://localhost:3002
+ARG VITE_API_URL=http://harbor.roboetech.com
+ARG VITE_WS_URL=ws://harbor.roboetech.com
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_WS_URL=$VITE_WS_URL
 
 # 프로덕션 빌드
 RUN npm run build
