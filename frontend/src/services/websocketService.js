@@ -27,9 +27,7 @@ class WebSocketService {
         this.token = token;
 
         // WebSocket URL 구성
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-        const wsUrl = apiUrl.replace(/^https?:/, wsProtocol);
+        const wsUrl = import.meta.env.VITE_WS_URL || 'ws://harbor.roboetech.com';
         this.url = `${wsUrl}/ws?token=${encodeURIComponent(token)}`;
 
         this.ws = new WebSocket(this.url);
