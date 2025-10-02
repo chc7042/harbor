@@ -82,8 +82,11 @@ services:
       LDAP_GROUP_BASE: ${LDAP_GROUP_BASE}
       LDAP_PORT: ${LDAP_PORT}
 
-      # Jenkins Webhook
-      JENKINS_WEBHOOK_SECRET: harbor_jenkins_webhook_secret_2024
+      # Jenkins Configuration
+      JENKINS_URL: ${JENKINS_URL}
+      JENKINS_USERNAME: ${JENKINS_USERNAME}
+      JENKINS_PASSWORD: ${JENKINS_PASSWORD}
+      JENKINS_WEBHOOK_SECRET: ${JENKINS_WEBHOOK_SECRET}
       
       # Rate Limiting - DISABLED
       RATE_LIMIT_LOGIN: 999999
@@ -93,6 +96,15 @@ services:
 
       # NAS configuration
       NAS_PATH: ${NAS_PATH:-/nas}
+      NAS_HOST_PATH: ${NAS_HOST_PATH}
+      NAS_HOST: ${NAS_HOST}
+      NAS_SHARE: ${NAS_SHARE}
+      NAS_USERNAME: ${NAS_USERNAME}
+      NAS_PASSWORD: ${NAS_PASSWORD}
+      NAS_DOMAIN: ${NAS_DOMAIN}
+      NAS_RELEASE_PATH: ${NAS_RELEASE_PATH}
+      NAS_MOUNT_PATH: ${NAS_MOUNT_PATH}
+      NAS_SCAN_INTERVAL: ${NAS_SCAN_INTERVAL}
 
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-info}
