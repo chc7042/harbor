@@ -17,12 +17,19 @@ services:
     networks:
       - jenkins-nas-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jenkins_nas_deployment"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # 백엔드 API 서버
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
+      target: development
     container_name: jenkins-nas-backend
     environment:
       - NODE_ENV=development
@@ -44,37 +51,35 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - ./backend:/app
-      - /dev/null:/app/node_modules  # 개발 시 로컬 node_modules 무시
       - nas_volume:/mnt/nas:ro  # NAS 마운트 포인트 (읽기 전용)
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - jenkins-nas-network
     restart: unless-stopped
-    command: npm run dev
+    command: ["sh", "-c", "echo 'Starting Harbor backend...' && /app/scripts/migrate.sh && echo 'Starting Node.js application...' && node src/app.js"]
 
   # 프론트엔드 개발 서버
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      target: production
     container_name: jenkins-nas-frontend
     environment:
       - NODE_ENV=development
       - VITE_API_URL=http://localhost:3001
       - VITE_WS_URL=ws://localhost:3001
     ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /dev/null:/app/node_modules  # 개발 시 로컬 node_modules 무시
+      - "5173:80"
+    # volumes removed for production build
     depends_on:
       - backend
     networks:
       - jenkins-nas-network
     restart: unless-stopped
-    command: npm run dev -- --host 0.0.0.0
+    command: ["nginx", "-g", "daemon off;"]
 
   # Redis (세션 저장용 - 옵션)
   redis:

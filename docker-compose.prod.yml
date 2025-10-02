@@ -6,6 +6,7 @@ services:
     image: postgres:15-alpine
     container_name: harbor-postgres-prod
     restart: unless-stopped
+    network_mode: host
     environment:
       POSTGRES_DB: ${DB_NAME:-harbor_prod}
       POSTGRES_USER: ${DB_USER:-harbor_user}
@@ -15,8 +16,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    networks:
-      - harbor-network
     ports:
       - "${DB_PORT:-5432}:5432"
     healthcheck:
@@ -38,32 +37,40 @@ services:
         - NODE_ENV=production
     container_name: harbor-backend-prod
     restart: unless-stopped
+    network_mode: host
     environment:
       NODE_ENV: production
       PORT: 3002
 
       # Database configuration
-      DB_HOST: postgres
+      DB_HOST: localhost
       DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-harbor_prod}
-      DB_USER: ${DB_USER:-harbor_user}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_SSL: ${DB_SSL:-false}
+      DB_NAME: harbor_prod
+      DB_USER: harbor_user
+      DB_PASSWORD: harbor_production_password_2024
+      DB_SSL: false
 
       # JWT configuration
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_SECRET: harbor_production_jwt_secret_key_2024_very_secure_random_string
+      JWT_REFRESH_SECRET: harbor_production_refresh_secret_key_2024_very_secure_random
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
 
       # LDAP configuration
-      LDAP_URL: ${LDAP_URL:-ldap://openldap:389}
-      LDAP_BIND_DN: ${LDAP_BIND_DN}
-      LDAP_BIND_CREDENTIALS: ${LDAP_BIND_CREDENTIALS}
-      LDAP_SEARCH_BASE: ${LDAP_SEARCH_BASE}
+      LDAP_URL: ldap://172.30.1.97:389
+      LDAP_BIND_DN: cn=admin,dc=roboetech,dc=com
+      LDAP_BIND_CREDENTIALS: dlqhdskatmxm
+      LDAP_SEARCH_BASE: ou=users,dc=roboetech,dc=com
+      LDAP_SEARCH_FILTER: (|(uid={{username}})(cn={{username}}))
 
       # Jenkins Webhook
-      JENKINS_WEBHOOK_SECRET: ${JENKINS_WEBHOOK_SECRET}
+      JENKINS_WEBHOOK_SECRET: harbor_jenkins_webhook_secret_2024
+      
+      # Rate Limiting - DISABLED
+      RATE_LIMIT_LOGIN: 999999
+      MAX_LOGIN_ATTEMPTS: 999999
+      LOCKOUT_DURATION: 1
+      DISABLE_RATE_LIMITING: true
 
       # NAS configuration
       NAS_PATH: ${NAS_PATH:-/nas}
@@ -72,8 +79,6 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
       - nas_data:/nas:ro
-    networks:
-      - harbor-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -105,14 +110,13 @@ services:
       dockerfile: Dockerfile.frontend
       target: production
       args:
-        - VITE_API_URL=${VITE_API_URL:-http://localhost:3002}
+        - VITE_API_URL=${VITE_API_URL:-http://harbor.roboetech.com:3002}
     container_name: harbor-frontend-prod
     restart: unless-stopped
+    network_mode: host
     environment:
       NGINX_WORKER_PROCESSES: auto
       NGINX_WORKER_CONNECTIONS: 1024
-    networks:
-      - harbor-network
     depends_on:
       backend:
         condition: service_healthy
@@ -138,15 +142,11 @@ services:
     image: nginx:1.25-alpine
     container_name: harbor-nginx-prod
     restart: unless-stopped
-    ports:
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
+    network_mode: host
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - nginx_logs:/var/log/nginx
-    networks:
-      - harbor-network
     depends_on:
       frontend:
         condition: service_healthy

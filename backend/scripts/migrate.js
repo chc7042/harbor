@@ -50,7 +50,7 @@ async function getExecutedMigrations() {
 
 // 마이그레이션 파일 목록 조회
 function getMigrationFiles() {
-  const migrationsDir = path.join(__dirname, '../../database/migrations');
+  const migrationsDir = path.join(__dirname, '../database/migrations');
 
   if (!fs.existsSync(migrationsDir)) {
     console.log('❌ Migrations directory not found:', migrationsDir);
