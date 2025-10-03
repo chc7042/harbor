@@ -228,7 +228,8 @@ async function startServer() {
           logger.info('NAS scan scheduler started');
         }
     } catch (error) {
-      logger.warn('NAS scanner initialization failed:', error.message);
+      logger.error('NAS scanner initialization failed:', error.message);
+      logger.error('NAS scanner error stack:', error.stack);
     }
 
     // 서버 시작
