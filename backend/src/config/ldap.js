@@ -14,8 +14,8 @@ class LDAPConfig {
       searchFilter: process.env.LDAP_SEARCH_FILTER || '(uid={{username}})',
 
       // 연결 설정
-      timeout: parseInt(process.env.LDAP_TIMEOUT, 10) || 5000,
-      connectTimeout: parseInt(process.env.LDAP_CONNECT_TIMEOUT, 10) || 3000,
+      timeout: parseInt(process.env.LDAP_TIMEOUT, 10) || 60000,
+      connectTimeout: parseInt(process.env.LDAP_CONNECT_TIMEOUT, 10) || 30000,
 
       // TLS 설정
       tlsOptions: {

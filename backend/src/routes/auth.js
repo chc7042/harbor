@@ -220,6 +220,12 @@ router.post('/login', ...loginMiddleware, async (req, res) => {
     } else if (error.message.includes('LDAP')) {
       errorCode = 'LDAP_ERROR';
       statusCode = 503;
+    } else if (error.message.includes('Database connection failed')) {
+      errorCode = 'DATABASE_ERROR';
+      statusCode = 503;
+    } else if (error.message.includes('password authentication failed')) {
+      errorCode = 'DATABASE_AUTH_ERROR';
+      statusCode = 503;
     }
 
     res.status(statusCode).json(createErrorResponse(

@@ -61,9 +61,8 @@ class LDAPService {
         try {
           user = await this.syncUserToDatabase(mockUserInfo);
         } catch (dbError) {
-          console.warn('데이터베이스 사용자 동기화 실패 (개발환경에서 무시):', dbError.message);
-          // 사용자 정보 없이는 인증 실패 처리
-          throw new Error('Failed to create or retrieve user from database');
+          console.error('데이터베이스 사용자 동기화 실패:', dbError.message);
+          throw new Error(`Database connection failed: ${dbError.message}`);
         }
 
         const authDuration = Date.now() - startTime;
@@ -104,18 +103,13 @@ class LDAPService {
         }
       }
 
-      // 사용자 정보 업데이트/생성 (개발환경에서는 DB 오류 무시)
+      // 사용자 정보 업데이트/생성
       let user;
       try {
         user = await this.syncUserToDatabase(userInfo);
       } catch (dbError) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('데이터베이스 사용자 동기화 실패 (개발환경에서 무시):', dbError.message);
-          // 데이터베이스 동기화 실패 시 인증 실패
-          throw dbError;
-        } else {
-          throw dbError;
-        }
+        console.error('데이터베이스 사용자 동기화 실패:', dbError.message);
+        throw new Error(`Database connection failed: ${dbError.message}`);
       }
 
       const authDuration = Date.now() - startTime;

@@ -123,8 +123,38 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       dispatch({ type: 'AUTH_ERROR' });
 
-      const errorMessage = error.response?.data?.error?.message ||
-                          '로그인 중 오류가 발생했습니다.';
+      // 에러 코드별 메시지 매핑
+      const errorCode = error.response?.data?.error?.code;
+      const serverMessage = error.response?.data?.error?.message;
+      
+      let errorMessage = '로그인 중 오류가 발생했습니다.';
+      
+      switch (errorCode) {
+        case 'USER_NOT_FOUND':
+          errorMessage = '사용자를 찾을 수 없습니다.';
+          break;
+        case 'INVALID_CREDENTIALS':
+          errorMessage = '사용자명 또는 비밀번호가 올바르지 않습니다.';
+          break;
+        case 'ACCESS_DENIED':
+          errorMessage = '이 애플리케이션에 접근할 권한이 없습니다.';
+          break;
+        case 'LDAP_ERROR':
+          errorMessage = 'LDAP 서버 연결에 실패했습니다. 관리자에게 문의하세요.';
+          break;
+        case 'DATABASE_ERROR':
+          errorMessage = '데이터베이스 연결에 실패했습니다. 관리자에게 문의하세요.';
+          break;
+        case 'DATABASE_AUTH_ERROR':
+          errorMessage = '데이터베이스 인증에 실패했습니다. 관리자에게 문의하세요.';
+          break;
+        case 'VALIDATION_ERROR':
+          errorMessage = serverMessage || '입력 정보를 확인해주세요.';
+          break;
+        default:
+          // 서버에서 제공한 메시지가 있으면 사용, 없으면 기본 메시지
+          errorMessage = serverMessage || '로그인 중 오류가 발생했습니다.';
+      }
 
       return {
         success: false,
