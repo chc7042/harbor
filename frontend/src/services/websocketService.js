@@ -37,7 +37,17 @@ class WebSocketService {
         // WebSocket URL 구성
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.host;
-        const wsUrl = import.meta.env.VITE_WS_URL || `${protocol}//${host}`;
+        
+        // 환경변수에서 WebSocket URL 가져오기 (빈 문자열도 fallback 처리)
+        const envWsUrl = import.meta.env.VITE_WS_URL;
+        const wsUrl = (envWsUrl && envWsUrl.trim() !== '') ? envWsUrl : `${protocol}//${host}`;
+        
+        console.log('WebSocket configuration:', {
+          envWsUrl,
+          fallbackUrl: `${protocol}//${host}`,
+          finalWsUrl: wsUrl
+        });
+        
         this.url = `${wsUrl}/ws?token=${encodeURIComponent(token)}`;
 
         // 연결 시도 추적
