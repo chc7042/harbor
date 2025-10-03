@@ -179,9 +179,9 @@ class LDAPService {
       try {
         client = this.config.createClient();
         
-        // 연결 타임아웃 설정
-        client.timeout = 15000; // 15초
-        client.connectTimeout = 10000; // 10초
+        // 연결 타임아웃 설정 (OpenLDAP 응답 지연 고려)
+        client.timeout = 30000; // 30초
+        client.connectTimeout = 20000; // 20초
 
         // 관리자 계정으로 바인드 (재시도 로직 포함)
         const bindAsync = promisify(client.bind).bind(client);
@@ -278,7 +278,7 @@ class LDAPService {
                                  error.message.includes('ETIMEDOUT');
 
         if (retryCount <= maxRetries && isConnectionError) {
-          console.warn(`LDAP connection failed (attempt ${retryCount}/${maxRetries + 1}), retrying in ${retryDelay}ms...`);
+          console.warn(`LDAP connection failed (attempt ${retryCount}/${maxRetries + 1}), retrying in ${retryDelay * retryCount}ms...`);
           await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount)); // 지수 백오프
           continue;
         }
