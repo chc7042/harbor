@@ -13,9 +13,9 @@ class LDAPConfig {
       searchBase: process.env.LDAP_SEARCH_BASE || 'ou=users,dc=company,dc=com',
       searchFilter: process.env.LDAP_SEARCH_FILTER || '(uid={{username}})',
 
-      // 연결 설정
-      timeout: parseInt(process.env.LDAP_TIMEOUT, 10) || 60000,
-      connectTimeout: parseInt(process.env.LDAP_CONNECT_TIMEOUT, 10) || 30000,
+      // 연결 설정 (더 짧은 타임아웃으로 빠른 재시도)
+      timeout: parseInt(process.env.LDAP_TIMEOUT, 10) || 15000,
+      connectTimeout: parseInt(process.env.LDAP_CONNECT_TIMEOUT, 10) || 10000,
 
       // TLS 설정
       tlsOptions: {
@@ -73,14 +73,12 @@ class LDAPConfig {
       url: this.config.url,
       timeout: this.config.timeout,
       connectTimeout: this.config.connectTimeout,
-      reconnect: {
-        initialDelay: 100,
-        maxDelay: 1000,
-        failAfter: 3,
-      },
+      reconnect: false, // 자동 재연결 비활성화 (수동으로 관리)
       strictDN: false,
-      bindDN: this.config.bindDN,
-      bindCredentials: this.config.bindCredentials,
+      maxConnections: 1, // 단일 연결 사용
+      queueSize: 0, // 큐 사용 안함
+      queueTimeout: 0,
+      queueDisable: true,
     };
 
     // LDAPS 또는 StartTLS 설정
@@ -90,17 +88,22 @@ class LDAPConfig {
 
     const client = ldap.createClient(clientOptions);
 
-    // 에러 이벤트 처리
+    // 에러 이벤트 처리 (로그 레벨을 낮춤)
     client.on('error', (err) => {
-      console.error('LDAP client error:', err);
+      console.debug('LDAP client error:', err.message);
     });
 
     client.on('connect', () => {
-      console.log('LDAP client connected');
+      console.debug('LDAP client connected to', this.config.url);
     });
 
     client.on('close', () => {
-      console.log('LDAP client disconnected');
+      console.debug('LDAP client disconnected from', this.config.url);
+    });
+
+    // 연결 실패 처리
+    client.on('connectError', (err) => {
+      console.debug('LDAP connection error:', err.message);
     });
 
     return client;

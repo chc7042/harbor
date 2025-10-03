@@ -76,23 +76,53 @@ class LDAPService {
       }
 
       // 실제 LDAP 인증
-      // 사용자 검색
+      // 사용자 검색 (이미 재시도 로직이 포함됨)
       const userInfo = await this.findUser(username);
       if (!userInfo) {
         throw new Error('User not found in LDAP directory');
       }
 
-      // 비밀번호 인증
-      client = this.config.createClient();
-      const bindAsync = promisify(client.bind).bind(client);
-
-      try {
-        await bindAsync(userInfo.dn, password);
-      } catch (bindError) {
-        if (bindError.name === 'InvalidCredentialsError') {
-          throw new Error('Invalid username or password');
+      // 비밀번호 인증 (재시도 로직 추가)
+      let authRetryCount = 0;
+      const authMaxRetries = 2;
+      
+      while (authRetryCount <= authMaxRetries) {
+        try {
+          client = this.config.createClient();
+          client.timeout = 10000; // 10초 타임아웃
+          client.connectTimeout = 5000; // 5초 연결 타임아웃
+          
+          const bindAsync = promisify(client.bind).bind(client);
+          await bindAsync(userInfo.dn, password);
+          break; // 성공 시 루프 탈출
+          
+        } catch (bindError) {
+          if (client) {
+            try {
+              client.unbind(() => {});
+            } catch (unbindError) {
+              // 무시
+            }
+          }
+          
+          if (bindError.name === 'InvalidCredentialsError') {
+            throw new Error('Invalid username or password');
+          }
+          
+          authRetryCount++;
+          const isRetryableError = bindError.message.includes('closed') || 
+                                  bindError.message.includes('timeout') ||
+                                  bindError.message.includes('ECONNREFUSED') ||
+                                  bindError.message.includes('ETIMEDOUT');
+          
+          if (authRetryCount <= authMaxRetries && isRetryableError) {
+            console.warn(`LDAP authentication failed (attempt ${authRetryCount}/${authMaxRetries + 1}), retrying...`);
+            await new Promise(resolve => setTimeout(resolve, 500 * authRetryCount));
+            continue;
+          }
+          
+          throw new Error(`Authentication failed: ${bindError.message}`);
         }
-        throw new Error(`Authentication failed: ${bindError.message}`);
       }
 
       // 그룹 확인 (설정된 경우)
@@ -140,72 +170,122 @@ class LDAPService {
    * @returns {Promise<Object|null>} - 사용자 정보 또는 null
    */
   async findUser(username) {
-    const client = this.config.createClient();
+    let client = null;
+    let retryCount = 0;
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1초
 
-    try {
-      // 관리자 계정으로 바인드
-      const bindAsync = promisify(client.bind).bind(client);
-      await bindAsync(
-        this.config.getConfig().bindDN,
-        this.config.getConfig().bindCredentials,
-      );
+    while (retryCount <= maxRetries) {
+      try {
+        client = this.config.createClient();
+        
+        // 연결 타임아웃 설정
+        client.timeout = 15000; // 15초
+        client.connectTimeout = 10000; // 10초
 
-      // 사용자 검색
-      const searchAsync = promisify(client.search).bind(client);
-      const searchFilter = this.config.buildSearchFilter(username);
-      const searchOptions = {
-        filter: searchFilter,
-        scope: 'sub',
-        attributes: Object.values(this.config.getConfig().attributeMap),
-        timeLimit: 10,
-        sizeLimit: 1,
-      };
+        // 관리자 계정으로 바인드 (재시도 로직 포함)
+        const bindAsync = promisify(client.bind).bind(client);
+        await bindAsync(
+          this.config.getConfig().bindDN,
+          this.config.getConfig().bindCredentials,
+        );
 
-      const searchResult = await searchAsync(this.config.getConfig().searchBase, searchOptions);
+        // 사용자 검색
+        const searchAsync = promisify(client.search).bind(client);
+        const searchFilter = this.config.buildSearchFilter(username);
+        const searchOptions = {
+          filter: searchFilter,
+          scope: 'sub',
+          attributes: Object.values(this.config.getConfig().attributeMap),
+          timeLimit: 15, // 검색 시간 제한 증가
+          sizeLimit: 1,
+        };
 
-      return new Promise((resolve, reject) => {
-        let user = null;
-        let entryCount = 0;
+        const searchResult = await searchAsync(this.config.getConfig().searchBase, searchOptions);
 
-        searchResult.on('searchEntry', (entry) => {
-          entryCount++;
-          if (entryCount === 1) {
-            user = this.config.mapUserAttributes(entry);
-          }
+        return new Promise((resolve, reject) => {
+          let user = null;
+          let entryCount = 0;
+          let searchCompleted = false;
+
+          const cleanup = () => {
+            if (!searchCompleted) {
+              searchCompleted = true;
+              if (client && !client.destroyed) {
+                client.unbind(() => {
+                  // Connection cleaned up
+                });
+              }
+            }
+          };
+
+          searchResult.on('searchEntry', (entry) => {
+            entryCount++;
+            if (entryCount === 1) {
+              user = this.config.mapUserAttributes(entry);
+            }
+          });
+
+          searchResult.on('error', (error) => {
+            cleanup();
+            const errorMsg = `LDAP search error (attempt ${retryCount + 1}/${maxRetries + 1}): ${error.message}`;
+            console.error(errorMsg);
+            reject(new Error(errorMsg));
+          });
+
+          searchResult.on('end', (result) => {
+            cleanup();
+            
+            if (result.status !== 0) {
+              reject(new Error(`LDAP search failed with status: ${result.status}`));
+              return;
+            }
+
+            if (entryCount === 0) {
+              resolve(null);
+            } else if (entryCount === 1) {
+              resolve(user);
+            } else {
+              reject(new Error(`Multiple users found for username: ${username}`));
+            }
+          });
+
+          // 타임아웃 설정 (더 긴 시간으로 조정)
+          setTimeout(() => {
+            if (!searchCompleted) {
+              cleanup();
+              reject(new Error(`LDAP search timeout after 15 seconds (attempt ${retryCount + 1}/${maxRetries + 1})`));
+            }
+          }, 15000);
         });
 
-        searchResult.on('error', (error) => {
-          reject(new Error(`LDAP search error: ${error.message}`));
-        });
-
-        searchResult.on('end', (result) => {
-          if (result.status !== 0) {
-            reject(new Error(`LDAP search failed with status: ${result.status}`));
-            return;
+      } catch (error) {
+        // 연결 정리
+        if (client && !client.destroyed) {
+          try {
+            client.unbind(() => {
+              // Connection closed
+            });
+          } catch (unbindError) {
+            console.warn('Error during client unbind:', unbindError.message);
           }
+        }
 
-          if (entryCount === 0) {
-            resolve(null);
-          } else if (entryCount === 1) {
-            resolve(user);
-          } else {
-            reject(new Error(`Multiple users found for username: ${username}`));
-          }
-        });
+        retryCount++;
+        const isConnectionError = error.message.includes('closed') || 
+                                 error.message.includes('timeout') || 
+                                 error.message.includes('ECONNREFUSED') ||
+                                 error.message.includes('ETIMEDOUT');
 
-        // 타임아웃 설정
-        setTimeout(() => {
-          reject(new Error('LDAP search timeout'));
-        }, 10000);
-      });
+        if (retryCount <= maxRetries && isConnectionError) {
+          console.warn(`LDAP connection failed (attempt ${retryCount}/${maxRetries + 1}), retrying in ${retryDelay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount)); // 지수 백오프
+          continue;
+        }
 
-    } catch (error) {
-      console.error('LDAP user search error:', error.message);
-      throw error;
-    } finally {
-      client.unbind(() => {
-        // Connection closed
-      });
+        console.error(`LDAP user search failed after ${retryCount} attempts:`, error.message);
+        throw error;
+      }
     }
   }
 

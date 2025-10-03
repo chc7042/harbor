@@ -36,9 +36,10 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
+      connectSrc: ["'self'", "ws://localhost:3001", "wss://localhost:3001", "ws://localhost:5173", "wss://localhost:5173"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: ["'self'", "data:", "https:", "https://www.gravatar.com"],
       scriptSrc: ["'self'"]
     }
   }
@@ -193,11 +194,15 @@ app.use(errorHandler);
 
 // 서버 시작
 async function startServer() {
+  let server = null;
+
   try {
     // 데이터베이스 초기화 (개발 환경에서는 에러 무시)
+    let dbConnected = false;
     try {
       await initializeDatabase();
       logger.info('데이터베이스 연결 성공');
+      dbConnected = true;
     } catch (dbError) {
       if (process.env.NODE_ENV === 'development') {
         logger.warn('데이터베이스 연결 실패 (개발 환경에서 무시):', dbError.message);
@@ -206,8 +211,83 @@ async function startServer() {
       }
     }
 
-    // NAS 스캐너 초기화
+    // 서버 시작
+    server = await new Promise((resolve, reject) => {
+      const serverInstance = app.listen(PORT, '0.0.0.0', () => {
+        logger.info(`Jenkins NAS 배포 이력 서버 시작`);
+        logger.info(`포트: ${PORT}`);
+        logger.info(`환경: ${process.env.NODE_ENV || 'development'}`);
+        logger.info(`프론트엔드 URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+        resolve(serverInstance);
+      });
+
+      serverInstance.on('error', (error) => {
+        logger.error('서버 시작 에러:', error);
+        reject(error);
+      });
+
+      // 서버 시작 타임아웃 (10초)
+      setTimeout(() => {
+        reject(new Error('Server startup timeout'));
+      }, 10000);
+    });
+
+    // WebSocket 서버 초기화 (서버 시작 직후, 재시도 로직 포함)
+    await initializeWebSocketWithRetry(server, 3);
+
+    // NAS 스캐너 초기화 (비동기적으로 백그라운드에서 진행)
+    initializeNASScanner(dbConnected);
+
+    logger.info('서버 초기화 완료');
+    return server;
+
+  } catch (error) {
+    logger.error('서버 시작 실패:', error);
+    
+    // 서버가 생성되었다면 정리
+    if (server) {
+      try {
+        server.close();
+      } catch (closeError) {
+        logger.error('서버 종료 중 에러:', closeError);
+      }
+    }
+
+    throw error;
+  }
+}
+
+// WebSocket 초기화 재시도 로직
+async function initializeWebSocketWithRetry(server, maxRetries = 3) {
+  let attempt = 0;
+
+  while (attempt < maxRetries) {
     try {
+      websocketManager.initialize(server);
+      logger.info('WebSocket server initialized successfully');
+      return;
+    } catch (error) {
+      attempt++;
+      logger.error(`WebSocket 초기화 실패 (시도 ${attempt}/${maxRetries}):`, error.message);
+
+      if (attempt >= maxRetries) {
+        logger.error('WebSocket 서버 초기화를 포기합니다. 서버는 HTTP만 지원합니다.');
+        throw new Error(`WebSocket initialization failed after ${maxRetries} attempts`);
+      }
+
+      // 재시도 전 대기 (지수 백오프)
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+      logger.info(`${delay}ms 후 WebSocket 초기화 재시도...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
+// NAS 스캐너 초기화
+function initializeNASScanner(dbConnected) {
+  setImmediate(async () => {
+    try {
+      logger.info('Starting NAS scanner initialization...');
       const nasScanner = getNASScanner();
 
       // 개발환경에서는 mock 디렉토리 생성
@@ -218,39 +298,37 @@ async function startServer() {
 
       // 파일 감시 시작 (개발환경에서도 활성화)
       if (process.env.NAS_WATCH_ENABLED !== 'false') {
-        nasScanner.startFileWatcher();
-        logger.info('NAS file watcher started');
+        try {
+          const watcherStarted = nasScanner.startFileWatcher();
+          if (watcherStarted) {
+            logger.info('NAS file watcher started');
+          } else {
+            logger.warn('NAS file watcher failed to start');
+          }
+        } catch (watchError) {
+          logger.error('NAS file watcher initialization failed:', watchError.message);
+        }
       }
 
-      // 스케줄러 시작 (개발환경에서는 비활성화)
-      if (process.env.NAS_SCHEDULER_ENABLED !== 'false' && process.env.NODE_ENV !== 'development') {
+      // 스케줄러 시작 (개발환경에서는 비활성화, DB 연결 필요)
+      if (process.env.NAS_SCHEDULER_ENABLED !== 'false' &&
+          process.env.NODE_ENV !== 'development' &&
+          dbConnected) {
+        try {
           nasScanner.startScheduler();
           logger.info('NAS scan scheduler started');
+        } catch (schedulerError) {
+          logger.error('NAS scheduler initialization failed:', schedulerError.message);
         }
+      }
+
+      logger.info('NAS scanner initialization completed');
     } catch (error) {
       logger.error('NAS scanner initialization failed:', error.message);
       logger.error('NAS scanner error stack:', error.stack);
+      logger.info('Server will continue running without NAS scanner functionality');
     }
-
-    // 서버 시작
-    const server = app.listen(PORT, '0.0.0.0', () => {
-      logger.info(`Jenkins NAS 배포 이력 서버 시작`);
-      logger.info(`포트: ${PORT}`);
-      logger.info(`환경: ${process.env.NODE_ENV || 'development'}`);
-      logger.info(`프론트엔드 URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
-    });
-
-    // WebSocket 서버 초기화
-    try {
-      websocketManager.initialize(server);
-      logger.info('WebSocket server initialized successfully');
-    } catch (error) {
-      logger.error('Failed to initialize WebSocket server:', error);
-    }
-  } catch (error) {
-    logger.error('서버 시작 실패:', error);
-    process.exit(1);
-  }
+  });
 }
 
 // Graceful shutdown
@@ -283,14 +361,17 @@ function gracefulShutdown(signal) {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   logger.error('처리되지 않은 Promise 거부:', reason);
-  process.exit(1);
+  throw new Error(`Unhandled rejection: ${reason}`);
 });
 
 process.on('uncaughtException', (error) => {
   logger.error('처리되지 않은 예외:', error);
-  process.exit(1);
+  throw error;
 });
 
-startServer(); // Force restart for unlimited fix
+startServer().catch(error => {
+  logger.error('서버 초기화 실패:', error);
+  process.exit(1);
+}); // Force restart for unlimited fix

@@ -8,6 +8,7 @@ export const useWebSocket = () => {
   const [connectionState, setConnectionState] = useState('disconnected');
   const [isConnected, setIsConnected] = useState(false);
   const [connectionInfo, setConnectionInfo] = useState(null);
+  const [lastError, setLastError] = useState(null);
   const reconnectTimeoutRef = useRef(null);
 
   // WebSocket 연결
@@ -36,6 +37,31 @@ export const useWebSocket = () => {
     setConnectionState('disconnected');
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
+    }
+  }, []);
+
+  // 수동 재연결
+  const manualReconnect = useCallback(async () => {
+    try {
+      const result = await websocketService.manualReconnect();
+      
+      if (result.success) {
+        toast.success(result.message);
+        setIsConnected(true);
+        setConnectionState('connected');
+        // 토스트 상태 초기화
+        sessionStorage.removeItem('ws_disconnect_toast_shown');
+        sessionStorage.removeItem('ws_error_toast_shown');
+        sessionStorage.removeItem('ws_max_reconnect_toast_shown');
+      } else {
+        toast.error(result.error);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Manual reconnect error:', error);
+      toast.error('재연결에 실패했습니다.');
+      return { success: false, error: error.message };
     }
   }, []);
 
@@ -92,9 +118,41 @@ export const useWebSocket = () => {
       }
     };
 
+    // 재연결 시도
+    const handleReconnectAttempt = (data) => {
+      console.log(`재연결 시도 중 (${data.attempt}/${data.maxAttempts})...`);
+      toast(`재연결 시도 중... (${data.attempt}/${data.maxAttempts})`, {
+        icon: '🔄',
+        duration: 3000,
+      });
+    };
+
+    // 재연결 실패
+    const handleReconnectFailed = (data) => {
+      console.error(`재연결 실패 (${data.attempt}/${data.maxAttempts}):`, data);
+      setLastError(data);
+      
+      // 사용자 친화적 메시지 표시
+      const errorMessage = data.userMessage || `재연결 실패 (${data.attempt}/${data.maxAttempts})`;
+      toast.error(errorMessage);
+    };
+
+    // 수동 재연결 실패
+    const handleManualReconnectFailed = (data) => {
+      console.error('Manual reconnect failed:', data);
+      setLastError(data);
+    };
+
+    // 수동 재연결 성공
+    const handleManualReconnectSuccess = (data) => {
+      console.log('Manual reconnect succeeded:', data);
+      setLastError(null); // 에러 상태 초기화
+    };
+
     // 연결 확립
     const handleConnectionEstablished = (data) => {
       console.log('WebSocket connection established:', data);
+      setLastError(null); // 에러 상태 초기화
       
       // 세션당 한 번만 토스트 표시
       const toastShown = sessionStorage.getItem('ws_connection_toast_shown');
@@ -109,6 +167,10 @@ export const useWebSocket = () => {
     websocketService.on('disconnection', handleDisconnection);
     websocketService.on('error', handleError);
     websocketService.on('max_reconnect_attempts', handleMaxReconnectAttempts);
+    websocketService.on('reconnect_attempt', handleReconnectAttempt);
+    websocketService.on('reconnect_failed', handleReconnectFailed);
+    websocketService.on('manual_reconnect_failed', handleManualReconnectFailed);
+    websocketService.on('manual_reconnect_success', handleManualReconnectSuccess);
     websocketService.on('connection_established', handleConnectionEstablished);
 
     // 초기 연결
@@ -120,6 +182,10 @@ export const useWebSocket = () => {
       websocketService.off('disconnection', handleDisconnection);
       websocketService.off('error', handleError);
       websocketService.off('max_reconnect_attempts', handleMaxReconnectAttempts);
+      websocketService.off('reconnect_attempt', handleReconnectAttempt);
+      websocketService.off('reconnect_failed', handleReconnectFailed);
+      websocketService.off('manual_reconnect_failed', handleManualReconnectFailed);
+      websocketService.off('manual_reconnect_success', handleManualReconnectSuccess);
       websocketService.off('connection_established', handleConnectionEstablished);
     };
   }, [user, connect]);
@@ -159,11 +225,13 @@ export const useWebSocket = () => {
     isConnected,
     connectionState,
     connectionInfo,
+    lastError,
     connect,
     disconnect,
     subscribe,
     unsubscribe,
     getDeploymentStatus,
+    manualReconnect,
     websocketService
   };
 };
