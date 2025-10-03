@@ -149,6 +149,7 @@ services:
       target: production
       args:
         - VITE_API_URL=${VITE_API_URL:-http://harbor.roboetech.com}
+        - VITE_WS_URL=${VITE_WS_URL:-ws://harbor.roboetech.com}
     container_name: harbor-frontend-prod
     restart: unless-stopped
     networks:
