@@ -34,17 +34,14 @@ class WebSocketService {
         this.isConnecting = true;
         this.token = token;
 
-        // WebSocket URL 구성
+        // WebSocket URL 구성 - 브라우저의 현재 호스트 사용 (Nginx가 프록시함)
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.host;
-        
-        // 환경변수에서 WebSocket URL 가져오기 (빈 문자열도 fallback 처리)
-        const envWsUrl = import.meta.env.VITE_WS_URL;
-        const wsUrl = (envWsUrl && envWsUrl.trim() !== '') ? envWsUrl : `${protocol}//${host}`;
+        const wsUrl = `${protocol}//${host}`;
         
         console.log('WebSocket configuration:', {
-          envWsUrl,
-          fallbackUrl: `${protocol}//${host}`,
+          protocol,
+          host,
           finalWsUrl: wsUrl
         });
         
