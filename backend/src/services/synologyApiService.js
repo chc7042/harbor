@@ -359,34 +359,25 @@ class SynologyApiService {
    */
   async createDirectDownloadUrl(filePath) {
     try {
-      await this.ensureValidSession();
+      logger.info(`Creating immediate direct download URL for file: ${filePath}`);
 
-      logger.info(`Creating direct download URL for file: ${filePath}`);
-
-      // FileStation Download API 사용
-      const downloadUrl = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${encodeURIComponent(filePath)}&mode=download&_sid=${this.sessionId}`;
-
-      // URL 테스트
-      const testResponse = await axios.head(downloadUrl, {
-        timeout: 5000,
-        validateStatus: function (status) {
-          return status < 500; // 400 이상도 허용하여 상세한 응답 확인
-        },
-      });
-
-      logger.info(`Direct download URL test status: ${testResponse.status}`);
-      logger.info(`Direct download URL content-type: ${testResponse.headers['content-type']}`);
-
-      if (testResponse.status === 200 && testResponse.headers['content-type'] !== 'text/html') {
-        return {
-          success: true,
-          downloadUrl: downloadUrl,
-          path: filePath,
-          isDirectDownload: true,
-        };
-      } else {
-        throw new Error(`Direct download not available (status: ${testResponse.status}, content-type: ${testResponse.headers['content-type']})`);
-      }
+      // 세션 생성 및 테스트 과정 생략하고 즉시 URL 반환
+      // 인증은 Harbor 백엔드에서 이미 완료되었으므로
+      
+      // 우선 세션 없이 시도 (게스트 접근이 가능한 경우)
+      let downloadUrl = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${encodeURIComponent(filePath)}&mode=download`;
+      
+      // 즉시 URL 반환 (테스트 생략)
+      logger.info(`Immediate direct NAS URL (no session test): ${downloadUrl}`);
+        
+      return {
+        success: true,
+        downloadUrl: downloadUrl,
+        directNasUrl: downloadUrl,
+        path: filePath,
+        isDirectDownload: true,
+      };
+      
     } catch (error) {
       logger.warn(`Direct download URL creation failed for ${filePath}: ${error.message}`);
       return {
@@ -446,13 +437,14 @@ class SynologyApiService {
         if (shareData && shareData.links && shareData.links.length > 0) {
           const linkInfo = shareData.links[0];
 
-          // 파일 공유 링크는 직접 다운로드 URL로 변환
+          // 파일 공유 링크는 직접 다운로드 URL로 변환 (즉시 다운로드)
           const directDownloadUrl = `${linkInfo.url}?mode=download`;
 
-          logger.info(`File share link created for ${filePath}: ${directDownloadUrl}`);
+          logger.info(`File share created for ${filePath}, returning direct download URL: ${directDownloadUrl}`);
           return {
             success: true,
             downloadUrl: directDownloadUrl,
+            directNasUrl: directDownloadUrl,
             shareUrl: linkInfo.url,
             shareId: linkInfo.id,
             path: filePath,

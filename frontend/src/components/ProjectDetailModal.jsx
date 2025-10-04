@@ -14,6 +14,7 @@ import {
   HardDrive,
   ChevronDown
 } from 'lucide-react';
+import { downloadFile } from '../services/api';
 
 // 파일 크기 포맷팅 함수
 const formatFileSize = (bytes) => {
@@ -46,6 +47,7 @@ const ProjectDetailModal = ({
   const [loadingDeploymentInfo, setLoadingDeploymentInfo] = useState(false);
   const [selectedJobType, setSelectedJobType] = useState('mr'); // 기본값: 모로우
   const [jobLogs, setJobLogs] = useState({}); // 각 job별 로그 캐시
+  const [downloadStatus, setDownloadStatus] = useState(null); // 다운로드 상태 관리
 
   const fetchDeploymentInfo = async () => {
     if (!deployment) return;
@@ -564,20 +566,182 @@ const ProjectDetailModal = ({
                                       {fileExists ? (
                                         <button
                                           className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200"
-                                          onClick={(e) => {
+                                          onClick={async (e) => {
                                             e.preventDefault();
                                             e.stopPropagation();
                                             
-                                            const iframe = document.createElement('iframe');
-                                            iframe.style.display = 'none';
-                                            iframe.src = deploymentInfo.downloadBaseUrl ? 
-                                              `${deploymentInfo.downloadBaseUrl}/${file}` : 
-                                              `/api/deployments/download/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}/${encodeURIComponent(file)}`;
-                                            document.body.appendChild(iframe);
-                                            
-                                            setTimeout(() => {
-                                              document.body.removeChild(iframe);
-                                            }, 1000);
+                                            try {
+                                              console.log('Download attempt for file:', file);
+                                              console.log('Deployment data:', {
+                                                project_name: deployment.project_name,
+                                                build_number: deployment.build_number,
+                                                version: deployment.version,
+                                                artifacts: deployment.artifacts
+                                              });
+                                              
+                                              // First, try to find the file in deployment.artifacts if available
+                                              let downloadUrl = null;
+                                              if (deployment.artifacts && deployment.artifacts.length > 0) {
+                                                const artifact = deployment.artifacts.find(a => a.name === file || a.filename === file);
+                                                console.log('Found artifact:', artifact);
+                                                if (artifact && artifact.downloadUrl) {
+                                                  downloadUrl = artifact.downloadUrl;
+                                                  console.log('Using artifact downloadUrl:', downloadUrl);
+                                                }
+                                              }
+                                              
+                                              // If not found in artifacts, use deployment info from backend API
+                                              if (!downloadUrl) {
+                                                console.log('No artifact downloadUrl found, using deployment info from API');
+                                                
+                                                // Use deployment info from backend which contains the correct NAS path and date
+                                                if (deploymentInfo && deploymentInfo.nasPath) {
+                                                  // Extract the actual NAS path from deployment info
+                                                  let nasPath = deploymentInfo.nasPath;
+                                                  
+                                                  // Convert Windows path to Unix path for API consumption
+                                                  if (nasPath.includes('\\\\nas.roboetech.com\\')) {
+                                                    nasPath = nasPath
+                                                      .replace('\\\\nas.roboetech.com\\', '/nas/')
+                                                      .replace(/\\/g, '/');
+                                                  }
+                                                  
+                                                  // Ensure it starts with /nas/release_version/
+                                                  if (!nasPath.startsWith('/nas/release_version/')) {
+                                                    nasPath = '/nas/release_version/' + nasPath.replace(/^\/nas\//, '');
+                                                  }
+                                                  
+                                                  const downloadPath = `${nasPath}/${file}`;
+                                                  downloadUrl = `/files/download?path=${encodeURIComponent(downloadPath)}`;
+                                                  
+                                                  console.log('Using deployment info path:', {
+                                                    originalNasPath: deploymentInfo.nasPath,
+                                                    convertedPath: nasPath,
+                                                    fullDownloadPath: downloadPath,
+                                                    downloadUrl: downloadUrl
+                                                  });
+                                                } else {
+                                                  // Fallback to manual construction only if deployment info is not available
+                                                  console.log('No deployment info available, falling back to manual construction');
+                                                  // Extract version from project name (e.g., "3.0.0/mr3.0.0_release" -> "3.0.0")
+                                                  const versionMatch = deployment.project_name?.match(/^(\d+\.\d+\.\d+)/) || 
+                                                                     deployment.version?.match(/(\d+\.\d+\.\d+)/) ||
+                                                                     ['', '3.0.0']; // fallback
+                                                  const version = versionMatch[1];
+                                                  
+                                                  // Use version-specific fallback dates
+                                                  const versionFallbacks = {
+                                                    '1.0.0': '240904',
+                                                    '1.0.1': '250407', 
+                                                    '1.1.0': '241204',
+                                                    '1.2.0': '250929',
+                                                    '2.0.0': '250116', // Correct date for 2.0.0
+                                                    '3.0.0': '250310', // Correct date for 3.0.0
+                                                    '4.0.0': '250904'
+                                                  };
+                                                  const fallbackDate = versionFallbacks[version] || '250310';
+                                                  
+                                                  const downloadPath = `/nas/release_version/release/product/mr${version}/${fallbackDate}/${deployment.build_number}/${file}`;
+                                                  downloadUrl = `/files/download?path=${encodeURIComponent(downloadPath)}`;
+                                                  
+                                                  console.log('Fallback construction:', {
+                                                    version,
+                                                    fallbackDate,
+                                                    build_number: deployment.build_number,
+                                                    file,
+                                                    fullPath: downloadPath
+                                                  });
+                                                }
+                                              }
+                                              
+                                              // 다운로드 시작
+                                              let result = await downloadFile(downloadUrl, file, (progress) => {
+                                                setDownloadStatus(progress);
+                                                
+                                                // 토스트 알림으로 상태 표시
+                                                if (progress.type === 'start') {
+                                                  console.log('📥 다운로드 시작:', file);
+                                                } else if (progress.type === 'progress') {
+                                                  console.log(`📊 다운로드 진행률: ${progress.progress}% (${Math.round(progress.loaded/1024/1024)}MB/${Math.round(progress.total/1024/1024)}MB)`);
+                                                } else if (progress.type === 'complete') {
+                                                  console.log('✅다운로드 완료:', file);
+                                                } else if (progress.type === 'error') {
+                                                  console.error('❌ 다운로드 실패:', progress.message);
+                                                }
+                                              });
+                                              
+                                              // If the download failed, try to find the file by name in database
+                                              console.log('Download result:', result);
+                                              if (!result.success) {
+                                                console.log('Download failed, attempting search fallback for file:', file);
+                                                try {
+                                                  // Try to get the file by searching the artifacts API
+                                                  const searchResponse = await fetch(`/files/search?filename=${encodeURIComponent(file)}`, {
+                                                    headers: {
+                                                      'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+                                                    }
+                                                  });
+                                                  
+                                                  console.log('Search API response status:', searchResponse.status);
+                                                  
+                                                  if (searchResponse.ok) {
+                                                    const searchData = await searchResponse.json();
+                                                    console.log('Search API data:', searchData);
+                                                    
+                                                    if (searchData.success && searchData.data && searchData.data.length > 0) {
+                                                      const foundFile = searchData.data[0];
+                                                      const correctPath = `/nas/release_version/${foundFile.nas_path}`;
+                                                      const correctDownloadUrl = `/files/download?path=${encodeURIComponent(correctPath)}`;
+                                                      console.log('Found correct path via search:', correctPath);
+                                                      console.log('Retrying download with correct URL:', correctDownloadUrl);
+                                                      result = await downloadFile(correctDownloadUrl, file);
+                                                    } else {
+                                                      console.log('No file found in search results');
+                                                    }
+                                                  } else {
+                                                    console.log('Search API request failed with status:', searchResponse.status);
+                                                    const errorText = await searchResponse.text();
+                                                    console.log('Search API error:', errorText);
+                                                  }
+                                                } catch (searchError) {
+                                                  console.error('Search fallback failed:', searchError);
+                                                }
+                                              }
+                                              
+                                              if (!result.success) {
+                                                // Try to get available files for this deployment to suggest alternatives
+                                                try {
+                                                  const availableResponse = await fetch(`/api/deployments`, {
+                                                    headers: {
+                                                      'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+                                                    }
+                                                  });
+                                                  
+                                                  if (availableResponse.ok) {
+                                                    const deployData = await availableResponse.json();
+                                                    const currentDeployment = deployData.data?.find(d => 
+                                                      d.project_name === deployment.project_name && 
+                                                      d.build_number === deployment.build_number
+                                                    );
+                                                    
+                                                    if (currentDeployment?.artifacts && currentDeployment.artifacts.length > 0) {
+                                                      const availableFiles = currentDeployment.artifacts.map(a => a.name || a.filename).join(', ');
+                                                      alert(`다운로드 실패: ${result.error}\n\n사용 가능한 파일: ${availableFiles}`);
+                                                    } else {
+                                                      alert(`다운로드 실패: ${result.error}\n\n이 배포에는 다운로드 가능한 파일이 없습니다.`);
+                                                    }
+                                                  } else {
+                                                    alert(`다운로드 실패: ${result.error}`);
+                                                  }
+                                                } catch (suggestionError) {
+                                                  console.error('Failed to get file suggestions:', suggestionError);
+                                                  alert(`다운로드 실패: ${result.error}`);
+                                                }
+                                              }
+                                            } catch (error) {
+                                              console.error('Download error:', error);
+                                              alert('다운로드 중 오류가 발생했습니다.');
+                                            }
                                           }}
                                         >
                                           <Download className="w-4 h-4 mr-1.5" />
@@ -770,7 +934,7 @@ const ProjectDetailModal = ({
                                                     : 'bg-gray-600 hover:bg-gray-700 text-white'
                                         }`}
                                         disabled={!fileExists || !deploymentInfo.directoryVerified}
-                                        onClick={(e) => {
+                                        onClick={async (e) => {
                                           e.preventDefault();
                                           e.stopPropagation();
                                           if (!fileExists || !deploymentInfo.directoryVerified) {
@@ -785,14 +949,18 @@ const ProjectDetailModal = ({
                                           if (downloadUrl) {
                                             const isDirectDownload = fileDownloadInfo?.isDirectDownload || false;
                                             
-                                            // 직접 다운로드 링크면 iframe으로, 공유 링크면 새 탭에서 열기
+                                            // 직접 다운로드 링크면 authenticated download API 사용, 공유 링크면 새 탭에서 열기
                                             if (isDirectDownload) {
-                                              // 직접 다운로드 - iframe으로 다운로드하여 모달이 사라지지 않게 함
-                                              const iframe = document.createElement('iframe');
-                                              iframe.style.display = 'none';
-                                              iframe.src = downloadUrl;
-                                              document.body.appendChild(iframe);
-                                              setTimeout(() => document.body.removeChild(iframe), 5000);
+                                              // 직접 다운로드 - API 서비스를 통해 인증된 다운로드
+                                              try {
+                                                const fileName = downloadUrl.split('/').pop() || 'download';
+                                                await downloadFile(downloadUrl, fileName, (progress) => {
+                                                  console.log('Download progress:', progress);
+                                                });
+                                              } catch (error) {
+                                                console.error('Download failed:', error);
+                                                alert('다운로드 중 오류가 발생했습니다.');
+                                              }
                                             } else {
                                               // 공유 링크 - 새 탭에서 폴더 열기
                                               window.open(downloadUrl, '_blank');

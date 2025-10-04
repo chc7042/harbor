@@ -1005,8 +1005,8 @@ router.get('/deployment-info/:projectName/:buildNumber',
           });
         }
 
-        // Jenkins에서 배포 정보 조회
-        const deploymentInfo = await jenkinsService.extractDeploymentInfoFromBuildLog(projectName, parseInt(buildNumber));
+        // Jenkins에서 배포 정보 조회 (PRD 기반 자동 경로 탐지 시스템 사용)
+        const deploymentInfo = await jenkinsService.extractDeploymentInfo(projectName, parseInt(buildNumber));
 
         // NAS 디렉토리 존재 확인 및 검증
         if (deploymentInfo.nasPath || deploymentInfo.deploymentPath) {

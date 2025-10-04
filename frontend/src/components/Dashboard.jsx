@@ -8,9 +8,11 @@ import DeploymentTable from './DeploymentTable';
 import DeploymentDetailModal from './DeploymentDetailModal';
 import Pagination from './Pagination';
 import ProjectHierarchy from './ProjectHierarchy';
+import FileUploadModal from './FileUploadModal';
 import { useDeploymentUpdates } from '../hooks/useWebSocket';
 import api from '../services/api';
 import toast from 'react-hot-toast';
+import { Upload } from 'lucide-react';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -50,6 +52,7 @@ const Dashboard = () => {
   // 모달 상태
   const [selectedDeployment, setSelectedDeployment] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   // 뷰 모드 상태 (deployments: 배포이력, projects: 프로젝트 계층)
   const [viewMode, setViewMode] = useState('projects');
@@ -285,6 +288,12 @@ const Dashboard = () => {
     }
   };
 
+  const handleUploadComplete = (data) => {
+    toast.success(`파일 업로드 완료: ${data.filename}`);
+    // 프로젝트 목록 새로고침 (업로드된 파일이 반영될 수 있도록)
+    fetchProjects();
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-primary-50">
@@ -317,7 +326,16 @@ const Dashboard = () => {
         {/* 뷰 모드 탭 */}
         <div className="mb-6 bg-white p-4 rounded border" style={{display: 'block', visibility: 'visible'}}>
           <div className="border-b border-gray-200" style={{display: 'block'}}>
-            <h4 className="mb-2 text-gray-700">현재 뷰 모드: {viewMode}</h4>
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="text-gray-700">현재 뷰 모드: {viewMode}</h4>
+              <button
+                onClick={() => setIsUploadModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                <Upload size={16} />
+                파일 업로드
+              </button>
+            </div>
             <nav className="-mb-px flex space-x-8" style={{display: 'flex'}}>
               {console.log('Current viewMode:', viewMode)} {/* 디버깅용 */}
               <button
@@ -409,6 +427,13 @@ const Dashboard = () => {
             source="dashboard"
           />
         )}
+
+        {/* 파일 업로드 모달 */}
+        <FileUploadModal
+          isOpen={isUploadModalOpen}
+          onClose={() => setIsUploadModalOpen(false)}
+          onUploadComplete={handleUploadComplete}
+        />
       </main>
     </div>
   );

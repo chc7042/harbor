@@ -67,12 +67,15 @@ class JWTUtils {
   static verifyAccessToken(token) {
     const { accessSecret } = this.getSecrets();
     try {
+      console.log('Verifying token with secret length:', accessSecret ? accessSecret.length : 'null');
       const decoded = jwt.verify(token, accessSecret);
       if (decoded.type !== 'access') {
         throw new Error('Invalid token type');
       }
       return decoded;
     } catch (error) {
+      console.error('JWT verification failed:', error.message);
+      console.error('Token that failed:', token ? token.substring(0, 50) + '...' : 'null');
       throw new Error(`Invalid access token: ${error.message}`);
     }
   }
@@ -101,11 +104,16 @@ class JWTUtils {
       throw new Error('Authorization header missing');
     }
 
+    console.log('Full auth header:', JSON.stringify(authHeader));
     const parts = authHeader.split(' ');
+    console.log('Header parts:', parts.length, JSON.stringify(parts));
+    
     if (parts.length !== 2 || parts[0] !== 'Bearer') {
+      console.error('Invalid header format. Expected "Bearer <token>", got:', authHeader);
       throw new Error('Invalid authorization header format');
     }
 
+    console.log('Extracted token preview:', parts[1].substring(0, 20) + '...');
     return parts[1];
   }
 }
@@ -258,7 +266,11 @@ class SessionManager {
 function authenticateToken(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
+    console.log('Auth header received:', authHeader ? 'Bearer [token]' : 'null');
+    
     const token = JWTUtils.extractTokenFromHeader(authHeader);
+    console.log('Extracted token length:', token ? token.length : 'null');
+    console.log('Token starts with:', token ? token.substring(0, 20) + '...' : 'null');
 
     const decoded = JWTUtils.verifyAccessToken(token);
 

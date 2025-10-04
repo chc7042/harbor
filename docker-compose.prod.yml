@@ -66,6 +66,7 @@ services:
       # Production flags
       ENABLE_MOCK_AUTH: ${ENABLE_MOCK_AUTH:-false}
       ENABLE_MOCK_DB: ${ENABLE_MOCK_DB:-false}
+      ENABLE_MOCK_NAS: ${ENABLE_MOCK_NAS:-false}
 
       # LDAP configuration
       LDAP_URL: ${LDAP_URL}
@@ -108,10 +109,10 @@ services:
       NAS_USERNAME: ${NAS_USERNAME}
       NAS_PASSWORD: ${NAS_PASSWORD}
       NAS_SCAN_INTERVAL: ${NAS_SCAN_INTERVAL:-*/15 * * * *}
-      NAS_MAX_FILE_SIZE: ${NAS_MAX_FILE_SIZE:-1073741824}
+      NAS_MAX_FILE_SIZE: ${NAS_MAX_FILE_SIZE:-2147483648}
       NAS_ALLOWED_EXTENSIONS: ${NAS_ALLOWED_EXTENSIONS:-.tar.gz,.zip,.jar,.war,.tgz}
-      NAS_WATCH_ENABLED: ${NAS_WATCH_ENABLED:-false}
-      NAS_SCHEDULER_ENABLED: ${NAS_SCHEDULER_ENABLED:-false}
+      NAS_WATCH_ENABLED: ${NAS_WATCH_ENABLED:-true}
+      NAS_SCHEDULER_ENABLED: ${NAS_SCHEDULER_ENABLED:-true}
 
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -130,7 +131,7 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 2G
+          memory: 4G
         reservations:
           cpus: '0.5'
           memory: 512M
@@ -267,4 +268,4 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${NAS_HOST_PATH:-./nas-mock}
+      device: ${NAS_HOST_PATH}

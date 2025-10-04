@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Download
 } from 'lucide-react';
+// import { downloadFile } from '../services/api'; // 스트리밍 다운로드로 변경
 
 const DeploymentTable = ({
   deployments = [],
@@ -310,17 +311,38 @@ const DeploymentTable = ({
 
                   <td onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center space-x-1">
-                      {/* 다운로드 버튼 - 아티팩트가 있는 경우에만 표시 */}
-                      {deployment.artifacts && deployment.artifacts.length > 0 && (
+                      {/* 다운로드 버튼 - 임시로 모든 deployment에 표시 */}
+                      {/* 모든 deployment 디버깅 로그 */}
+                      {console.log(`Deployment debug - version: ${deployment.version}, artifacts:`, deployment.artifacts)}
+                      {true && (
                         <div className="relative group">
                           <button
                             className="p-1 text-gray-400 hover:text-green-600 transition-colors rounded"
-                            title={`${deployment.artifacts.length}개 아티팩트 다운로드`}
-                            onClick={(e) => {
+                            title={`${deployment.artifacts?.length || 0}개 아티팩트 다운로드`}
+                            onClick={async (e) => {
                               e.stopPropagation();
+                              console.log('Download button clicked for version:', deployment.version);
+                              console.log('Artifacts:', deployment.artifacts);
+                              
+                              if (!deployment.artifacts || deployment.artifacts.length === 0) {
+                                alert(`${deployment.version} 버전에는 artifacts 데이터가 없습니다. 콘솔에서 디버깅 정보를 확인하세요.`);
+                                return;
+                              }
+                              
                               if (deployment.artifacts.length === 1) {
-                                // 아티팩트가 하나인 경우 바로 다운로드
-                                window.open(deployment.artifacts[0].downloadUrl, '_blank');
+                                // 아티팩트가 하나인 경우 바로 스트리밍 다운로드 (즉시 반응)
+                                const artifact = deployment.artifacts[0];
+                                
+                                // 스트리밍 다운로드 - 브라우저가 즉시 다운로드 시작
+                                const link = document.createElement('a');
+                                link.href = artifact.downloadUrl;
+                                link.download = artifact.fileName || 'download';
+                                link.style.display = 'none';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                
+                                console.log(`스트리밍 다운로드 시작: ${artifact.fileName}`);
                               } else {
                                 // 여러 아티팩트가 있는 경우 모달 열기
                                 onRowClick?.(deployment);
@@ -330,7 +352,7 @@ const DeploymentTable = ({
                             <Download className="w-4 h-4" />
                           </button>
                           {/* 아티팩트 수 표시 */}
-                          {deployment.artifacts.length > 1 && (
+                          {deployment.artifacts && deployment.artifacts.length > 1 && (
                             <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
                               {deployment.artifacts.length}
                             </span>

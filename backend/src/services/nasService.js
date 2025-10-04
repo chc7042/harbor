@@ -16,8 +16,8 @@ class NASService {
   constructor() {
     this.smbClient = null;
     this.isConnected = false;
-    // 개발환경에서는 mock 사용, 프로덕션에서는 실제 NAS 사용
-    this.isDevelopment = process.env.NODE_ENV === 'development';
+    // Mock NAS 사용 여부 (기본값: false, 프로덕션에서는 항상 실제 NAS 사용)
+    this.useMockNAS = process.env.ENABLE_MOCK_NAS === 'true';
     this.connectionConfig = {
       share: `\\\\${process.env.NAS_HOST || 'nas.roboetech.com'}\\${process.env.NAS_SHARE || 'release_version'}`,
       domain: '', // 도메인 빈 문자열로 명시
@@ -39,8 +39,8 @@ class NASService {
     this.connectionRetries = 3;
     this.connectionTimeout = 30000; // 30초
 
-    // 개발환경에서는 mock 디렉토리 사용
-    if (this.isDevelopment) {
+    // Mock NAS 사용 시 디렉토리 설정
+    if (this.useMockNAS) {
       this.mockBasePath = process.env.NAS_MOUNT_PATH || path.resolve(__dirname, '../../mock-nas');
     }
   }
@@ -54,7 +54,7 @@ class NASService {
     }
 
     // 개발환경에서는 SMB 연결 건너뛰기
-    if (this.isDevelopment) {
+    if (this.useMockNAS) {
       logger.info('Development mode: Skipping SMB connection, using local filesystem');
       this.isConnected = true;
       return true;
@@ -171,11 +171,11 @@ class NASService {
   async listDirectory(dirPath = '') {
     await this.ensureConnection();
 
-    if (this.isDevelopment) {
+    if (this.useMockNAS) {
       // 개발환경에서는 로컬 파일시스템 사용
       try {
         const fullPath = path.join(this.mockBasePath, dirPath);
-        logger.info(`개발환경 디렉토리 목록 조회 - mockBasePath: ${this.mockBasePath}, dirPath: ${dirPath}, fullPath: ${fullPath}`);
+        logger.info(`Mock NAS 디렉토리 목록 조회 - mockBasePath: ${this.mockBasePath}, dirPath: ${dirPath}, fullPath: ${fullPath}`);
 
         const files = await fs.readdir(fullPath, { withFileTypes: true });
         const fileNames = files.map(file => file.name);
@@ -558,7 +558,7 @@ class NASService {
   async downloadFile(filePath) {
     logger.info(`NAS downloadFile 요청 - 파일 경로: ${filePath}`);
 
-    if (this.isDevelopment) {
+    if (this.useMockNAS) {
       // 개발환경에서는 로컬 파일시스템 사용
       try {
         const fullPath = path.join(this.mockBasePath, filePath);
@@ -573,6 +573,10 @@ class NASService {
     } else {
       // 프로덕션환경에서는 SMB 사용
       await this.ensureConnection();
+
+      if (this.useSmbclient) {
+        return this.downloadFileWithSmbclient(filePath);
+      }
 
       return new Promise((resolve, reject) => {
         this.smbClient.readFile(filePath, (err, data) => {
@@ -589,16 +593,177 @@ class NASService {
   }
 
   /**
+   * smbclient 명령어를 사용한 파일 다운로드
+   */
+  async downloadFileWithSmbclient(filePath) {
+    return withNASRetry(async () => {
+      const host = process.env.NAS_HOST || 'nas.roboetech.com';
+      const share = process.env.NAS_SHARE || 'release_version';
+      const username = process.env.NAS_USERNAME || 'nasadmin';
+      const password = process.env.NAS_PASSWORD || 'Cmtes123';
+
+      // 임시 파일 경로 생성 - 파일명에서 특수문자 제거
+      const safeFileName = path.basename(filePath).replace(/[^a-zA-Z0-9._-]/g, '_');
+      const tempFileName = `nas_download_${Date.now()}_${safeFileName}`;
+      const tempFilePath = `/tmp/${tempFileName}`;
+
+      try {
+        logger.info(`smbclient로 파일 다운로드 시도: ${filePath}`);
+        logger.info(`임시 파일 경로: ${tempFilePath}`);
+
+        // smbclient get 명령어 실행 - 타임아웃 증가
+        const command = `timeout 300 smbclient //${host}/${share} -U ${username}%${password} -c "get \\"${filePath}\\" \\"${tempFilePath}\\"" 2>&1`;
+        
+        logger.info(`실행 명령어: ${command.replace(password, '***')}`);
+        
+        const { stdout, stderr } = await execAsync(command, { 
+          timeout: 300000, // 5분 타임아웃
+          maxBuffer: 1024 * 1024 * 10 // 10MB 버퍼
+        });
+
+        logger.info(`smbclient 출력: ${stdout}`);
+        if (stderr) {
+          logger.warn(`smbclient 경고: ${stderr}`);
+        }
+
+        // 임시 파일 존재 확인
+        try {
+          await fs.access(tempFilePath);
+        } catch (accessError) {
+          throw new Error(`다운로드된 임시 파일을 찾을 수 없습니다: ${tempFilePath}`);
+        }
+
+        // 임시 파일에서 데이터 읽기
+        const data = await fs.readFile(tempFilePath);
+        
+        // 임시 파일 삭제
+        try {
+          await fs.unlink(tempFilePath);
+        } catch (unlinkError) {
+          logger.warn(`Failed to delete temp file ${tempFilePath}:`, unlinkError.message);
+        }
+
+        logger.info(`File downloaded successfully via smbclient: ${filePath}, size: ${data.length} bytes`);
+        return data;
+
+      } catch (error) {
+        // 임시 파일이 있다면 삭제 시도
+        try {
+          await fs.unlink(tempFilePath);
+        } catch (unlinkError) {
+          // 무시
+        }
+
+        logger.error(`smbclient 파일 다운로드 실패: ${filePath}`, error.message);
+        throw new AppError(`File download failed: ${error.message}`, 404);
+      }
+    });
+  }
+
+  /**
+   * 스트리밍 파일 다운로드 (메모리에 전체 로드하지 않음)
+   */
+  async streamDownloadFile(filePath, res) {
+    return withNASRetry(async () => {
+      const host = process.env.NAS_HOST || 'nas.roboetech.com';
+      const share = process.env.NAS_SHARE || 'release_version';
+      const username = process.env.NAS_USERNAME || 'nasadmin';
+      const password = process.env.NAS_PASSWORD || 'Cmtes123';
+
+      logger.info(`스트리밍 다운로드 시작: ${filePath}`);
+
+      // smbclient를 사용한 스트리밍 다운로드
+      const { spawn } = require('child_process');
+      
+      return new Promise((resolve, reject) => {
+        // smbclient 명령어로 파일을 stdout으로 스트리밍
+        const command = 'smbclient';
+        const args = [
+          `//${host}/${share}`,
+          '-U', `${username}%${password}`,
+          '-c', `get "${filePath}" -`  // stdout으로 출력
+        ];
+
+        logger.info(`스트리밍 명령어: ${command} ${args.join(' ').replace(password, '***')}`);
+
+        const smbProcess = spawn(command, args, {
+          stdio: ['ignore', 'pipe', 'pipe']
+        });
+
+        let errorOutput = '';
+        let bytesTransferred = 0;
+
+        // stderr 에러 수집
+        smbProcess.stderr.on('data', (data) => {
+          errorOutput += data.toString();
+        });
+
+        // stdout을 HTTP 응답으로 파이프
+        smbProcess.stdout.on('data', (chunk) => {
+          bytesTransferred += chunk.length;
+          res.write(chunk);
+        });
+
+        smbProcess.stdout.on('end', () => {
+          res.end();
+          logger.info(`스트리밍 다운로드 완료: ${filePath}, 전송량: ${bytesTransferred} bytes`);
+          resolve();
+        });
+
+        smbProcess.on('error', (error) => {
+          logger.error(`smbclient 프로세스 에러: ${error.message}`);
+          reject(new AppError(`Stream download process failed: ${error.message}`, 500));
+        });
+
+        smbProcess.on('close', (code) => {
+          if (code !== 0) {
+            logger.error(`smbclient 종료 코드: ${code}, 에러: ${errorOutput}`);
+            
+            if (!res.headersSent) {
+              reject(new AppError(`Stream download failed with code ${code}: ${errorOutput}`, 404));
+            } else {
+              // 이미 응답이 시작된 경우 연결만 종료
+              res.end();
+              reject(new AppError(`Stream download interrupted: ${errorOutput}`, 500));
+            }
+          }
+        });
+
+        // 클라이언트 연결 해제 처리
+        res.on('close', () => {
+          if (!smbProcess.killed) {
+            logger.warn(`클라이언트 연결 해제, smbclient 프로세스 종료: ${filePath}`);
+            smbProcess.kill('SIGTERM');
+          }
+        });
+
+        // 타임아웃 설정 (10분)
+        const timeout = setTimeout(() => {
+          if (!smbProcess.killed) {
+            logger.error(`스트리밍 다운로드 타임아웃: ${filePath}`);
+            smbProcess.kill('SIGTERM');
+            reject(new AppError('Stream download timeout', 408));
+          }
+        }, 600000); // 10분
+
+        smbProcess.on('close', () => {
+          clearTimeout(timeout);
+        });
+      });
+    });
+  }
+
+  /**
    * 파일 목록 조회 (files API용)
    */
   async listFiles(dirPath = '') {
     await this.ensureConnection();
 
-    if (this.isDevelopment) {
+    if (this.useMockNAS) {
       // 개발환경에서는 로컬 파일시스템 사용
       try {
         const fullPath = path.join(this.mockBasePath, dirPath);
-        logger.info(`개발환경 파일 목록 조회 - mockBasePath: ${this.mockBasePath}, dirPath: ${dirPath}, fullPath: ${fullPath}`);
+        logger.info(`Mock NAS 파일 목록 조회 - mockBasePath: ${this.mockBasePath}, dirPath: ${dirPath}, fullPath: ${fullPath}`);
 
         const files = await fs.readdir(fullPath, { withFileTypes: true });
         const result = [];
@@ -664,7 +829,7 @@ class NASService {
    * 연결 상태 확인 및 재연결
    */
   async ensureConnection() {
-    if (!this.isConnected || (!this.isDevelopment && !this.smbClient)) {
+    if (!this.isConnected || (!this.useMockNAS && !this.smbClient)) {
       await this.connect();
     }
   }
@@ -1109,6 +1274,252 @@ class NASService {
       logger.warn(`Error getting files for directory ${dirPath}: ${error.message}`);
       return [];
     }
+  }
+
+  /**
+   * 파일 업로드 (버퍼 기반)
+   * @param {string} filePath - 업로드할 파일 경로
+   * @param {Buffer} buffer - 파일 데이터 버퍼
+   */
+  async uploadFile(filePath, buffer) {
+    await this.ensureConnection();
+
+    if (this.useMockNAS) {
+      // 개발환경에서는 로컬 파일시스템 사용
+      try {
+        const fullPath = path.join(this.mockBasePath, filePath);
+        const dirPath = path.dirname(fullPath);
+        
+        // 디렉토리 생성 (재귀적으로)
+        await fs.mkdir(dirPath, { recursive: true });
+        
+        // 파일 쓰기
+        await fs.writeFile(fullPath, buffer);
+        
+        logger.info(`File uploaded successfully to mock NAS: ${filePath}, size: ${buffer.length} bytes`);
+        return;
+      } catch (error) {
+        logger.error(`Failed to upload file to mock NAS ${filePath}:`, error.message);
+        throw new AppError(`File upload failed: ${error.message}`, 500);
+      }
+    }
+
+    // 프로덕션환경에서는 smbclient 사용
+    return this.uploadFileWithSmbclient(filePath, buffer);
+  }
+
+  /**
+   * smbclient를 사용한 파일 업로드
+   * @param {string} filePath - 업로드할 파일 경로
+   * @param {Buffer} buffer - 파일 데이터 버퍼
+   */
+  async uploadFileWithSmbclient(filePath, buffer) {
+    return withNASRetry(async () => {
+      const host = process.env.NAS_HOST || 'nas.roboetech.com';
+      const share = process.env.NAS_SHARE || 'release_version';
+      const username = process.env.NAS_USERNAME || 'nasadmin';
+      const password = process.env.NAS_PASSWORD || 'Cmtes123';
+
+      // 임시 파일 경로 생성
+      const safeFileName = path.basename(filePath).replace(/[^a-zA-Z0-9._-]/g, '_');
+      const tempFileName = `nas_upload_${Date.now()}_${safeFileName}`;
+      const tempFilePath = `/tmp/${tempFileName}`;
+
+      try {
+        logger.info(`smbclient로 파일 업로드 시도: ${filePath}`);
+        logger.info(`임시 파일 경로: ${tempFilePath}`);
+
+        // 로컬 임시 파일에 버퍼 저장
+        await fs.writeFile(tempFilePath, buffer);
+
+        // 디렉토리 경로 생성 (필요한 경우)
+        const dirPath = path.dirname(filePath);
+        if (dirPath && dirPath !== '.') {
+          const mkdirCommand = `smbclient //${host}/${share} -U ${username}%${password} -c "mkdir \\"${dirPath}\\"" 2>/dev/null || true`;
+          await execAsync(mkdirCommand);
+        }
+
+        // smbclient put 명령어 실행
+        const command = `smbclient //${host}/${share} -U ${username}%${password} -c "put \\"${tempFilePath}\\" \\"${filePath}\\"" 2>&1`;
+        
+        logger.info(`실행 명령어: ${command.replace(password, '***')}`);
+        
+        const { stdout, stderr } = await execAsync(command, { 
+          timeout: 300000, // 5분 타임아웃
+          maxBuffer: 1024 * 1024 * 10 // 10MB 버퍼
+        });
+
+        logger.info(`smbclient 출력: ${stdout}`);
+        if (stderr) {
+          logger.warn(`smbclient 경고: ${stderr}`);
+        }
+
+        // 임시 파일 삭제
+        try {
+          await fs.unlink(tempFilePath);
+        } catch (unlinkError) {
+          logger.warn(`Failed to delete temp file ${tempFilePath}:`, unlinkError.message);
+        }
+
+        logger.info(`File uploaded successfully via smbclient: ${filePath}, size: ${buffer.length} bytes`);
+
+      } catch (error) {
+        // 임시 파일이 있다면 삭제 시도
+        try {
+          await fs.unlink(tempFilePath);
+        } catch (unlinkError) {
+          // 무시
+        }
+
+        logger.error(`smbclient 파일 업로드 실패: ${filePath}`, error.message);
+        throw new AppError(`File upload failed: ${error.message}`, 500);
+      }
+    });
+  }
+
+  /**
+   * 스트리밍 파일 업로드 (대용량 파일용)
+   * @param {string} filePath - 업로드할 파일 경로
+   * @param {Readable} stream - 파일 스트림 (Express req 객체)
+   */
+  async streamUploadFile(filePath, stream) {
+    await this.ensureConnection();
+
+    if (this.useMockNAS) {
+      // 개발환경에서는 로컬 파일시스템 사용
+      try {
+        const fullPath = path.join(this.mockBasePath, filePath);
+        const dirPath = path.dirname(fullPath);
+        
+        // 디렉토리 생성 (재귀적으로)
+        await fs.mkdir(dirPath, { recursive: true });
+        
+        // 스트림을 파일로 파이프
+        const writeStream = require('fs').createWriteStream(fullPath);
+        
+        return new Promise((resolve, reject) => {
+          stream.pipe(writeStream);
+          
+          writeStream.on('finish', () => {
+            logger.info(`Stream upload completed to mock NAS: ${filePath}`);
+            resolve();
+          });
+          
+          writeStream.on('error', (error) => {
+            logger.error(`Stream upload failed to mock NAS: ${filePath}`, error.message);
+            reject(new AppError(`Stream upload failed: ${error.message}`, 500));
+          });
+        });
+      } catch (error) {
+        logger.error(`Failed to setup stream upload to mock NAS ${filePath}:`, error.message);
+        throw new AppError(`Stream upload setup failed: ${error.message}`, 500);
+      }
+    }
+
+    // 프로덕션환경에서는 smbclient 사용
+    return this.streamUploadFileWithSmbclient(filePath, stream);
+  }
+
+  /**
+   * smbclient를 사용한 스트리밍 파일 업로드
+   * @param {string} filePath - 업로드할 파일 경로
+   * @param {Readable} stream - 파일 스트림
+   */
+  async streamUploadFileWithSmbclient(filePath, stream) {
+    return withNASRetry(async () => {
+      const host = process.env.NAS_HOST || 'nas.roboetech.com';
+      const share = process.env.NAS_SHARE || 'release_version';
+      const username = process.env.NAS_USERNAME || 'nasadmin';
+      const password = process.env.NAS_PASSWORD || 'Cmtes123';
+
+      logger.info(`스트리밍 업로드 시작: ${filePath}`);
+
+      const { spawn } = require('child_process');
+      
+      return new Promise((resolve, reject) => {
+        // 디렉토리 경로 생성 (필요한 경우)
+        const dirPath = path.dirname(filePath);
+        let mkdirPromise = Promise.resolve();
+        
+        if (dirPath && dirPath !== '.') {
+          mkdirPromise = execAsync(`smbclient //${host}/${share} -U ${username}%${password} -c "mkdir \\"${dirPath}\\"" 2>/dev/null || true`);
+        }
+
+        mkdirPromise.then(() => {
+          // smbclient 명령어로 stdin에서 파일을 받아서 업로드
+          const command = 'smbclient';
+          const args = [
+            `//${host}/${share}`,
+            '-U', `${username}%${password}`,
+            '-c', `put - "${filePath}"`  // stdin에서 읽어서 업로드
+          ];
+
+          logger.info(`스트리밍 업로드 명령어: ${command} ${args.join(' ').replace(password, '***')}`);
+
+          const smbProcess = spawn(command, args, {
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+
+          let errorOutput = '';
+          let bytesReceived = 0;
+
+          // stderr 에러 수집
+          smbProcess.stderr.on('data', (data) => {
+            errorOutput += data.toString();
+          });
+
+          // stdout 로그 수집
+          smbProcess.stdout.on('data', (data) => {
+            logger.debug(`smbclient stdout: ${data.toString()}`);
+          });
+
+          // 클라이언트 스트림을 smbclient stdin으로 파이프
+          stream.on('data', (chunk) => {
+            bytesReceived += chunk.length;
+            smbProcess.stdin.write(chunk);
+          });
+
+          stream.on('end', () => {
+            smbProcess.stdin.end();
+            logger.info(`스트림 전송 완료: ${filePath}, 수신량: ${bytesReceived} bytes`);
+          });
+
+          stream.on('error', (error) => {
+            logger.error(`클라이언트 스트림 에러: ${error.message}`);
+            smbProcess.kill('SIGTERM');
+            reject(new AppError(`Stream upload client error: ${error.message}`, 400));
+          });
+
+          smbProcess.on('error', (error) => {
+            logger.error(`smbclient 프로세스 에러: ${error.message}`);
+            reject(new AppError(`Stream upload process failed: ${error.message}`, 500));
+          });
+
+          smbProcess.on('close', (code) => {
+            if (code === 0) {
+              logger.info(`스트리밍 업로드 완료: ${filePath}, 수신량: ${bytesReceived} bytes`);
+              resolve();
+            } else {
+              logger.error(`smbclient 종료 코드: ${code}, 에러: ${errorOutput}`);
+              reject(new AppError(`Stream upload failed with code ${code}: ${errorOutput}`, 500));
+            }
+          });
+
+          // 타임아웃 설정 (10분)
+          const timeout = setTimeout(() => {
+            if (!smbProcess.killed) {
+              logger.error(`스트리밍 업로드 타임아웃: ${filePath}`);
+              smbProcess.kill('SIGTERM');
+              reject(new AppError('Stream upload timeout', 408));
+            }
+          }, 600000); // 10분
+
+          smbProcess.on('close', () => {
+            clearTimeout(timeout);
+          });
+        }).catch(reject);
+      });
+    });
   }
 
   async cleanup() {
