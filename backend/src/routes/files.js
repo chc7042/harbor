@@ -40,103 +40,203 @@ const upload = multer({
 // 모든 파일 라우트는 인증 필요
 router.use(authenticateToken);
 
-// NAS 직접 다운로드를 위한 리다이렉트
-router.get('/download',
-  async (req, res, next) => {
+/**
+ * 파일 다운로드 클래스 - 리다이렉트 패턴 구현
+ */
+class DownloadManager {
+  constructor() {
+    this.downloadStrategies = [
+      { name: 'Synology Direct', method: this.tryDirectDownload.bind(this) },
+      { name: 'Synology Share Link', method: this.tryShareLinkDownload.bind(this) },
+      { name: 'NAS Service', method: this.tryNasServiceDownload.bind(this) }
+    ];
+  }
+
+  /**
+   * 다운로드 요청 메인 처리 함수
+   */
+  async processDownload(req, res) {
+    const requestId = Math.random().toString(36).substr(2, 9);
+    const startTime = Date.now();
+    
     try {
       const { path } = req.query;
+      const user = req.user;
 
-      if (!path) {
+      // 요청 검증
+      const validationResult = this.validateDownloadRequest(path);
+      if (!validationResult.isValid) {
         return res.status(400).json({
           success: false,
-          error: {
-            code: 'MISSING_PATH',
-            message: '파일 경로가 필요합니다.',
-          },
+          error: validationResult.error
         });
       }
 
-      // path가 /nas/release_version/으로 시작하는지 확인
-      if (!path.startsWith('/nas/release_version/')) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'INVALID_PATH',
-            message: '유효하지 않은 파일 경로입니다.',
-          },
-        });
-      }
-
-      // /nas/release_version/ 제거하고 실제 NAS 경로 구성
       const relativePath = path.replace('/nas/release_version/', '');
-
-      logger.info(`즉시 다운로드 리다이렉트 - 사용자: ${req.user.username}, 경로: ${relativePath}`);
-
-      // Synology API를 통한 즉시 다운로드 리다이렉트
-      const synologyApiService = require('../services/synologyApiService');
       
-      try {
-        logger.info(`🚀 Synology API 직접 다운로드 시도 시작: ${path}`);
-        // Synology API 세션 확인 및 직접 다운로드 URL 생성
-        const directDownloadResult = await synologyApiService.createDirectDownloadUrl(path);
-        logger.info(`🔍 Synology API 결과:`, directDownloadResult);
+      logger.info(`[DOWNLOAD-${requestId}] =================================`);
+      logger.info(`[DOWNLOAD-${requestId}] 다운로드 요청 시작`);
+      logger.info(`[DOWNLOAD-${requestId}] 사용자: ${user.username} (${user.email})`);
+      logger.info(`[DOWNLOAD-${requestId}] 요청 경로: ${path}`);
+      logger.info(`[DOWNLOAD-${requestId}] 상대 경로: ${relativePath}`);
+      logger.info(`[DOWNLOAD-${requestId}] 클라이언트 IP: ${req.ip || req.connection.remoteAddress}`);
+
+      // 다단계 폴백 체인 실행
+      for (let i = 0; i < this.downloadStrategies.length; i++) {
+        const strategy = this.downloadStrategies[i];
         
-        if (directDownloadResult.success && directDownloadResult.directNasUrl) {
-          // 직접 NAS URL로 리다이렉트 (즉시 다운로드 시작)
-          logger.info(`직접 NAS URL로 리다이렉트: ${directDownloadResult.directNasUrl}`);
-          return res.redirect(302, directDownloadResult.directNasUrl);
-        } else {
-          throw new Error('직접 다운로드 URL 생성 실패');
-        }
-        
-      } catch (downloadError) {
-        logger.error(`❌ Synology API 직접 다운로드 실패: ${downloadError.message}, fallback to share link`);
-        
-        // 직접 다운로드 실패시 공유링크로 fallback
         try {
-          logger.info(`🔄 Synology API 공유링크 fallback 시도: ${path}`);
-          const shareResult = await synologyApiService.createFileDownloadLink(path);
-          logger.info(`🔍 공유링크 결과:`, shareResult);
-          if (shareResult.success && shareResult.directNasUrl) {
-            logger.info(`✅ 공유링크로 리다이렉트: ${shareResult.directNasUrl}`);
-            return res.redirect(302, shareResult.directNasUrl);
-          } else {
-            throw new Error('공유링크 생성도 실패');
-          }
-        } catch (shareError) {
-          logger.error(`❌ 공유링크 생성 실패: ${shareError.message}, fallback to NAS service`);
-          logger.info(`🔄 NAS 서비스 fallback 시도`);
+          logger.info(`[DOWNLOAD-${requestId}] 🚀 전략 ${i + 1}: ${strategy.name} 시도 중...`);
+          const strategyStartTime = Date.now();
           
-          // 기존 NAS 서비스로 fallback
-          const nasService = getNASService();
-          try {
-            const fileBuffer = await nasService.downloadFile(relativePath);
+          const result = await strategy.method(path, relativePath, requestId);
+          const strategyDuration = Date.now() - strategyStartTime;
+          
+          if (result.success) {
+            const totalDuration = Date.now() - startTime;
+            logger.info(`[DOWNLOAD-${requestId}] ✅ ${strategy.name} 성공! (${strategyDuration}ms)`);
+            logger.info(`[DOWNLOAD-${requestId}] 다운로드 URL: ${result.url || result.action}`);
+            logger.info(`[DOWNLOAD-${requestId}] =================================`);
+            logger.info(`[DOWNLOAD-${requestId}] 전체 처리 시간: ${totalDuration}ms`);
             
-            res.setHeader('Content-Type', 'application/octet-stream');
-            res.setHeader('Content-Disposition', `attachment; filename="${path.split('/').pop()}"`);
-            res.send(fileBuffer);
-            
-            logger.info(`✅ NAS 서비스를 통한 다운로드 완료: ${relativePath}`);
-            return;
-          } catch (nasError) {
-            logger.error(`❌ NAS 서비스 fallback도 실패: ${nasError.message}`);
-            return res.status(404).json({
-              success: false,
-              error: {
-                code: 'DOWNLOAD_FAILED',
-                message: '다운로드에 실패했습니다.',
-              },
-            });
+            if (result.redirect) {
+              return res.redirect(302, result.url);
+            } else {
+              // 직접 파일 전송
+              res.setHeader('Content-Type', 'application/octet-stream');
+              res.setHeader('Content-Disposition', `attachment; filename="${path.split('/').pop()}"`);
+              res.send(result.buffer);
+              return;
+            }
+          }
+        } catch (strategyError) {
+          const strategyDuration = Date.now() - strategyStartTime;
+          logger.warn(`[DOWNLOAD-${requestId}] ⚠ ${strategy.name} 실패 (${strategyDuration}ms): ${strategyError.message}`);
+          
+          // 마지막 전략이 실패한 경우에만 에러 처리
+          if (i === this.downloadStrategies.length - 1) {
+            throw strategyError;
           }
         }
       }
+
+      // 모든 전략이 실패한 경우
+      throw new Error('모든 다운로드 전략이 실패했습니다.');
 
     } catch (error) {
-      logger.error('파일 다운로드 오류:', error.message);
-      next(error);
+      const totalDuration = Date.now() - startTime;
+      logger.error(`[DOWNLOAD-${requestId}] ❌ 다운로드 최종 실패 (${totalDuration}ms): ${error.message}`);
+      logger.error(`[DOWNLOAD-${requestId}] =================================`);
+      
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'DOWNLOAD_FAILED',
+          message: '다운로드에 실패했습니다.',
+        },
+      });
     }
-  },
-);
+  }
+
+  /**
+   * 다운로드 요청 검증
+   */
+  validateDownloadRequest(path) {
+    if (!path) {
+      return {
+        isValid: false,
+        error: {
+          code: 'MISSING_PATH',
+          message: '파일 경로가 필요합니다.',
+        }
+      };
+    }
+
+    if (!path.startsWith('/nas/release_version/')) {
+      return {
+        isValid: false,
+        error: {
+          code: 'INVALID_PATH',
+          message: '유효하지 않은 파일 경로입니다.',
+        }
+      };
+    }
+
+    return { isValid: true };
+  }
+
+  /**
+   * 전략 1: Synology API 직접 다운로드
+   */
+  async tryDirectDownload(path, relativePath, requestId) {
+    const synologyApiService = require('../services/synologyApiService');
+    
+    logger.info(`[DOWNLOAD-${requestId}] Synology API 직접 다운로드 URL 생성 중...`);
+    const result = await synologyApiService.createDirectDownloadUrl(path);
+    
+    if (result.success && result.directNasUrl) {
+      return {
+        success: true,
+        redirect: true,
+        url: result.directNasUrl,
+        action: 'Synology Direct Download'
+      };
+    }
+    
+    throw new Error('직접 다운로드 URL 생성 실패');
+  }
+
+  /**
+   * 전략 2: Synology API 공유링크 다운로드
+   */
+  async tryShareLinkDownload(path, relativePath, requestId) {
+    const synologyApiService = require('../services/synologyApiService');
+    
+    logger.info(`[DOWNLOAD-${requestId}] Synology API 공유링크 생성 중...`);
+    const result = await synologyApiService.createFileDownloadLink(path);
+    
+    if (result.success && result.directNasUrl) {
+      return {
+        success: true,
+        redirect: true,
+        url: result.directNasUrl,
+        action: 'Synology Share Link'
+      };
+    }
+    
+    throw new Error('공유링크 생성 실패');
+  }
+
+  /**
+   * 전략 3: NAS 서비스를 통한 직접 파일 전송
+   */
+  async tryNasServiceDownload(path, relativePath, requestId) {
+    const nasService = getNASService();
+    
+    logger.info(`[DOWNLOAD-${requestId}] NAS 서비스를 통한 파일 다운로드 중...`);
+    const fileBuffer = await nasService.downloadFile(relativePath);
+    
+    return {
+      success: true,
+      redirect: false,
+      buffer: fileBuffer,
+      action: 'NAS Service Direct Transfer'
+    };
+  }
+}
+
+// 다운로드 매니저 인스턴스 생성
+const downloadManager = new DownloadManager();
+
+// NAS 직접 다운로드를 위한 리다이렉트 (향상된 패턴)
+router.get('/download', async (req, res, next) => {
+  try {
+    await downloadManager.processDownload(req, res);
+  } catch (error) {
+    logger.error('파일 다운로드 오류:', error.message);
+    next(error);
+  }
+});
 
 // NAS 파일 목록 조회
 router.get('/list',

@@ -3,6 +3,53 @@ const { query } = require('../config/database');
 const crypto = require('crypto');
 
 /**
+ * 인증 관련 로깅 유틸리티
+ */
+class AuthLogger {
+  static logAuthAttempt(requestId, method, url, ip, userAgent) {
+    console.log(`[AUTH-${requestId}] =================================`);
+    console.log(`[AUTH-${requestId}] NEW REQUEST: ${method} ${url}`);
+    console.log(`[AUTH-${requestId}] Client IP: ${ip || 'unknown'}`);
+    console.log(`[AUTH-${requestId}] User-Agent: ${userAgent || 'unknown'}`);
+    console.log(`[AUTH-${requestId}] Timestamp: ${new Date().toISOString()}`);
+  }
+
+  static logTokenSource(requestId, hasHeader, hasQuery) {
+    console.log(`[AUTH-${requestId}] Token availability - Header: ${hasHeader ? 'YES' : 'NO'}, Query: ${hasQuery ? 'YES' : 'NO'}`);
+  }
+
+  static logTokenExtraction(requestId, source, success, tokenLength, error = null) {
+    if (success) {
+      console.log(`[AUTH-${requestId}] ✓ Token extracted from ${source}, length: ${tokenLength}`);
+    } else {
+      console.log(`[AUTH-${requestId}] ✗ Token extraction from ${source} failed: ${error}`);
+    }
+  }
+
+  static logTokenValidation(requestId, success, user = null, error = null, duration = null) {
+    if (success) {
+      console.log(`[AUTH-${requestId}] ✓ Token validation SUCCESS in ${duration}ms`);
+      console.log(`[AUTH-${requestId}] User authenticated: ${user.username} (ID: ${user.userId})`);
+      console.log(`[AUTH-${requestId}] User details: ${user.email}, ${user.department}`);
+    } else {
+      console.log(`[AUTH-${requestId}] ✗ Token validation FAILED: ${error}`);
+    }
+  }
+
+  static logAuthResult(requestId, success, duration, username = null) {
+    const status = success ? 'SUCCESS' : 'FAILURE';
+    const userInfo = username ? ` for user: ${username}` : '';
+    console.log(`[AUTH-${requestId}] =================================`);
+    console.log(`[AUTH-${requestId}] FINAL RESULT: ${status} in ${duration}ms${userInfo}`);
+    console.log(`[AUTH-${requestId}] =================================`);
+  }
+
+  static logSecurityEvent(requestId, event, details) {
+    console.warn(`[SECURITY-${requestId}] ${event}: ${details}`);
+  }
+}
+
+/**
  * JWT 토큰 유틸리티 함수들
  */
 class JWTUtils {
@@ -64,19 +111,53 @@ class JWTUtils {
   /**
    * Access 토큰 검증
    */
-  static verifyAccessToken(token) {
+  static verifyAccessToken(token, requestId = null) {
+    const verifyStartTime = Date.now();
     const { accessSecret } = this.getSecrets();
+    const logPrefix = requestId ? `[AUTH-${requestId}]` : '[JWT]';
+    
     try {
-      console.log('Verifying token with secret length:', accessSecret ? accessSecret.length : 'null');
+      console.log(`${logPrefix} Starting token verification...`);
+      console.log(`${logPrefix} Secret configured: ${accessSecret ? 'YES' : 'NO'}, length: ${accessSecret ? accessSecret.length : 'null'}`);
+      console.log(`${logPrefix} Token length: ${token ? token.length : 'null'}`);
+      console.log(`${logPrefix} Token preview: ${token ? token.substring(0, 20) + '...' : 'null'}`);
+      
       const decoded = jwt.verify(token, accessSecret);
+      const verifyDuration = Date.now() - verifyStartTime;
+      
+      console.log(`${logPrefix} Token structure validation...`);
       if (decoded.type !== 'access') {
-        throw new Error('Invalid token type');
+        throw new Error(`Invalid token type: ${decoded.type}, expected: access`);
       }
+      
+      const now = Math.floor(Date.now() / 1000);
+      const tokenAge = now - decoded.iat;
+      const expiresIn = decoded.exp - now;
+      
+      console.log(`${logPrefix} ✓ Token verification completed in ${verifyDuration}ms`);
+      console.log(`${logPrefix} Token age: ${tokenAge}s, expires in: ${expiresIn}s`);
+      console.log(`${logPrefix} Token issued at: ${new Date(decoded.iat * 1000).toISOString()}`);
+      console.log(`${logPrefix} Token expires at: ${new Date(decoded.exp * 1000).toISOString()}`);
+      
       return decoded;
     } catch (error) {
-      console.error('JWT verification failed:', error.message);
-      console.error('Token that failed:', token ? token.substring(0, 50) + '...' : 'null');
-      throw new Error(`Invalid access token: ${error.message}`);
+      const verifyDuration = Date.now() - verifyStartTime;
+      console.error(`${logPrefix} JWT verification FAILED in ${verifyDuration}ms: ${error.message}`);
+      console.error(`${logPrefix} Error type: ${error.name}`);
+      console.error(`${logPrefix} Failed token preview: ${token ? token.substring(0, 50) + '...' : 'null'}`);
+      
+      // JWT 라이브러리 에러를 더 구체적으로 분류
+      let errorType = 'UNKNOWN';
+      if (error.name === 'TokenExpiredError') {
+        errorType = 'EXPIRED';
+        console.error(`${logPrefix} Token expired at: ${error.expiredAt}`);
+      } else if (error.name === 'JsonWebTokenError') {
+        errorType = 'MALFORMED';
+      } else if (error.name === 'NotBeforeError') {
+        errorType = 'NOT_ACTIVE';
+      }
+      
+      throw new Error(`Invalid access token [${errorType}]: ${error.message}`);
     }
   }
 
@@ -264,15 +345,66 @@ class SessionManager {
  * JWT 인증 미들웨어
  */
 function authenticateToken(req, res, next) {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substr(2, 9);
+  let tokenValidationStart;
+  
   try {
-    const authHeader = req.headers.authorization;
-    console.log('Auth header received:', authHeader ? 'Bearer [token]' : 'null');
+    // 요청 정보 로깅
+    AuthLogger.logAuthAttempt(
+      requestId, 
+      req.method, 
+      req.originalUrl, 
+      req.ip || req.connection.remoteAddress, 
+      req.get('User-Agent')
+    );
     
-    const token = JWTUtils.extractTokenFromHeader(authHeader);
-    console.log('Extracted token length:', token ? token.length : 'null');
-    console.log('Token starts with:', token ? token.substring(0, 20) + '...' : 'null');
+    const authHeader = req.headers.authorization;
+    const queryToken = req.query.token;
+    
+    // 토큰 소스 가용성 로깅
+    AuthLogger.logTokenSource(requestId, !!authHeader, !!queryToken);
+    
+    let token;
+    let tokenSource = 'none';
+    
+    // 1. 헤더에서 토큰 추출 시도
+    if (authHeader) {
+      try {
+        token = JWTUtils.extractTokenFromHeader(authHeader);
+        tokenSource = 'header';
+        AuthLogger.logTokenExtraction(requestId, 'header', true, token.length);
+      } catch (headerError) {
+        AuthLogger.logTokenExtraction(requestId, 'header', false, null, headerError.message);
+        AuthLogger.logSecurityEvent(requestId, 'MALFORMED_AUTH_HEADER', headerError.message);
+      }
+    }
+    
+    // 2. 헤더에서 실패했거나 없으면 쿼리 파라미터에서 시도
+    if (!token && queryToken) {
+      token = queryToken;
+      tokenSource = 'query';
+      AuthLogger.logTokenExtraction(requestId, 'query', true, token.length);
+      
+      // 쿼리 파라미터 사용 보안 이벤트 기록
+      AuthLogger.logSecurityEvent(requestId, 'QUERY_PARAM_AUTH', 'Token provided via query parameter');
+    }
+    
+    // 3. 토큰이 없으면 에러
+    if (!token) {
+      AuthLogger.logTokenExtraction(requestId, 'none', false, null, 'No token in header or query parameter');
+      throw new Error('No token provided in header or query parameter');
+    }
 
-    const decoded = JWTUtils.verifyAccessToken(token);
+    console.log(`[AUTH-${requestId}] Token source: ${tokenSource}, preview: ${token.substring(0, 20)}...`);
+
+    // 토큰 검증 시작
+    tokenValidationStart = Date.now();
+    const decoded = JWTUtils.verifyAccessToken(token, requestId);
+    const validationDuration = Date.now() - tokenValidationStart;
+    
+    // 사용자 정보 로깅
+    AuthLogger.logTokenValidation(requestId, true, decoded, null, validationDuration);
 
     // 사용자 정보를 request 객체에 추가
     req.user = {
@@ -282,10 +414,49 @@ function authenticateToken(req, res, next) {
       fullName: decoded.fullName,
       department: decoded.department,
     };
+    
+    // 추가 보안 검증 로깅
+    const now = Math.floor(Date.now() / 1000);
+    const tokenAge = now - decoded.iat;
+    const remainingTime = decoded.exp - now;
+    
+    if (remainingTime < 300) { // 5분 미만 남은 토큰
+      AuthLogger.logSecurityEvent(requestId, 'TOKEN_NEAR_EXPIRY', `Token expires in ${remainingTime}s`);
+    }
+    
+    if (tokenAge > 3600) { // 1시간 이상 된 토큰
+      AuthLogger.logSecurityEvent(requestId, 'OLD_TOKEN_USAGE', `Token age: ${tokenAge}s`);
+    }
+    
+    // 인증 성공 로그
+    const totalDuration = Date.now() - startTime;
+    AuthLogger.logAuthResult(requestId, true, totalDuration, decoded.username);
+    
+    // 성능 메트릭 기록
+    AuthPerformanceMonitor.recordAuth(true, totalDuration, tokenSource);
 
     next();
   } catch (error) {
-    console.error('Token authentication failed:', error.message);
+    const totalDuration = Date.now() - startTime;
+    const validationDuration = tokenValidationStart ? Date.now() - tokenValidationStart : null;
+    
+    // 실패 로깅
+    AuthLogger.logTokenValidation(requestId, false, null, error.message, validationDuration);
+    AuthLogger.logAuthResult(requestId, false, totalDuration);
+    
+    // 보안 이벤트로 기록
+    AuthLogger.logSecurityEvent(requestId, 'AUTH_FAILURE', error.message);
+    
+    // 에러 타입 분류
+    let errorType = 'UNKNOWN';
+    if (error.message.includes('[EXPIRED]')) errorType = 'EXPIRED';
+    else if (error.message.includes('[MALFORMED]')) errorType = 'MALFORMED';
+    else if (error.message.includes('No token provided')) errorType = 'MISSING';
+    
+    // 성능 메트릭 기록
+    AuthPerformanceMonitor.recordAuth(false, totalDuration, tokenSource, errorType);
+    
+    console.error(`[AUTH-${requestId}] Authentication failed: ${error.message}`);
     return res.status(401).json({
       success: false,
       error: {
@@ -300,14 +471,30 @@ function authenticateToken(req, res, next) {
  * 선택적 인증 미들웨어 (토큰이 있으면 검증, 없어도 통과)
  */
 function optionalAuthentication(req, res, next) {
+  const requestId = Math.random().toString(36).substr(2, 9);
+  const startTime = Date.now();
+  
   try {
+    console.log(`[OPT-AUTH-${requestId}] Optional authentication started for ${req.method} ${req.originalUrl}`);
+    
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
+    const queryToken = req.query.token;
+    
+    if (!authHeader && !queryToken) {
+      console.log(`[OPT-AUTH-${requestId}] No auth token provided, proceeding without authentication`);
       return next();
     }
 
-    const token = JWTUtils.extractTokenFromHeader(authHeader);
-    const decoded = JWTUtils.verifyAccessToken(token);
+    let token;
+    if (authHeader) {
+      token = JWTUtils.extractTokenFromHeader(authHeader);
+      console.log(`[OPT-AUTH-${requestId}] Token extracted from header`);
+    } else if (queryToken) {
+      token = queryToken;
+      console.log(`[OPT-AUTH-${requestId}] Token extracted from query parameter`);
+    }
+
+    const decoded = JWTUtils.verifyAccessToken(token, requestId);
 
     req.user = {
       id: decoded.userId,
@@ -317,11 +504,75 @@ function optionalAuthentication(req, res, next) {
       department: decoded.department,
     };
 
+    const duration = Date.now() - startTime;
+    console.log(`[OPT-AUTH-${requestId}] ✓ Optional authentication successful in ${duration}ms for user: ${decoded.username}`);
     next();
   } catch (error) {
+    const duration = Date.now() - startTime;
     // 토큰이 유효하지 않아도 계속 진행
-    console.warn('Optional token authentication failed:', error.message);
+    console.warn(`[OPT-AUTH-${requestId}] Optional authentication failed in ${duration}ms: ${error.message}`);
+    console.log(`[OPT-AUTH-${requestId}] Proceeding without authentication`);
     next();
+  }
+}
+
+/**
+ * 인증 성능 모니터링 유틸리티
+ */
+class AuthPerformanceMonitor {
+  static metrics = {
+    totalRequests: 0,
+    successfulAuths: 0,
+    failedAuths: 0,
+    avgResponseTime: 0,
+    slowRequests: 0, // >100ms
+    tokenSources: { header: 0, query: 0 },
+    errorTypes: new Map()
+  };
+
+  static recordAuth(success, duration, tokenSource, errorType = null) {
+    this.metrics.totalRequests++;
+    
+    if (success) {
+      this.metrics.successfulAuths++;
+    } else {
+      this.metrics.failedAuths++;
+      if (errorType) {
+        const count = this.metrics.errorTypes.get(errorType) || 0;
+        this.metrics.errorTypes.set(errorType, count + 1);
+      }
+    }
+    
+    // 평균 응답 시간 업데이트 (이동 평균)
+    this.metrics.avgResponseTime = (this.metrics.avgResponseTime * (this.metrics.totalRequests - 1) + duration) / this.metrics.totalRequests;
+    
+    if (duration > 100) {
+      this.metrics.slowRequests++;
+    }
+    
+    if (tokenSource) {
+      this.metrics.tokenSources[tokenSource]++;
+    }
+  }
+
+  static getMetrics() {
+    return {
+      ...this.metrics,
+      successRate: this.metrics.totalRequests > 0 ? (this.metrics.successfulAuths / this.metrics.totalRequests) * 100 : 0,
+      errorTypes: Object.fromEntries(this.metrics.errorTypes)
+    };
+  }
+
+  static logMetrics() {
+    const metrics = this.getMetrics();
+    console.log('=== AUTH PERFORMANCE METRICS ===');
+    console.log(`Total Requests: ${metrics.totalRequests}`);
+    console.log(`Success Rate: ${metrics.successRate.toFixed(2)}%`);
+    console.log(`Average Response Time: ${metrics.avgResponseTime.toFixed(2)}ms`);
+    console.log(`Slow Requests (>100ms): ${metrics.slowRequests}`);
+    console.log(`Token Sources - Header: ${metrics.tokenSources.header}, Query: ${metrics.tokenSources.query}`);
+    console.log(`Error Types:`, metrics.errorTypes);
+    console.log('================================');
   }
 }
 
@@ -392,6 +643,8 @@ function createErrorResponse(code, message, statusCode = 400) {
 module.exports = {
   JWTUtils,
   SessionManager,
+  AuthLogger,
+  AuthPerformanceMonitor,
   authenticateToken,
   optionalAuthentication,
   auditLog,
