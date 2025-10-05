@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ChevronUp,
   ChevronDown,
@@ -13,7 +13,7 @@ import {
   AlertCircle,
   Download
 } from 'lucide-react';
-// import { downloadFile } from '../services/api'; // 스트리밍 다운로드로 변경
+import downloadService from '../services/downloadService';
 
 const DeploymentTable = ({
   deployments = [],
@@ -23,6 +23,7 @@ const DeploymentTable = ({
   onRowClick,
   className = ''
 }) => {
+  const [downloadingFiles, setDownloadingFiles] = useState(new Set());
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -102,6 +103,52 @@ const DeploymentTable = ({
     return sortConfig.direction === 'asc' ?
       <ChevronUp className="w-4 h-4 text-primary-600" /> :
       <ChevronDown className="w-4 h-4 text-primary-600" />;
+  };
+
+  // 통합 다운로드 처리 함수
+  const handleDownload = async (artifact, deploymentId) => {
+    const downloadKey = `${deploymentId}-${artifact.fileName}`;
+    
+    if (downloadingFiles.has(downloadKey)) {
+      console.log('다운로드가 이미 진행 중입니다.');
+      return;
+    }
+
+    try {
+      setDownloadingFiles(prev => new Set([...prev, downloadKey]));
+      
+      console.log(`[DEPLOYMENT-TABLE] 통합 다운로드 시작`);
+      console.log(`[DEPLOYMENT-TABLE] 파일 경로: ${artifact.filePath}`);
+      console.log(`[DEPLOYMENT-TABLE] 파일명: ${artifact.fileName}`);
+      
+      const result = await downloadService.downloadFile(
+        artifact.filePath,
+        artifact.fileName,
+        {
+          onProgress: (progress) => {
+            console.log(`[DEPLOYMENT-TABLE] 다운로드 진행:`, progress);
+            // 여기서 UI 업데이트 가능 (토스트, 진행바 등)
+          },
+          strategy: 'redirect' // 기본적으로 리다이렉트 사용 (가장 빠름)
+        }
+      );
+      
+      if (result.success) {
+        console.log(`[DEPLOYMENT-TABLE] ✅ 다운로드 완료: ${artifact.fileName}`);
+      } else {
+        console.error(`[DEPLOYMENT-TABLE] ❌ 다운로드 실패: ${result.error}`);
+        // 에러는 downloadService에서 토스트로 표시됨
+      }
+    } catch (error) {
+      console.error(`[DEPLOYMENT-TABLE] ❌ 다운로드 오류:`, error);
+      // 에러는 downloadService에서 처리됨
+    } finally {
+      setDownloadingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(downloadKey);
+        return newSet;
+      });
+    }
   };
 
 
@@ -311,38 +358,26 @@ const DeploymentTable = ({
 
                   <td onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center space-x-1">
-                      {/* 다운로드 버튼 - 임시로 모든 deployment에 표시 */}
-                      {/* 모든 deployment 디버깅 로그 */}
-                      {console.log(`Deployment debug - version: ${deployment.version}, artifacts:`, deployment.artifacts)}
-                      {true && (
+                      {/* 다운로드 버튼 - 통합 다운로드 서비스 사용 */}
+                      {deployment.artifacts && deployment.artifacts.length > 0 && (
                         <div className="relative group">
                           <button
-                            className="p-1 text-gray-400 hover:text-green-600 transition-colors rounded"
-                            title={`${deployment.artifacts?.length || 0}개 아티팩트 다운로드`}
+                            className={`p-1 transition-colors rounded ${
+                              downloadingFiles.has(`${deployment.id}-${deployment.artifacts[0]?.fileName}`)
+                                ? 'text-blue-500 animate-pulse'
+                                : 'text-gray-400 hover:text-green-600'
+                            }`}
+                            title={`${deployment.artifacts.length}개 아티팩트 다운로드`}
+                            disabled={downloadingFiles.has(`${deployment.id}-${deployment.artifacts[0]?.fileName}`)}
                             onClick={async (e) => {
                               e.stopPropagation();
-                              console.log('Download button clicked for version:', deployment.version);
+                              console.log('통합 다운로드 버튼 클릭 - version:', deployment.version);
                               console.log('Artifacts:', deployment.artifacts);
                               
-                              if (!deployment.artifacts || deployment.artifacts.length === 0) {
-                                alert(`${deployment.version} 버전에는 artifacts 데이터가 없습니다. 콘솔에서 디버깅 정보를 확인하세요.`);
-                                return;
-                              }
-                              
                               if (deployment.artifacts.length === 1) {
-                                // 아티팩트가 하나인 경우 바로 스트리밍 다운로드 (즉시 반응)
+                                // 단일 아티팩트 - 통합 다운로드 서비스 사용
                                 const artifact = deployment.artifacts[0];
-                                
-                                // 스트리밍 다운로드 - 브라우저가 즉시 다운로드 시작
-                                const link = document.createElement('a');
-                                link.href = artifact.downloadUrl;
-                                link.download = artifact.fileName || 'download';
-                                link.style.display = 'none';
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                                
-                                console.log(`스트리밍 다운로드 시작: ${artifact.fileName}`);
+                                await handleDownload(artifact, deployment.id);
                               } else {
                                 // 여러 아티팩트가 있는 경우 모달 열기
                                 onRowClick?.(deployment);
@@ -352,9 +387,14 @@ const DeploymentTable = ({
                             <Download className="w-4 h-4" />
                           </button>
                           {/* 아티팩트 수 표시 */}
-                          {deployment.artifacts && deployment.artifacts.length > 1 && (
+                          {deployment.artifacts.length > 1 && (
                             <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
                               {deployment.artifacts.length}
+                            </span>
+                          )}
+                          {/* 다운로드 중 표시 */}
+                          {downloadingFiles.has(`${deployment.id}-${deployment.artifacts[0]?.fileName}`) && (
+                            <span className="absolute -bottom-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-2 h-2 animate-ping">
                             </span>
                           )}
                         </div>
