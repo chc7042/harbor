@@ -1,0 +1,49 @@
+# Production Download Fix - PRD
+
+## Critical Issue
+
+**Current Problem**: On production website `http://harbor.roboetech.com`, when clicking the main version download button for 3.0.0, the download does NOT start immediately. Users experience 2-3 seconds delay before download begins.
+
+**Expected Behavior**: Download should start immediately upon button click (within 1 second).
+
+## Root Cause Analysis
+
+The local development environment has been updated with instant download functionality (using hidden `<a>` tag click instead of `window.location.href`), but **production environment is still running the old code**.
+
+## Critical Actions Required
+
+### 1. Production Code Version Check
+- Verify what version of frontend code is currently running on harbor.roboetech.com
+- Check if the instant download fix (downloadViaRedirect with hidden link) is deployed
+- Confirm production environment configuration
+
+### 2. Emergency Production Deployment
+- Build updated frontend code with instant download fix
+- Deploy to production server immediately
+- Ensure zero-downtime deployment
+
+### 3. Production Environment Verification
+- Test actual 3.0.0 main file download on harbor.roboetech.com
+- Verify download starts within 1 second of button click
+- Confirm no browser compatibility issues
+
+## Technical Solution Summary
+
+**Fixed Code (Local)**: 
+- Changed `window.location.href = downloadUrl` to hidden `<a>` tag click
+- Added fallback with `window.open` method
+- Maintains backend streaming functionality
+
+**Production Deployment**:
+- Update frontend container with latest code
+- Clear browser cache if needed
+- Test with actual large files
+
+## Success Criteria
+
+1. **Immediate Start**: 3.0.0 main file download starts within 1 second on harbor.roboetech.com
+2. **Production Stable**: No regressions in other download functionality
+3. **User Experience**: Seamless download experience for all file sizes
+
+## Priority: CRITICAL
+This is affecting real users on the production website right now.
