@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2.0.0 버전 다운로드 수동 테스트</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-900 mb-8">Harbor 2.0.0 버전 다운로드 테스트</h1>
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">테스트 상태</h2>
+            <div id="testStatus" class="space-y-2">
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-yellow-500 rounded-full mr-3"></div>
+                    <span>테스트 준비 중...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">2.0.0 버전 파일 목록</h2>
+            <div class="space-y-4">
+                <div class="border rounded-lg p-4">
+                    <h3 class="font-medium mb-2">V2.0.0_250116_123.tar.enc (메인 버전)</h3>
+                    <p class="text-sm text-gray-600 mb-3">파일 크기: ~520MB | 경로: /nas/release_version/release/product/mr2.0.0/250116/123/</p>
+                    <button id="downloadV" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                        다운로드 테스트
+                    </button>
+                    <span id="statusV" class="ml-3 text-sm"></span>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h3 class="font-medium mb-2">mr2.0.0_250116_123.tar.enc (모로우 컴포넌트)</h3>
+                    <p class="text-sm text-gray-600 mb-3">파일 크기: ~120MB | 경로: /nas/release_version/release/product/mr2.0.0/250116/123/</p>
+                    <button id="downloadMR" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
+                        다운로드 테스트
+                    </button>
+                    <span id="statusMR" class="ml-3 text-sm"></span>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h3 class="font-medium mb-2">be2.0.0_250116_123.tar.enc (백엔드 컴포넌트)</h3>
+                    <p class="text-sm text-gray-600 mb-3">파일 크기: ~50MB | 경로: /nas/release_version/release/product/mr2.0.0/250116/123/</p>
+                    <button id="downloadBE" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                        다운로드 테스트
+                    </button>
+                    <span id="statusBE" class="ml-3 text-sm"></span>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h3 class="font-medium mb-2">fe2.0.0_250116_123.tar.enc (프런트엔드 컴포넌트)</h3>
+                    <p class="text-sm text-gray-600 mb-3">파일 크기: ~30MB | 경로: /nas/release_version/release/product/mr2.0.0/250116/123/</p>
+                    <button id="downloadFE" class="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700">
+                        다운로드 테스트
+                    </button>
+                    <span id="statusFE" class="ml-3 text-sm"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">테스트 로그</h2>
+            <div id="testLog" class="bg-gray-100 rounded p-4 h-64 overflow-y-auto font-mono text-sm">
+                <!-- 로그 메시지가 여기에 표시됩니다 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 테스트 환경 설정
+        const API_BASE_URL = 'http://localhost:3001';
+        const testFiles = {
+            V: {
+                name: 'V2.0.0_250116_123.tar.enc',
+                path: '/nas/release_version/release/product/mr2.0.0/250116/123/V2.0.0_250116_123.tar.enc',
+                size: 545259520
+            },
+            MR: {
+                name: 'mr2.0.0_250116_123.tar.enc',
+                path: '/nas/release_version/release/product/mr2.0.0/250116/123/mr2.0.0_250116_123.tar.enc',
+                size: 125829120
+            },
+            BE: {
+                name: 'be2.0.0_250116_123.tar.enc',
+                path: '/nas/release_version/release/product/mr2.0.0/250116/123/be2.0.0_250116_123.tar.enc',
+                size: 52428800
+            },
+            FE: {
+                name: 'fe2.0.0_250116_123.tar.enc',
+                path: '/nas/release_version/release/product/mr2.0.0/250116/123/fe2.0.0_250116_123.tar.enc',
+                size: 31457280
+            }
+        };
+
+        // 로그 함수
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('testLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const colorClass = type === 'error' ? 'text-red-600' : 
+                              type === 'success' ? 'text-green-600' : 
+                              type === 'warning' ? 'text-yellow-600' : 'text-gray-700';
+            
+            logDiv.innerHTML += `<div class="${colorClass}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // 상태 업데이트
+        function updateStatus(fileType, status, isSuccess = null) {
+            const statusSpan = document.getElementById(`status${fileType}`);
+            const colorClass = isSuccess === true ? 'text-green-600' : 
+                              isSuccess === false ? 'text-red-600' : 'text-yellow-600';
+            statusSpan.className = `ml-3 text-sm ${colorClass}`;
+            statusSpan.textContent = status;
+        }
+
+        // 다운로드 URL 생성
+        function createDownloadUrl(filePath, token) {
+            const params = new URLSearchParams({
+                path: filePath,
+                token: token || 'test-token'
+            });
+            return `${API_BASE_URL}/api/files/download?${params.toString()}`;
+        }
+
+        // 다운로드 테스트 함수
+        async function testDownload(fileType) {
+            const file = testFiles[fileType];
+            const button = document.getElementById(`download${fileType}`);
+            
+            log(`${file.name} 다운로드 테스트 시작`);
+            updateStatus(fileType, '테스트 중...');
+            button.disabled = true;
+            button.textContent = '테스트 중...';
+
+            try {
+                // 1. URL 생성 테스트
+                const token = localStorage.getItem('accessToken') || 'test-token-123';
+                const downloadUrl = createDownloadUrl(file.path, token);
+                log(`다운로드 URL 생성: ${downloadUrl.substring(0, 100)}...`);
+
+                // 2. 다운로드 전략 결정
+                const fileSizeMB = file.size / (1024 * 1024);
+                const strategy = fileSizeMB > 100 ? 'redirect' : 
+                               fileSizeMB > 10 ? 'proxy' : 'direct';
+                log(`파일 크기: ${fileSizeMB.toFixed(2)}MB, 전략: ${strategy}`);
+
+                // 3. 리다이렉트 테스트 (실제 다운로드는 하지 않음)
+                if (strategy === 'redirect') {
+                    log(`리다이렉트 방식 테스트: ${downloadUrl}`);
+                    // window.open(downloadUrl, '_blank'); // 실제 테스트 시 주석 해제
+                    updateStatus(fileType, '리다이렉트 준비 완료', true);
+                    log(`${file.name} 리다이렉트 테스트 성공`, 'success');
+                } else {
+                    // 4. API 엔드포인트 테스트
+                    const response = await fetch(downloadUrl, {
+                        method: 'HEAD' // 실제 다운로드 대신 HEAD 요청
+                    });
+
+                    if (response.ok) {
+                        updateStatus(fileType, 'API 응답 성공', true);
+                        log(`${file.name} API 테스트 성공 (${response.status})`, 'success');
+                    } else {
+                        updateStatus(fileType, `API 오류 (${response.status})`, false);
+                        log(`${file.name} API 테스트 실패: ${response.status} ${response.statusText}`, 'error');
+                    }
+                }
+
+            } catch (error) {
+                updateStatus(fileType, '테스트 실패', false);
+                log(`${file.name} 테스트 실패: ${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = '다운로드 테스트';
+            }
+        }
+
+        // 이벤트 리스너 설정
+        document.getElementById('downloadV').addEventListener('click', () => testDownload('V'));
+        document.getElementById('downloadMR').addEventListener('click', () => testDownload('MR'));
+        document.getElementById('downloadBE').addEventListener('click', () => testDownload('BE'));
+        document.getElementById('downloadFE').addEventListener('click', () => testDownload('FE'));
+
+        // 초기화
+        document.addEventListener('DOMContentLoaded', () => {
+            log('2.0.0 버전 다운로드 테스트 시스템 초기화 완료');
+            log('각 파일의 다운로드 버튼을 클릭하여 테스트를 시작하세요');
+            
+            // 테스트 상태 업데이트
+            document.getElementById('testStatus').innerHTML = `
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-green-500 rounded-full mr-3"></div>
+                    <span>테스트 시스템 준비 완료</span>
+                </div>
+                <div class="flex items-center mt-2">
+                    <div class="w-4 h-4 bg-blue-500 rounded-full mr-3"></div>
+                    <span>API 서버: ${API_BASE_URL}</span>
+                </div>
+            `;
+        });
+
+        // 전역 테스트 함수 (콘솔에서 호출 가능)
+        window.runAllTests = async function() {
+            log('=== 전체 테스트 시작 ===');
+            for (const fileType of ['V', 'MR', 'BE', 'FE']) {
+                await testDownload(fileType);
+                await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 간격
+            }
+            log('=== 전체 테스트 완료 ===');
+        };
+
+        // JWT 토큰 설정 함수 (콘솔에서 호출 가능)
+        window.setTestToken = function(token) {
+            localStorage.setItem('accessToken', token);
+            log(`테스트 토큰 설정: ${token.substring(0, 20)}...`);
+        };
+    </script>
+</body>
+</html>

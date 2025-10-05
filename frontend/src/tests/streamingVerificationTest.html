@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>대용량 파일 스트리밍 다운로드 검증 - Task 5.2.4</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .test-controls {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .log-container {
+            background: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            height: 500px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .metric-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            border: 1px solid #dee2e6;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #6c757d;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 대용량 파일 스트리밍 다운로드 검증</h1>
+            <p><strong>Task 5.2.4:</strong> 500MB+ 파일의 즉시 다운로드 및 메모리 효율성 검증</p>
+        </div>
+
+        <div class="status info" id="systemStatus">
+            ℹ️ 시스템 준비 중... JWT 토큰과 서버 연결을 확인하세요.
+        </div>
+
+        <div class="test-controls">
+            <h3>테스트 컨트롤</h3>
+            <button onclick="setupAuth()" id="authBtn">🔐 인증 설정</button>
+            <button onclick="runBasicCheck()" id="basicCheckBtn" disabled>🔍 기본 기능 검증</button>
+            <button onclick="runStreamingTest()" id="streamingTestBtn" disabled>🚀 스트리밍 테스트</button>
+            <button onclick="clearLog()" id="clearBtn">🧹 로그 초기화</button>
+        </div>
+
+        <div class="metrics" id="metrics" style="display: none;">
+            <div class="metric-card">
+                <div class="metric-value" id="testsPassed">-</div>
+                <div class="metric-label">테스트 통과</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="avgFirstByte">-</div>
+                <div class="metric-label">평균 첫 바이트 시간 (ms)</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="maxMemory">-</div>
+                <div class="metric-label">최대 메모리 사용 (MB)</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="streamingStrategy">-</div>
+                <div class="metric-label">사용된 전략</div>
+            </div>
+        </div>
+
+        <div>
+            <h3>실시간 로그</h3>
+            <div class="log-container" id="logContainer"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import downloadService from '../services/downloadService.js';
+
+        // 전역 변수
+        let authToken = null;
+        let logContainer = null;
+        let testResults = null;
+
+        // DOM 로드 완료 후 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            logContainer = document.getElementById('logContainer');
+            initializeSystem();
+        });
+
+        // 시스템 초기화
+        function initializeSystem() {
+            log('🔧 시스템 초기화 중...');
+            
+            // 기존 토큰 확인
+            authToken = localStorage.getItem('accessToken');
+            
+            if (authToken) {
+                updateStatus('success', '✅ 인증 토큰 발견. 테스트 준비 완료.');
+                enableTestButtons();
+            } else {
+                updateStatus('warning', '⚠️ 인증 토큰이 없습니다. 먼저 인증을 설정하세요.');
+            }
+
+            log('📊 브라우저 환경 정보:');
+            log(`  • User Agent: ${navigator.userAgent}`);
+            log(`  • 메모리 API: ${performance.memory ? '사용 가능' : '사용 불가'}`);
+            log(`  • 현재 메모리: ${performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1024 / 1024) + 'MB' : 'N/A'}`);
+        }
+
+        // 인증 설정
+        window.setupAuth = function() {
+            const token = prompt('JWT 토큰을 입력하세요 (Harbor 로그인 후 개발자 도구에서 확인):');
+            if (token) {
+                localStorage.setItem('accessToken', token);
+                authToken = token;
+                updateStatus('success', '✅ 인증 토큰이 설정되었습니다.');
+                enableTestButtons();
+                log('🔐 인증 토큰 설정 완료');
+            }
+        };
+
+        // 기본 기능 검증
+        window.runBasicCheck = function() {
+            log('\n🔍 기본 기능 검증 시작...');
+            
+            // 다운로드 서비스 존재 확인
+            if (typeof downloadService === 'undefined') {
+                log('❌ downloadService를 찾을 수 없습니다.');
+                updateStatus('error', '❌ downloadService 모듈을 로드할 수 없습니다.');
+                return;
+            }
+            
+            log('✅ downloadService 모듈 로드됨');
+            
+            // 전략 선택 테스트
+            const strategy = downloadService.selectDownloadStrategy('/test/path', {
+                fileSize: 600 * 1024 * 1024 // 600MB
+            });
+            
+            log(`📋 대용량 파일 전략 선택: ${strategy}`);
+            
+            if (strategy === 'redirect') {
+                log('✅ 전략 선택 검증 통과 - redirect 방식 선택됨');
+                updateStatus('success', '✅ 기본 기능 검증 완료. 스트리밍 테스트를 실행할 수 있습니다.');
+                document.getElementById('streamingTestBtn').disabled = false;
+            } else {
+                log('⚠️ 경고: 대용량 파일에 대해 redirect 전략이 선택되지 않음');
+                updateStatus('warning', '⚠️ 전략 선택에 문제가 있습니다. 계속 진행하시겠습니까?');
+            }
+        };
+
+        // 스트리밍 테스트 실행
+        window.runStreamingTest = async function() {
+            const btn = document.getElementById('streamingTestBtn');
+            btn.disabled = true;
+            btn.textContent = '🔄 테스트 실행 중...';
+            
+            try {
+                log('\n🚀 대용량 파일 스트리밍 다운로드 테스트 시작');
+                log('=' * 60);
+                
+                await runLargeFileTest();
+                
+            } catch (error) {
+                log(`❌ 테스트 실행 중 오류 발생: ${error.message}`);
+                updateStatus('error', `❌ 테스트 실패: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 스트리밍 테스트';
+            }
+        };
+
+        // 대용량 파일 테스트 실행
+        async function runLargeFileTest() {
+            const testCases = [
+                {
+                    name: '600MB 테스트 파일',
+                    filePath: '/nas/release_version/test_large_files/large_test_file_600MB.tar.gz',
+                    fileName: 'large_test_file_600MB.tar.gz',
+                },
+                {
+                    name: '3.0.0 메인 파일',
+                    filePath: '/nas/release_version/release/product/mr3.0.0/250310/26/V3.0.0_250310_0843.tar.gz',
+                    fileName: 'V3.0.0_250310_0843.tar.gz',
+                },
+            ];
+
+            const results = [];
+            
+            for (const testCase of testCases) {
+                const result = await runSingleTest(testCase);
+                results.push(result);
+            }
+            
+            // 결과 종합
+            const totalTests = results.length;
+            const passedTests = results.filter(r => r.passed).length;
+            const avgFirstByte = results
+                .filter(r => r.timeToFirstByte)
+                .reduce((sum, r) => sum + r.timeToFirstByte, 0) / 
+                results.filter(r => r.timeToFirstByte).length;
+
+            // 메트릭 업데이트
+            updateMetrics({
+                testsPassed: `${passedTests}/${totalTests}`,
+                avgFirstByte: Math.round(avgFirstByte) || 'N/A',
+                maxMemory: Math.max(...results.map(r => r.maxMemoryMB), 0),
+                streamingStrategy: 'redirect'
+            });
+
+            // 최종 결과
+            const success = passedTests === totalTests;
+            log('\n' + '='.repeat(60));
+            log(`📊 최종 결과: ${passedTests}/${totalTests} 테스트 통과`);
+            log(`⚡ 평균 첫 바이트 시간: ${Math.round(avgFirstByte) || 'N/A'}ms`);
+            log(`🎯 전체 검증 결과: ${success ? '✅ 성공' : '❌ 실패'}`);
+            
+            updateStatus(
+                success ? 'success' : 'error',
+                success ? 
+                    '✅ 모든 테스트 통과! 대용량 파일 스트리밍 다운로드가 정상 작동합니다.' :
+                    '❌ 일부 테스트 실패. 스트리밍 다운로드에 개선이 필요합니다.'
+            );
+        }
+
+        // 개별 테스트 실행
+        async function runSingleTest(testCase) {
+            log(`\n📁 테스트: ${testCase.name}`);
+            log(`📍 경로: ${testCase.filePath}`);
+
+            const startMemory = performance.memory ? performance.memory.usedJSHeapSize : 0;
+            const startTime = Date.now();
+            
+            let downloadStarted = false;
+            let timeToFirstByte = null;
+            let maxMemoryMB = 0;
+            let errorOccurred = false;
+
+            try {
+                const result = await downloadService.downloadFile(
+                    testCase.filePath,
+                    testCase.fileName,
+                    {
+                        onProgress: (progress) => {
+                            const currentMemory = performance.memory ? 
+                                Math.round(performance.memory.usedJSHeapSize / 1024 / 1024) : 0;
+                            maxMemoryMB = Math.max(maxMemoryMB, currentMemory);
+
+                            if (progress.type === 'start') {
+                                downloadStarted = true;
+                                log(`🚀 다운로드 시작: ${progress.message}`);
+                            }
+
+                            if (progress.type === 'redirect' && !timeToFirstByte) {
+                                timeToFirstByte = Date.now() - startTime;
+                                log(`⚡ 첫 바이트 시간: ${timeToFirstByte}ms`);
+                            }
+
+                            log(`📊 ${progress.type}: ${progress.message} (메모리: ${currentMemory}MB)`);
+                        }
+                    }
+                );
+
+                log(`✅ 다운로드 결과: ${result.success ? '성공' : '실패'}`);
+
+            } catch (error) {
+                errorOccurred = true;
+                log(`❌ 다운로드 에러: ${error.message}`);
+            }
+
+            const endMemory = performance.memory ? performance.memory.usedJSHeapSize : 0;
+            const memoryIncrease = Math.round((endMemory - startMemory) / 1024 / 1024);
+            const totalTime = Date.now() - startTime;
+
+            const testResult = {
+                testName: testCase.name,
+                downloadStarted,
+                errorOccurred,
+                timeToFirstByte,
+                maxMemoryMB,
+                memoryIncrease,
+                totalTime,
+                passed: downloadStarted && !errorOccurred && timeToFirstByte < 5000 && memoryIncrease < 50
+            };
+
+            log(`\n📊 테스트 결과 요약:`);
+            log(`  ✅ 다운로드 시작: ${downloadStarted ? 'Yes' : 'No'}`);
+            log(`  ⚡ 첫 바이트 시간: ${timeToFirstByte || 'N/A'}ms`);
+            log(`  🧠 최대 메모리: ${maxMemoryMB}MB`);
+            log(`  📈 메모리 증가: ${memoryIncrease}MB`);
+            log(`  🎯 테스트 통과: ${testResult.passed ? '✅ PASS' : '❌ FAIL'}`);
+
+            return testResult;
+        }
+
+        // 유틸리티 함수들
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logLine = `[${timestamp}] ${message}\n`;
+            logContainer.textContent += logLine;
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function updateStatus(type, message) {
+            const statusEl = document.getElementById('systemStatus');
+            statusEl.className = `status ${type}`;
+            statusEl.textContent = message;
+        }
+
+        function enableTestButtons() {
+            document.getElementById('basicCheckBtn').disabled = false;
+        }
+
+        function updateMetrics(metrics) {
+            document.getElementById('testsPassed').textContent = metrics.testsPassed;
+            document.getElementById('avgFirstByte').textContent = metrics.avgFirstByte;
+            document.getElementById('maxMemory').textContent = metrics.maxMemory;
+            document.getElementById('streamingStrategy').textContent = metrics.streamingStrategy;
+            document.getElementById('metrics').style.display = 'grid';
+        }
+
+        window.clearLog = function() {
+            logContainer.textContent = '';
+            document.getElementById('metrics').style.display = 'none';
+            updateStatus('info', 'ℹ️ 로그가 초기화되었습니다.');
+        };
+
+        // 전역 함수로 노출
+        window.log = log;
+        window.updateStatus = updateStatus;
+    </script>
+</body>
+</html>
