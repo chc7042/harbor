@@ -43,13 +43,13 @@ class DownloadService {
       console.log(`[DOWNLOAD-${downloadId}] 파일명: ${fileName}`);
       console.log(`[DOWNLOAD-${downloadId}] 옵션:`, options);
 
-      // 다운로드 시작 알림
+      // 다운로드 시작 알림 (스트리밍 최적화)
       this.showUserFeedback('start', fileName, { downloadId });
       if (options.onProgress) {
         options.onProgress({ 
           type: 'start', 
           downloadId,
-          message: '다운로드를 준비 중입니다...' 
+          message: '스트리밍 다운로드를 준비 중입니다...' 
         });
       }
 
@@ -151,57 +151,88 @@ class DownloadService {
   }
 
   /**
-   * 리다이렉트 방식 다운로드 (가장 빠른 방법)
+   * 리다이렉트 방식 다운로드 (즉시 다운로드, 스트리밍 지원, 메모리 효율적)
    */
   async downloadViaRedirect(downloadUrl, downloadId, options) {
-    console.log(`[DOWNLOAD-${downloadId}] 리다이렉트 방식 다운로드 시작`);
+    console.log(`[DOWNLOAD-${downloadId}] 즉시 스트리밍 다운로드 시작`);
     
     // 다운로드 상태 업데이트
     const downloadInfo = this.activeDownloads.get(downloadId);
     if (downloadInfo) {
-      downloadInfo.status = 'redirecting';
+      downloadInfo.status = 'streaming';
     }
 
     if (options.onProgress) {
       options.onProgress({ 
         type: 'redirect', 
         downloadId,
-        message: '다운로드 페이지로 이동 중...' 
+        message: '즉시 다운로드 시작 중...' 
       });
     }
 
-    // 새 탭에서 다운로드 시작 (팝업 차단 방지)
+    // 즉시 다운로드를 위한 숨겨진 링크 방식 (백엔드 스트리밍 → 브라우저 직접 처리)
     try {
-      // 현재 탭에서 직접 다운로드 (더 안전함)
-      window.location.href = downloadUrl;
+      // 방법 1: 숨겨진 <a> 태그를 사용한 즉시 다운로드
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = ''; // 브라우저가 파일명을 자동으로 결정
+      link.style.display = 'none';
       
-      // 또는 새 탭에서 열기 (옵션)
-      // window.open(downloadUrl, '_blank');
+      // DOM에 추가하고 즉시 클릭
+      document.body.appendChild(link);
+      link.click();
       
-      return { success: true, method: 'redirect' };
+      // 정리
+      setTimeout(() => {
+        document.body.removeChild(link);
+      }, 100);
+      
+      console.log(`[DOWNLOAD-${downloadId}] 즉시 다운로드 링크 클릭 완료`);
+      
+      return { success: true, method: 'instant-download' };
     } catch (error) {
-      console.error(`[DOWNLOAD-${downloadId}] 리다이렉트 실패:`, error);
-      throw new Error('브라우저에서 다운로드를 차단했습니다. 팝업 차단을 해제해주세요.');
+      console.error(`[DOWNLOAD-${downloadId}] 즉시 다운로드 실패, 폴백 시도:`, error);
+      
+      // 폴백: window.open을 사용한 즉시 다운로드
+      try {
+        const newWindow = window.open(downloadUrl, '_blank');
+        if (newWindow) {
+          // 다운로드가 시작되면 새 창을 즉시 닫음
+          setTimeout(() => {
+            if (newWindow && !newWindow.closed) {
+              newWindow.close();
+            }
+          }, 1000);
+        }
+        
+        console.log(`[DOWNLOAD-${downloadId}] 폴백 다운로드 완료`);
+        return { success: true, method: 'instant-download-fallback' };
+      } catch (fallbackError) {
+        console.error(`[DOWNLOAD-${downloadId}] 모든 즉시 다운로드 방식 실패:`, fallbackError);
+        throw new Error('브라우저에서 다운로드를 차단했습니다. 팝업 차단을 해제해주세요.');
+      }
     }
   }
 
   /**
-   * 프록시 방식 다운로드 (API를 통한 다운로드)
+   * 프록시 방식 다운로드 (API를 통한 다운로드) - 레거시/폴백용
+   * ⚠️ 메모리 버퍼링 발생 - 대용량 파일에는 사용하지 않음
    */
   async downloadViaProxy(filePath, fileName, downloadId, options) {
-    console.log(`[DOWNLOAD-${downloadId}] 프록시 방식 다운로드 시작`);
+    console.log(`[DOWNLOAD-${downloadId}] ⚠️ 프록시 방식 다운로드 시작 (레거시 모드)`);
+    console.warn(`[DOWNLOAD-${downloadId}] 프록시 방식은 메모리 버퍼링이 발생합니다. 대용량 파일에는 권장하지 않습니다.`);
     
     // 다운로드 상태 업데이트
     const downloadInfo = this.activeDownloads.get(downloadId);
     if (downloadInfo) {
-      downloadInfo.status = 'downloading';
+      downloadInfo.status = 'buffering'; // 버퍼링 상태 표시
     }
 
     if (options.onProgress) {
       options.onProgress({ 
         type: 'start', 
         downloadId,
-        message: '서버에서 파일을 가져오는 중...' 
+        message: '서버에서 파일을 메모리로 로딩 중... (시간이 걸릴 수 있습니다)' 
       });
     }
 
@@ -308,7 +339,7 @@ class DownloadService {
   }
 
   /**
-   * 다운로드 전략 선택
+   * 다운로드 전략 선택 (스트리밍 최적화)
    */
   selectDownloadStrategy(filePath, options) {
     // 사용자가 지정한 전략이 있으면 사용
@@ -316,20 +347,23 @@ class DownloadService {
       return options.preferredStrategy;
     }
 
-    // 파일 크기에 따른 전략 선택
+    // 백엔드 스트리밍 구현 후 모든 파일에 대해 redirect 우선 사용
+    // redirect 방식은 브라우저가 직접 처리하여 메모리 버퍼링 없음
+    
+    // 파일 크기에 따른 전략 선택 (스트리밍 최적화)
     if (options.fileSize) {
       const fileSizeMB = options.fileSize / (1024 * 1024);
       
-      if (fileSizeMB > 100) {
-        return 'redirect'; // 대용량 파일은 리다이렉트
-      } else if (fileSizeMB > 10) {
-        return 'proxy'; // 중간 크기는 프록시
+      if (fileSizeMB > 50) {
+        return 'redirect'; // 대용량 파일은 무조건 리다이렉트 (메모리 우회)
+      } else if (fileSizeMB > 5) {
+        return 'redirect'; // 중간 크기도 리다이렉트 우선 (더 빠름)
       } else {
-        return 'direct'; // 소용량은 직접
+        return 'redirect'; // 소용량도 리다이렉트 (일관성)
       }
     }
 
-    // 기본 전략: 리다이렉트 (가장 안정적)
+    // 기본 전략: 리다이렉트 (스트리밍 지원, 메모리 효율적)
     return 'redirect';
   }
 

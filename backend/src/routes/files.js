@@ -23,18 +23,18 @@ const upload = multer({
       'application/x-zip-compressed',
       'application/json',
       'application/octet-stream',
-      'text/plain'
+      'text/plain',
     ];
-    
-    if (allowedTypes.includes(file.mimetype) || 
-        file.originalname.endsWith('.tar.gz') || 
+
+    if (allowedTypes.includes(file.mimetype) ||
+        file.originalname.endsWith('.tar.gz') ||
         file.originalname.endsWith('.zip') ||
         file.originalname.endsWith('.json')) {
       cb(null, true);
     } else {
       cb(new Error('지원하지 않는 파일 형식입니다.'), false);
     }
-  }
+  },
 });
 
 // 모든 파일 라우트는 인증 필요
@@ -46,9 +46,9 @@ router.use(authenticateToken);
 class DownloadManager {
   constructor() {
     this.downloadStrategies = [
+      { name: 'NAS Service Streaming', method: this.tryNasServiceDownload.bind(this) },
       { name: 'Synology Direct', method: this.tryDirectDownload.bind(this) },
       { name: 'Synology Share Link', method: this.tryShareLinkDownload.bind(this) },
-      { name: 'NAS Service', method: this.tryNasServiceDownload.bind(this) }
     ];
   }
 
@@ -58,22 +58,22 @@ class DownloadManager {
   async processDownload(req, res) {
     const requestId = Math.random().toString(36).substr(2, 9);
     const startTime = Date.now();
-    
+
     try {
       const { path } = req.query;
-      const user = req.user;
+      const {user} = req;
 
       // 요청 검증
       const validationResult = this.validateDownloadRequest(path);
       if (!validationResult.isValid) {
         return res.status(400).json({
           success: false,
-          error: validationResult.error
+          error: validationResult.error,
         });
       }
 
       const relativePath = path.replace('/nas/release_version/', '');
-      
+
       logger.info(`[DOWNLOAD-${requestId}] =================================`);
       logger.info(`[DOWNLOAD-${requestId}] 다운로드 요청 시작`);
       logger.info(`[DOWNLOAD-${requestId}] 사용자: ${user.username} (${user.email})`);
@@ -84,25 +84,32 @@ class DownloadManager {
       // 다단계 폴백 체인 실행
       for (let i = 0; i < this.downloadStrategies.length; i++) {
         const strategy = this.downloadStrategies[i];
-        
+        let strategyStartTime = Date.now(); // 변수를 try 밖으로 이동
+
         try {
           logger.info(`[DOWNLOAD-${requestId}] 🚀 전략 ${i + 1}: ${strategy.name} 시도 중...`);
-          const strategyStartTime = Date.now();
-          
-          const result = await strategy.method(path, relativePath, requestId);
+
+          // NAS Service 전략인 경우 response 객체 전달
+          const isNasServiceStrategy = strategy.name === 'NAS Service Streaming';
+          const result = isNasServiceStrategy
+            ? await strategy.method(path, relativePath, requestId, res)
+            : await strategy.method(path, relativePath, requestId);
           const strategyDuration = Date.now() - strategyStartTime;
-          
+
           if (result.success) {
             const totalDuration = Date.now() - startTime;
             logger.info(`[DOWNLOAD-${requestId}] ✅ ${strategy.name} 성공! (${strategyDuration}ms)`);
             logger.info(`[DOWNLOAD-${requestId}] 다운로드 URL: ${result.url || result.action}`);
             logger.info(`[DOWNLOAD-${requestId}] =================================`);
             logger.info(`[DOWNLOAD-${requestId}] 전체 처리 시간: ${totalDuration}ms`);
-            
+
             if (result.redirect) {
               return res.redirect(302, result.url);
+            } else if (result.streaming) {
+              // 스트리밍 전송 완료 - 이미 응답이 전송됨
+              return;
             } else {
-              // 직접 파일 전송
+              // 직접 파일 전송 (레거시 - 메모리 기반)
               res.setHeader('Content-Type', 'application/octet-stream');
               res.setHeader('Content-Disposition', `attachment; filename="${path.split('/').pop()}"`);
               res.send(result.buffer);
@@ -112,7 +119,17 @@ class DownloadManager {
         } catch (strategyError) {
           const strategyDuration = Date.now() - strategyStartTime;
           logger.warn(`[DOWNLOAD-${requestId}] ⚠ ${strategy.name} 실패 (${strategyDuration}ms): ${strategyError.message}`);
-          
+
+          // 스트리밍 도중 에러가 발생한 경우, 응답이 이미 시작되었을 수 있음
+          if (isNasServiceStrategy && res.headersSent) {
+            logger.error(`[DOWNLOAD-${requestId}] 스트리밍 도중 에러 발생 - 응답 이미 시작됨`);
+            // 연결 종료만 하고 에러 응답은 보낼 수 없음
+            if (!res.destroyed) {
+              res.end();
+            }
+            return;
+          }
+
           // 마지막 전략이 실패한 경우에만 에러 처리
           if (i === this.downloadStrategies.length - 1) {
             throw strategyError;
@@ -127,7 +144,16 @@ class DownloadManager {
       const totalDuration = Date.now() - startTime;
       logger.error(`[DOWNLOAD-${requestId}] ❌ 다운로드 최종 실패 (${totalDuration}ms): ${error.message}`);
       logger.error(`[DOWNLOAD-${requestId}] =================================`);
-      
+
+      // 이미 응답이 시작된 경우 추가 응답을 보낼 수 없음
+      if (res.headersSent) {
+        logger.error(`[DOWNLOAD-${requestId}] 응답 헤더가 이미 전송됨 - JSON 에러 응답 불가`);
+        if (!res.destroyed) {
+          res.end();
+        }
+        return;
+      }
+
       return res.status(404).json({
         success: false,
         error: {
@@ -148,7 +174,7 @@ class DownloadManager {
         error: {
           code: 'MISSING_PATH',
           message: '파일 경로가 필요합니다.',
-        }
+        },
       };
     }
 
@@ -158,7 +184,7 @@ class DownloadManager {
         error: {
           code: 'INVALID_PATH',
           message: '유효하지 않은 파일 경로입니다.',
-        }
+        },
       };
     }
 
@@ -170,19 +196,19 @@ class DownloadManager {
    */
   async tryDirectDownload(path, relativePath, requestId) {
     const synologyApiService = require('../services/synologyApiService');
-    
+
     logger.info(`[DOWNLOAD-${requestId}] Synology API 직접 다운로드 URL 생성 중...`);
     const result = await synologyApiService.createDirectDownloadUrl(path);
-    
+
     if (result.success && result.directNasUrl) {
       return {
         success: true,
         redirect: true,
         url: result.directNasUrl,
-        action: 'Synology Direct Download'
+        action: 'Synology Direct Download',
       };
     }
-    
+
     throw new Error('직접 다운로드 URL 생성 실패');
   }
 
@@ -191,36 +217,44 @@ class DownloadManager {
    */
   async tryShareLinkDownload(path, relativePath, requestId) {
     const synologyApiService = require('../services/synologyApiService');
-    
+
     logger.info(`[DOWNLOAD-${requestId}] Synology API 공유링크 생성 중...`);
     const result = await synologyApiService.createFileDownloadLink(path);
-    
+
     if (result.success && result.directNasUrl) {
       return {
         success: true,
         redirect: true,
         url: result.directNasUrl,
-        action: 'Synology Share Link'
+        action: 'Synology Share Link',
       };
     }
-    
+
     throw new Error('공유링크 생성 실패');
   }
 
   /**
-   * 전략 3: NAS 서비스를 통한 직접 파일 전송
+   * 전략 3: NAS 서비스를 통한 스트리밍 파일 전송 (메모리 우회)
    */
-  async tryNasServiceDownload(path, relativePath, requestId) {
+  async tryNasServiceDownload(path, relativePath, requestId, res) {
     const nasService = getNASService();
-    
-    logger.info(`[DOWNLOAD-${requestId}] NAS 서비스를 통한 파일 다운로드 중...`);
-    const fileBuffer = await nasService.downloadFile(relativePath);
-    
+
+    logger.info(`[DOWNLOAD-${requestId}] NAS 서비스를 통한 스트리밍 다운로드 중...`);
+
+    // 파일명 추출 및 헤더 설정
+    const fileName = path.split('/').pop();
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Cache-Control', 'no-cache');
+
+    // 스트리밍 다운로드 (메모리에 전체 파일 로딩하지 않음)
+    await nasService.streamDownloadFile(relativePath, res);
+
     return {
       success: true,
       redirect: false,
-      buffer: fileBuffer,
-      action: 'NAS Service Direct Transfer'
+      streaming: true,
+      action: 'NAS Service Streaming Transfer',
     };
   }
 }
@@ -358,7 +392,7 @@ router.post('/upload',
   async (req, res, next) => {
     try {
       const { path } = req.body;
-      const file = req.file;
+      const {file} = req;
 
       if (!file) {
         return res.status(400).json({
