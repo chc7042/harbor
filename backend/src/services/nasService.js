@@ -613,12 +613,12 @@ class NASService {
 
         // smbclient get 명령어 실행 - 타임아웃 증가
         const command = `timeout 300 smbclient //${host}/${share} -U ${username}%${password} -c "get \\"${filePath}\\" \\"${tempFilePath}\\"" 2>&1`;
-        
+
         logger.info(`실행 명령어: ${command.replace(password, '***')}`);
-        
-        const { stdout, stderr } = await execAsync(command, { 
+
+        const { stdout, stderr } = await execAsync(command, {
           timeout: 300000, // 5분 타임아웃
-          maxBuffer: 1024 * 1024 * 10 // 10MB 버퍼
+          maxBuffer: 1024 * 1024 * 10, // 10MB 버퍼
         });
 
         logger.info(`smbclient 출력: ${stdout}`);
@@ -635,7 +635,7 @@ class NASService {
 
         // 임시 파일에서 데이터 읽기
         const data = await fs.readFile(tempFilePath);
-        
+
         // 임시 파일 삭제
         try {
           await fs.unlink(tempFilePath);
@@ -674,20 +674,20 @@ class NASService {
 
       // smbclient를 사용한 스트리밍 다운로드
       const { spawn } = require('child_process');
-      
+
       return new Promise((resolve, reject) => {
         // smbclient 명령어로 파일을 stdout으로 스트리밍
         const command = 'smbclient';
         const args = [
           `//${host}/${share}`,
           '-U', `${username}%${password}`,
-          '-c', `get "${filePath}" -`  // stdout으로 출력
+          '-c', `get "${filePath}" -`,  // stdout으로 출력
         ];
 
         logger.info(`스트리밍 명령어: ${command} ${args.join(' ').replace(password, '***')}`);
 
         const smbProcess = spawn(command, args, {
-          stdio: ['ignore', 'pipe', 'pipe']
+          stdio: ['ignore', 'pipe', 'pipe'],
         });
 
         let errorOutput = '';
@@ -718,7 +718,7 @@ class NASService {
         smbProcess.on('close', (code) => {
           if (code !== 0) {
             logger.error(`smbclient 종료 코드: ${code}, 에러: ${errorOutput}`);
-            
+
             if (!res.headersSent) {
               reject(new AppError(`Stream download failed with code ${code}: ${errorOutput}`, 404));
             } else {
@@ -1289,13 +1289,13 @@ class NASService {
       try {
         const fullPath = path.join(this.mockBasePath, filePath);
         const dirPath = path.dirname(fullPath);
-        
+
         // 디렉토리 생성 (재귀적으로)
         await fs.mkdir(dirPath, { recursive: true });
-        
+
         // 파일 쓰기
         await fs.writeFile(fullPath, buffer);
-        
+
         logger.info(`File uploaded successfully to mock NAS: ${filePath}, size: ${buffer.length} bytes`);
         return;
       } catch (error) {
@@ -1341,12 +1341,12 @@ class NASService {
 
         // smbclient put 명령어 실행
         const command = `smbclient //${host}/${share} -U ${username}%${password} -c "put \\"${tempFilePath}\\" \\"${filePath}\\"" 2>&1`;
-        
+
         logger.info(`실행 명령어: ${command.replace(password, '***')}`);
-        
-        const { stdout, stderr } = await execAsync(command, { 
+
+        const { stdout, stderr } = await execAsync(command, {
           timeout: 300000, // 5분 타임아웃
-          maxBuffer: 1024 * 1024 * 10 // 10MB 버퍼
+          maxBuffer: 1024 * 1024 * 10, // 10MB 버퍼
         });
 
         logger.info(`smbclient 출력: ${stdout}`);
@@ -1390,21 +1390,21 @@ class NASService {
       try {
         const fullPath = path.join(this.mockBasePath, filePath);
         const dirPath = path.dirname(fullPath);
-        
+
         // 디렉토리 생성 (재귀적으로)
         await fs.mkdir(dirPath, { recursive: true });
-        
+
         // 스트림을 파일로 파이프
         const writeStream = require('fs').createWriteStream(fullPath);
-        
+
         return new Promise((resolve, reject) => {
           stream.pipe(writeStream);
-          
+
           writeStream.on('finish', () => {
             logger.info(`Stream upload completed to mock NAS: ${filePath}`);
             resolve();
           });
-          
+
           writeStream.on('error', (error) => {
             logger.error(`Stream upload failed to mock NAS: ${filePath}`, error.message);
             reject(new AppError(`Stream upload failed: ${error.message}`, 500));
@@ -1435,12 +1435,12 @@ class NASService {
       logger.info(`스트리밍 업로드 시작: ${filePath}`);
 
       const { spawn } = require('child_process');
-      
+
       return new Promise((resolve, reject) => {
         // 디렉토리 경로 생성 (필요한 경우)
         const dirPath = path.dirname(filePath);
         let mkdirPromise = Promise.resolve();
-        
+
         if (dirPath && dirPath !== '.') {
           mkdirPromise = execAsync(`smbclient //${host}/${share} -U ${username}%${password} -c "mkdir \\"${dirPath}\\"" 2>/dev/null || true`);
         }
@@ -1451,13 +1451,13 @@ class NASService {
           const args = [
             `//${host}/${share}`,
             '-U', `${username}%${password}`,
-            '-c', `put - "${filePath}"`  // stdin에서 읽어서 업로드
+            '-c', `put - "${filePath}"`,  // stdin에서 읽어서 업로드
           ];
 
           logger.info(`스트리밍 업로드 명령어: ${command} ${args.join(' ').replace(password, '***')}`);
 
           const smbProcess = spawn(command, args, {
-            stdio: ['pipe', 'pipe', 'pipe']
+            stdio: ['pipe', 'pipe', 'pipe'],
           });
 
           let errorOutput = '';

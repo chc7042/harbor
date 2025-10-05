@@ -361,7 +361,7 @@ class SynologyApiService {
   async createDirectDownloadUrl(filePath, options = {}) {
     const requestId = Math.random().toString(36).substr(2, 9);
     const startTime = Date.now();
-    
+
     try {
       logger.info(`[SYNOLOGY-${requestId}] =================================`);
       logger.info(`[SYNOLOGY-${requestId}] 직접 다운로드 URL 생성 시작`);
@@ -370,56 +370,55 @@ class SynologyApiService {
 
       // URL 생성 전략들
       const urlStrategies = [
-        { 
-          name: 'Session-based URL', 
+        {
+          name: 'Session-based URL',
           method: this.createSessionBasedUrl.bind(this),
-          requiresSession: true 
+          requiresSession: true,
         },
-        { 
-          name: 'Public Download URL', 
+        {
+          name: 'Public Download URL',
           method: this.createPublicUrl.bind(this),
-          requiresSession: false 
+          requiresSession: false,
         },
-        { 
-          name: 'Alternative API URL', 
+        {
+          name: 'Alternative API URL',
           method: this.createAlternativeUrl.bind(this),
-          requiresSession: false 
-        }
+          requiresSession: false,
+        },
       ];
 
       // 각 전략을 순서대로 시도
       for (let i = 0; i < urlStrategies.length; i++) {
         const strategy = urlStrategies[i];
-        
+
         try {
           logger.info(`[SYNOLOGY-${requestId}] 🚀 전략 ${i + 1}: ${strategy.name} 시도 중...`);
           const strategyStartTime = Date.now();
-          
+
           // 세션이 필요한 전략인 경우 세션 확인
           if (strategy.requiresSession) {
             await this.ensureValidSession();
             logger.info(`[SYNOLOGY-${requestId}] 세션 확인 완료: ${this.sessionId ? 'OK' : 'FAILED'}`);
           }
-          
+
           const result = await strategy.method(filePath, requestId, options);
           const strategyDuration = Date.now() - strategyStartTime;
-          
+
           if (result.success) {
             const totalDuration = Date.now() - startTime;
             logger.info(`[SYNOLOGY-${requestId}] ✅ ${strategy.name} 성공! (${strategyDuration}ms)`);
             logger.info(`[SYNOLOGY-${requestId}] 생성된 URL: ${result.directNasUrl}`);
             logger.info(`[SYNOLOGY-${requestId}] =================================`);
             logger.info(`[SYNOLOGY-${requestId}] 전체 처리 시간: ${totalDuration}ms`);
-            
+
             return {
               ...result,
               strategy: strategy.name,
-              duration: totalDuration
+              duration: totalDuration,
             };
           }
         } catch (strategyError) {
-          const strategyDuration = Date.now() - strategyStartTime;
-          logger.warn(`[SYNOLOGY-${requestId}] ⚠ ${strategy.name} 실패 (${strategyDuration}ms): ${strategyError.message}`);
+          logger.warn(`[SYNOLOGY-${requestId}] ⚠ ${strategy.name} 실패: ${strategyError.message}`);
         }
       }
 
@@ -430,12 +429,12 @@ class SynologyApiService {
       const totalDuration = Date.now() - startTime;
       logger.error(`[SYNOLOGY-${requestId}] ❌ 직접 다운로드 URL 생성 최종 실패 (${totalDuration}ms): ${error.message}`);
       logger.error(`[SYNOLOGY-${requestId}] =================================`);
-      
+
       return {
         success: false,
         error: error.message,
         path: filePath,
-        duration: totalDuration
+        duration: totalDuration,
       };
     }
   }
@@ -443,7 +442,7 @@ class SynologyApiService {
   /**
    * 세션 기반 다운로드 URL 생성
    */
-  async createSessionBasedUrl(filePath, requestId, options) {
+  async createSessionBasedUrl(filePath, requestId, _options) {
     if (!this.sessionId) {
       throw new Error('세션이 없습니다.');
     }
@@ -454,7 +453,7 @@ class SynologyApiService {
 
     // 세션 기반 다운로드 URL 생성
     const downloadUrl = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${encodeURIComponent(normalizedPath)}&mode=download&_sid=${this.sessionId}`;
-    
+
     // URL 검증 (선택적)
     if (options.validateUrl) {
       await this.validateDownloadUrl(downloadUrl, requestId);
@@ -466,34 +465,34 @@ class SynologyApiService {
       directNasUrl: downloadUrl,
       path: normalizedPath,
       isDirectDownload: true,
-      sessionBased: true
+      sessionBased: true,
     };
   }
 
   /**
    * 공개 다운로드 URL 생성 (세션 없이)
    */
-  async createPublicUrl(filePath, requestId, options) {
+  async createPublicUrl(filePath, _requestId, _options) {
     const normalizedPath = this.normalizePath(filePath);
-    
+
     // 공개 접근 가능한 URL 패턴들 시도
     const publicPatterns = [
       `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${encodeURIComponent(normalizedPath)}&mode=download`,
       `${this.baseUrl}/webapi/DownloadStation/Download.cgi?path=${encodeURIComponent(normalizedPath)}`,
-      `${this.baseUrl}/fbdownload/${encodeURIComponent(normalizedPath.replace(/^\//, ''))}`
+      `${this.baseUrl}/fbdownload/${encodeURIComponent(normalizedPath.replace(/^\//, ''))}`,
     ];
 
     for (const url of publicPatterns) {
       try {
         logger.info(`[SYNOLOGY-${requestId}] 공개 URL 패턴 시도: ${url.substring(0, 100)}...`);
-        
+
         return {
           success: true,
           downloadUrl: url,
           directNasUrl: url,
           path: normalizedPath,
           isDirectDownload: true,
-          sessionBased: false
+          sessionBased: false,
         };
       } catch (error) {
         logger.warn(`[SYNOLOGY-${requestId}] 공개 URL 패턴 실패: ${error.message}`);
@@ -508,16 +507,16 @@ class SynologyApiService {
    */
   async createAlternativeUrl(filePath, requestId, options) {
     const normalizedPath = this.normalizePath(filePath);
-    
+
     // Synology의 다른 API 엔드포인트들 시도
     const alternativeUrls = [
       `${this.baseUrl}/webapi/AudioStation/stream.cgi?method=stream&id=${encodeURIComponent(normalizedPath)}`,
       `${this.baseUrl}/webapi/VideoStation/vtestreaming.cgi?path=${encodeURIComponent(normalizedPath)}`,
-      `${this.baseUrl}/sharing/download/${encodeURIComponent(normalizedPath.replace(/^\//, ''))}`
+      `${this.baseUrl}/sharing/download/${encodeURIComponent(normalizedPath.replace(/^\//, ''))}`,
     ];
 
     const url = alternativeUrls[0]; // 첫 번째 대안 URL만 시도
-    
+
     return {
       success: true,
       downloadUrl: url,
@@ -525,7 +524,7 @@ class SynologyApiService {
       path: normalizedPath,
       isDirectDownload: true,
       sessionBased: false,
-      alternative: true
+      alternative: true,
     };
   }
 
@@ -535,19 +534,19 @@ class SynologyApiService {
   normalizePath(filePath) {
     // 경로 앞의 /nas/release_version/ 제거 (이미 제거되었을 수도 있음)
     let normalized = filePath;
-    
+
     if (normalized.startsWith('/nas/release_version/')) {
       normalized = '/' + normalized.replace('/nas/release_version/', '');
     }
-    
+
     // 중복 슬래시 제거
     normalized = normalized.replace(/\/+/g, '/');
-    
+
     // 시작 슬래시 확인
     if (!normalized.startsWith('/')) {
       normalized = '/' + normalized;
     }
-    
+
     return normalized;
   }
 
@@ -557,13 +556,13 @@ class SynologyApiService {
   async validateDownloadUrl(url, requestId) {
     try {
       logger.info(`[SYNOLOGY-${requestId}] URL 검증 중...`);
-      
+
       // HEAD 요청으로 URL 유효성 확인
       const response = await axios.head(url, {
         timeout: 5000,
-        validateStatus: (status) => status < 500 // 4xx는 허용 (인증 문제일 수 있음)
+        validateStatus: (status) => status < 500, // 4xx는 허용 (인증 문제일 수 있음)
       });
-      
+
       logger.info(`[SYNOLOGY-${requestId}] URL 검증 결과: ${response.status}`);
       return response.status < 400;
     } catch (error) {

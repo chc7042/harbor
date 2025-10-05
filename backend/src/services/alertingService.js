@@ -24,10 +24,10 @@ class AlertingService {
 
     this.alertHandlers = [];
     this.recentFailures = []; // Track recent failures for rate calculation
-    
+
     // Register default console alert handler
     this.registerAlertHandler(this.consoleAlertHandler.bind(this));
-    
+
     logger.info('AlertingService initialized', {
       thresholds: this.alertThresholds,
     });
@@ -98,12 +98,12 @@ class AlertingService {
    */
   async checkAlertConditions() {
     const now = new Date();
-    
+
     // 쿨다운 기간 확인
     if (this.alertState.lastAlertTime) {
       const timeSinceLastAlert = now.getTime() - this.alertState.lastAlertTime.getTime();
       const cooldownMs = this.alertThresholds.cooldownMinutes * 60 * 1000;
-      
+
       if (timeSinceLastAlert < cooldownMs) {
         this.alertState.suppressedAlerts++;
         logger.debug('Alert suppressed due to cooldown', {
@@ -146,9 +146,9 @@ class AlertingService {
       // 최근 성공 요청 수 추정
       const recentSuccessEstimate = await this.getRecentSuccessCount();
       const totalRecentRequests = this.recentFailures.length + recentSuccessEstimate;
-      
+
       if (totalRecentRequests === 0) return 0;
-      
+
       return this.recentFailures.length / totalRecentRequests;
     } catch (error) {
       logger.error('Error calculating failure rate', { error: error.message });
@@ -164,13 +164,13 @@ class AlertingService {
     try {
       const deploymentPathService = getDeploymentPathService();
       const cutoffTime = new Date(Date.now() - this.alertThresholds.timeWindowMinutes * 60 * 1000);
-      
+
       // 최근 저장된 배포 경로 개수를 성공으로 간주
       const recentPaths = await deploymentPathService.getRecentPaths(50);
-      const recentSuccessfulPaths = recentPaths.filter(path => 
-        new Date(path.verifiedAt) > cutoffTime
+      const recentSuccessfulPaths = recentPaths.filter(path =>
+        new Date(path.verifiedAt) > cutoffTime,
       );
-      
+
       return recentSuccessfulPaths.length;
     } catch (error) {
       logger.error('Error getting recent success count', { error: error.message });
@@ -219,19 +219,19 @@ class AlertingService {
    */
   async consoleAlertHandler(alertType, alertData) {
     const { data, timestamp } = alertData;
-    
+
     switch (alertType) {
       case 'consecutive_failures':
-        logger.error(`🚨 ALERT: Consecutive deployment path detection failures detected!`, {
+        logger.error('🚨 ALERT: Consecutive deployment path detection failures detected!', {
           consecutiveFailures: data.consecutiveFailures,
           threshold: data.threshold,
           timestamp: timestamp.toISOString(),
           action: 'Check Jenkins connectivity, NAS availability, and database status',
         });
         break;
-        
+
       case 'high_failure_rate':
-        logger.error(`🚨 ALERT: High deployment path detection failure rate detected!`, {
+        logger.error('🚨 ALERT: High deployment path detection failure rate detected!', {
           failureRate: `${data.failureRate}%`,
           threshold: `${data.threshold}%`,
           timeWindow: `${data.timeWindowMinutes} minutes`,
@@ -241,7 +241,7 @@ class AlertingService {
           action: 'Check system performance and external dependencies',
         });
         break;
-        
+
       default:
         logger.error(`🚨 ALERT: Unknown alert type: ${alertType}`, alertData);
     }
@@ -257,25 +257,25 @@ class AlertingService {
       try {
         const axios = require('axios');
         const { data, timestamp } = alertData;
-        
+
         let message = '';
         switch (alertType) {
           case 'consecutive_failures':
-            message = `🚨 **Deployment Path Detection Alert**\n\n` +
-                     `**Type:** Consecutive Failures\n` +
+            message = '🚨 **Deployment Path Detection Alert**\n\n' +
+                     '**Type:** Consecutive Failures\n' +
                      `**Count:** ${data.consecutiveFailures}/${data.threshold}\n` +
                      `**Time:** ${timestamp.toISOString()}\n` +
-                     `**Action:** Check Jenkins connectivity, NAS availability, and database status`;
+                     '**Action:** Check Jenkins connectivity, NAS availability, and database status';
             break;
-            
+
           case 'high_failure_rate':
-            message = `🚨 **Deployment Path Detection Alert**\n\n` +
-                     `**Type:** High Failure Rate\n` +
+            message = '🚨 **Deployment Path Detection Alert**\n\n' +
+                     '**Type:** High Failure Rate\n' +
                      `**Rate:** ${data.failureRate}% (threshold: ${data.threshold}%)\n` +
                      `**Period:** ${data.timeWindowMinutes} minutes\n` +
                      `**Requests:** ${data.failedRequests}/${data.totalRequests} failed\n` +
                      `**Time:** ${timestamp.toISOString()}\n` +
-                     `**Action:** Check system performance and external dependencies`;
+                     '**Action:** Check system performance and external dependencies';
             break;
         }
 

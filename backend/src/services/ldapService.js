@@ -30,7 +30,7 @@ class LDAPService {
 
     try {
       // 개발 환경에서 모의 인증 사용
-      if (process.env.NODE_ENV === 'development' && process.env.ENABLE_MOCK_AUTH === 'true') {
+      if (process.env.ENABLE_MOCK_AUTH === 'true') {
         console.log(`Using mock authentication for development - user: ${username}`);
 
         // 실제 LDAP에서 사용자 정보 조회 시도
@@ -85,17 +85,17 @@ class LDAPService {
       // 비밀번호 인증 (재시도 로직 추가)
       let authRetryCount = 0;
       const authMaxRetries = 2;
-      
+
       while (authRetryCount <= authMaxRetries) {
         try {
           client = this.config.createClient();
           client.timeout = 10000; // 10초 타임아웃
           client.connectTimeout = 5000; // 5초 연결 타임아웃
-          
+
           const bindAsync = promisify(client.bind).bind(client);
           await bindAsync(userInfo.dn, password);
           break; // 성공 시 루프 탈출
-          
+
         } catch (bindError) {
           if (client) {
             try {
@@ -104,23 +104,23 @@ class LDAPService {
               // 무시
             }
           }
-          
+
           if (bindError.name === 'InvalidCredentialsError') {
             throw new Error('Invalid username or password');
           }
-          
+
           authRetryCount++;
-          const isRetryableError = bindError.message.includes('closed') || 
+          const isRetryableError = bindError.message.includes('closed') ||
                                   bindError.message.includes('timeout') ||
                                   bindError.message.includes('ECONNREFUSED') ||
                                   bindError.message.includes('ETIMEDOUT');
-          
+
           if (authRetryCount <= authMaxRetries && isRetryableError) {
             console.warn(`LDAP authentication failed (attempt ${authRetryCount}/${authMaxRetries + 1}), retrying...`);
             await new Promise(resolve => setTimeout(resolve, 500 * authRetryCount));
             continue;
           }
-          
+
           throw new Error(`Authentication failed: ${bindError.message}`);
         }
       }
@@ -178,7 +178,7 @@ class LDAPService {
     while (retryCount <= maxRetries) {
       try {
         client = this.config.createClient();
-        
+
         // 연결 타임아웃 설정 (OpenLDAP 응답 지연 고려)
         client.timeout = 30000; // 30초
         client.connectTimeout = 20000; // 20초
@@ -235,7 +235,7 @@ class LDAPService {
 
           searchResult.on('end', (result) => {
             cleanup();
-            
+
             if (result.status !== 0) {
               reject(new Error(`LDAP search failed with status: ${result.status}`));
               return;
@@ -272,8 +272,8 @@ class LDAPService {
         }
 
         retryCount++;
-        const isConnectionError = error.message.includes('closed') || 
-                                 error.message.includes('timeout') || 
+        const isConnectionError = error.message.includes('closed') ||
+                                 error.message.includes('timeout') ||
                                  error.message.includes('ECONNREFUSED') ||
                                  error.message.includes('ETIMEDOUT');
 

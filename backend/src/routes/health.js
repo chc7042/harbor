@@ -57,7 +57,7 @@ router.get('/', async (req, res) => {
     try {
       const pathDetectionHealth = await checkDeploymentPathDetectionHealth();
       healthCheck.checks.deploymentPathDetection = pathDetectionHealth;
-      
+
       if (pathDetectionHealth.status === 'unhealthy') {
         healthCheck.status = 'degraded';
       } else if (pathDetectionHealth.status === 'warning' && healthCheck.status === 'healthy') {
@@ -170,7 +170,7 @@ router.get('/alerts', (req, res) => {
   try {
     const alertingService = getAlertingService();
     const alertStatus = alertingService.getAlertStatus();
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -180,7 +180,7 @@ router.get('/alerts', (req, res) => {
     });
   } catch (error) {
     console.error('Alerting status check error:', error);
-    
+
     res.status(500).json({
       success: false,
       error: {
@@ -249,14 +249,14 @@ async function checkDeploymentPathDetectionHealth() {
     try {
       const deploymentPathService = getDeploymentPathService();
       const recentPaths = await deploymentPathService.getRecentPaths(10);
-      
+
       if (recentPaths && recentPaths.length > 0) {
         checks.nasServiceAvailable = true;
-        
+
         // Calculate recent failures (paths without successful detection)
         const pathsWithNullNasPath = recentPaths.filter(p => !p.nas_path);
         checks.recentFailures = pathsWithNullNasPath.length;
-        
+
         if (checks.recentFailures > 5) {
           issues.push(`High failure rate: ${checks.recentFailures}/10 recent requests failed`);
           overallStatus = 'warning';
@@ -281,10 +281,10 @@ async function checkDeploymentPathDetectionHealth() {
         WHERE created_at > NOW() - INTERVAL '1 hour'
         AND verified_at IS NOT NULL
       `);
-      
+
       if (result.rows[0]?.avg_response_time_ms) {
         checks.avgResponseTime = Math.round(result.rows[0].avg_response_time_ms);
-        
+
         if (checks.avgResponseTime > 25000) { // 25 seconds
           issues.push(`Slow response time: ${checks.avgResponseTime}ms average`);
           if (overallStatus === 'healthy') overallStatus = 'warning';

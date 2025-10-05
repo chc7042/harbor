@@ -476,11 +476,11 @@ class JenkinsService {
         });
 
         metricsService.recordDeploymentExtractionComplete(requestData, { success: true });
-        
+
         // Record success for alerting
         const alertingService = getAlertingService();
         alertingService.recordPathDetectionSuccess();
-        
+
         return cachedPath;
       }
 
@@ -507,7 +507,7 @@ class JenkinsService {
 
         const legacyResult = await this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
         metricsService.recordDeploymentExtractionComplete(requestData, { success: !!legacyResult });
-        
+
         // Record alerting data for Jenkins API failure fallback
         const alertingService = getAlertingService();
         if (legacyResult) {
@@ -521,7 +521,7 @@ class JenkinsService {
             responseTime: Date.now() - startTime,
           });
         }
-        
+
         return legacyResult;
       }
 
@@ -551,7 +551,7 @@ class JenkinsService {
 
         const legacyResult = await this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
         metricsService.recordDeploymentExtractionComplete(requestData, { success: !!legacyResult });
-        
+
         // Record alerting data for path generation failure fallback
         const alertingService = getAlertingService();
         if (legacyResult) {
@@ -565,7 +565,7 @@ class JenkinsService {
             responseTime: Date.now() - startTime,
           });
         }
-        
+
         return legacyResult;
       }
 
@@ -594,7 +594,7 @@ class JenkinsService {
 
         const legacyResult = await this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
         metricsService.recordDeploymentExtractionComplete(requestData, { success: !!legacyResult });
-        
+
         // Record alerting data for NAS verification failure fallback
         const alertingService = getAlertingService();
         if (legacyResult) {
@@ -608,7 +608,7 @@ class JenkinsService {
             responseTime: Date.now() - startTime,
           });
         }
-        
+
         return legacyResult;
       }
 
@@ -647,11 +647,11 @@ class JenkinsService {
         });
 
         metricsService.recordDeploymentExtractionComplete(requestData, { success: true });
-        
+
         // Record success for alerting
         const alertingService = getAlertingService();
         alertingService.recordPathDetectionSuccess();
-        
+
         return verifiedPath;
       } catch (saveError) {
         const saveTime = Date.now() - saveStartTime;
@@ -682,7 +682,7 @@ class JenkinsService {
       // 새로운 방식 실패 시 기존 방식으로 폴백
       const legacyResult = await this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
       metricsService.recordDeploymentExtractionComplete(requestData, { success: !!legacyResult });
-      
+
       // Record alerting data for exception fallback
       const alertingService = getAlertingService();
       if (legacyResult) {
@@ -696,7 +696,7 @@ class JenkinsService {
           responseTime: totalTime,
         });
       }
-      
+
       return legacyResult;
     }
   }

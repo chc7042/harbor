@@ -15,10 +15,10 @@ describe('AlertingService', () => {
     alertingService = new AlertingService();
     mockHandler = jest.fn();
     alertingService.alertHandlers = [mockHandler]; // Replace default handler
-    
+
     // Reset alert state
     alertingService.resetAlertState();
-    
+
     // Set low thresholds for testing
     alertingService.updateThresholds({
       consecutiveFailures: 2,
@@ -57,7 +57,7 @@ describe('AlertingService', () => {
             consecutiveFailures: 2,
             threshold: 2,
           }),
-        })
+        }),
       );
       expect(alertingService.consecutiveFailures).toBe(2);
     });
@@ -72,7 +72,7 @@ describe('AlertingService', () => {
       };
 
       await alertingService.recordPathDetectionFailure(failureData);
-      
+
       expect(alertingService.recentFailures).toHaveLength(1);
       expect(alertingService.recentFailures[0]).toMatchObject({
         projectName: 'test-project',
@@ -87,17 +87,17 @@ describe('AlertingService', () => {
   describe('recordPathDetectionSuccess', () => {
     it('should reset consecutive failures on success', () => {
       alertingService.consecutiveFailures = 5;
-      
+
       alertingService.recordPathDetectionSuccess();
-      
+
       expect(alertingService.consecutiveFailures).toBe(0);
     });
 
     it('should not affect consecutive failures if already zero', () => {
       alertingService.consecutiveFailures = 0;
-      
+
       alertingService.recordPathDetectionSuccess();
-      
+
       expect(alertingService.consecutiveFailures).toBe(0);
     });
   });
@@ -131,9 +131,9 @@ describe('AlertingService', () => {
     it('should add new alert handlers', () => {
       const newHandler = jest.fn();
       const initialHandlerCount = alertingService.alertHandlers.length;
-      
+
       alertingService.registerAlertHandler(newHandler);
-      
+
       expect(alertingService.alertHandlers).toHaveLength(initialHandlerCount + 1);
       expect(alertingService.alertHandlers).toContain(newHandler);
     });
@@ -149,7 +149,7 @@ describe('AlertingService', () => {
     it('should create a webhook handler function', () => {
       const webhookUrl = 'https://hooks.slack.com/test';
       const handler = alertingService.createWebhookAlertHandler(webhookUrl);
-      
+
       expect(typeof handler).toBe('function');
     });
   });
@@ -159,9 +159,9 @@ describe('AlertingService', () => {
       alertingService.consecutiveFailures = 3;
       alertingService.alertState.lastAlertType = 'consecutive_failures';
       alertingService.recentFailures = [{ timestamp: new Date() }];
-      
+
       const status = alertingService.getAlertStatus();
-      
+
       expect(status).toMatchObject({
         thresholds: expect.objectContaining({
           consecutiveFailures: 2,
@@ -182,9 +182,9 @@ describe('AlertingService', () => {
         consecutiveFailures: 10,
         failureRateThreshold: 0.9,
       };
-      
+
       alertingService.updateThresholds(newThresholds);
-      
+
       expect(alertingService.alertThresholds.consecutiveFailures).toBe(10);
       expect(alertingService.alertThresholds.failureRateThreshold).toBe(0.9);
       // Should preserve other thresholds
@@ -198,9 +198,9 @@ describe('AlertingService', () => {
       alertingService.alertState.lastAlertTime = new Date();
       alertingService.alertState.lastAlertType = 'consecutive_failures';
       alertingService.recentFailures = [{ timestamp: new Date() }];
-      
+
       alertingService.resetAlertState();
-      
+
       expect(alertingService.consecutiveFailures).toBe(0);
       expect(alertingService.alertState.lastAlertTime).toBeNull();
       expect(alertingService.alertState.lastAlertType).toBeNull();
@@ -213,10 +213,10 @@ describe('AlertingService', () => {
       // Mock logger.error instead of console.error
       const logger = require('../config/logger');
       const loggerErrorSpy = jest.spyOn(logger, 'error').mockImplementation();
-      
+
       // Use the default console handler
       alertingService.alertHandlers = [alertingService.consoleAlertHandler.bind(alertingService)];
-      
+
       const failureData = {
         projectName: 'test-project',
         version: '1.0.0',
@@ -234,7 +234,7 @@ describe('AlertingService', () => {
         expect.objectContaining({
           consecutiveFailures: 2,
           threshold: 2,
-        })
+        }),
       );
 
       loggerErrorSpy.mockRestore();

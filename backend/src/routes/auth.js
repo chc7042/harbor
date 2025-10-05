@@ -44,7 +44,7 @@ const loginValidation = [
     .trim()
     .isLength({ min: 1, max: 100 })
     .withMessage('사용자명은 1-100자 사이여야 합니다')
-    .matches(/^[a-zA-Z0-9._-]+$/)
+    .matches(/^[a-zA-Z0-9._\-\s가-힣ㄱ-ㅎㅏ-ㅣ]+$/)
     .withMessage('사용자명에 유효하지 않은 문자가 포함되어 있습니다'),
 
   body('password')
@@ -110,8 +110,8 @@ const refreshTokenValidation = [
  *               $ref: '#/components/schemas/Error'
  */
 // Conditionally apply rate limiter based on environment
-const loginMiddleware = isRateLimitingDisabled ? 
-  [loginValidation] : 
+const loginMiddleware = isRateLimitingDisabled ?
+  [loginValidation] :
   [loginLimiter, loginValidation];
 
 router.post('/login', ...loginMiddleware, async (req, res) => {
