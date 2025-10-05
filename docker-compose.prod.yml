@@ -63,10 +63,7 @@ services:
       FRONTEND_URL: http://harbor.roboetech.com
       CORS_ORIGIN: ${CORS_ORIGIN:-http://harbor.roboetech.com}
 
-      # Production flags
-      ENABLE_MOCK_AUTH: ${ENABLE_MOCK_AUTH:-false}
-      ENABLE_MOCK_DB: ${ENABLE_MOCK_DB:-false}
-      ENABLE_MOCK_NAS: ${ENABLE_MOCK_NAS:-false}
+      # Production flags - Mock settings removed
 
       # LDAP configuration
       LDAP_URL: ${LDAP_URL}

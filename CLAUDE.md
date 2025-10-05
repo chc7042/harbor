@@ -259,6 +259,28 @@ NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 
+## Critical Production Environment Rules
+- **ALWAYS ask before changing production configurations**
+- **NEVER switch to mock authentication without explicit permission**
+- **NEVER ignore environment variable settings in .env files**
+- **ALWAYS use the credentials and settings specified in the project configuration**
+- **PRODUCTION MEANS PRODUCTION - do not make arbitrary changes**
+- **When testing fails, ask for guidance instead of making assumptions**
+
+## Authentication Configuration
+- **Primary test account**: admin/admin (as specified in .env)
+- **Jenkins integration account**: jenkins_admin (for Jenkins system integration only)
+- **LDAP configuration must match the settings in docker-compose.prod.yml**
+- **Never bypass or mock authentication in production environment**
+
+## Testing Protocols
+- **Always use the configured test credentials first**
+- **If authentication fails, check LDAP configuration before switching methods**
+- **Document any configuration changes and get approval**
+- **Production testing requires production credentials**
+- **NEVER use Mock authentication settings - Mock is permanently disabled**
+- **Always use real LDAP authentication in all environments**
+
 ## Task Master AI Instructions
 **Import Task Master's development workflow commands and guidelines, treat as if import is in the main CLAUDE.md file.**
 @./.taskmaster/CLAUDE.md
