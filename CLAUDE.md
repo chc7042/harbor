@@ -281,6 +281,86 @@ NEVER proactively create documentation files (*.md) or README files. Only create
 - **NEVER use Mock authentication settings - Mock is permanently disabled**
 - **Always use real LDAP authentication in all environments**
 
+## Production System Analysis & Troubleshooting
+
+### Current Architecture (Docker Network Analysis)
+```
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                          HARBOR PRODUCTION SYSTEM                                ║
+║                        Docker Network: 172.20.0.0/16                           ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+Browser → harbor.roboetech.com → Nginx Proxy Manager → Frontend:8080 (172.20.0.5)
+                                                           ↓ API calls
+Frontend → VITE_API_URL → Backend:3001 (172.20.0.4) ← Database:5432 (172.20.0.3)
+                            ↓                              ↑
+                       Redis:6379 (172.20.0.2)      WebSocket
+                            ↓
+                       NAS Volume (/nas) → ${NAS_HOST_PATH}
+```
+
+### Known Critical Issues
+
+**🔴 Database Migration Failures:**
+- Migration `004_create_deployment_paths.sql` failing to execute properly
+- Missing columns: `nas_path`, `download_file`, `all_files`, `build_number`, `build_date`
+- Backend code references non-existent columns causing SQL errors
+- **Fix**: Run database migration manually or reset database schema
+
+**🔴 NAS Scanning Service Failures:**
+- "NAS scan failed" errors occurring every 15 minutes
+- "Scheduled scan failed" errors in backend logs
+- Likely causes: NAS mount issues, permission problems, or incorrect NAS_HOST_PATH
+- **Fix**: Verify NAS mount path and permissions
+
+**🔴 Port Configuration Inconsistencies:**
+- `.env` file specifies PORT=3002
+- `docker-compose.prod.yml` uses PORT=3001 (actual running port)
+- **Fix**: Align all configuration files to use consistent port
+
+### Production Debugging Commands
+
+**Docker Container Inspection:**
+```bash
+docker ps                                    # Check running containers
+docker logs harbor-backend-prod --tail 50   # Check backend logs
+docker logs harbor-frontend-prod --tail 50  # Check frontend logs
+docker exec -it harbor-backend-prod sh      # Access backend container
+docker exec -it harbor-postgres-prod psql -U harbor_user -d harbor_prod  # Access database
+```
+
+**Database Debugging:**
+```bash
+# Check database schema
+docker exec harbor-postgres-prod psql -U harbor_user -d harbor_prod -c "\d deployment_paths"
+
+# Check migration status
+docker exec harbor-postgres-prod psql -U harbor_user -d harbor_prod -c "SELECT * FROM schema_migrations;"
+
+# Force re-run migrations
+docker exec harbor-backend-prod npm run db:migrate
+```
+
+**Network Connectivity Tests:**
+```bash
+curl -s http://localhost:3001/api/health     # Test backend directly
+curl -s http://localhost:8080               # Test frontend directly
+docker network inspect harbor_harbor-network # Inspect network configuration
+```
+
+### Recovery Procedures
+
+**Database Schema Reset (if migrations fail):**
+1. Stop containers: `docker-compose -f docker-compose.prod.yml down`
+2. Remove database volume: `docker volume rm harbor_postgres_data`
+3. Restart system: `docker-compose -f docker-compose.prod.yml up -d`
+
+**NAS Mount Troubleshooting:**
+1. Verify NAS_HOST_PATH environment variable
+2. Check host directory permissions
+3. Test NAS connectivity from host system
+4. Restart backend container if mount issues persist
+
 ## Task Master AI Instructions
 **Import Task Master's development workflow commands and guidelines, treat as if import is in the main CLAUDE.md file.**
 @./.taskmaster/CLAUDE.md
