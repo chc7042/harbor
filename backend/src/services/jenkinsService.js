@@ -285,25 +285,79 @@ class JenkinsService {
 
   async getBuildLog(jobName, buildNumber) {
     return withJenkinsRetry(async () => {
+      // BE/FE job인 경우 MR job에 의해 트리거된 downstream 빌드 번호를 찾기
+      let actualBuildNumber = buildNumber;
+      if (jobName.includes('/be') || jobName.includes('/fe')) {
+        actualBuildNumber = await this.findDownstreamBuildNumber(jobName, buildNumber);
+        if (!actualBuildNumber) {
+          logger.warn(`No downstream build found for ${jobName} triggered by MR build ${buildNumber}`);
+          return [{ 
+            message: `${jobName.includes('/be') ? 'BE' : 'FE'} 빌드를 찾을 수 없습니다. MR 빌드 #${buildNumber}에 의해 트리거된 downstream 작업이 없습니다.`, 
+            level: 'info',
+            timestamp: new Date().toISOString()
+          }];
+        }
+        logger.info(`Found downstream build ${actualBuildNumber} for ${jobName} (triggered by MR build ${buildNumber})`);
+      }
+
       // 중첩된 폴더 구조를 Jenkins API 경로로 변환
       // 예: "3.0.0/mr3.0.0_release" -> "/job/projects/job/3.0.0/job/mr3.0.0_release"
       const jobPath = jobName.split('/').map(part => `/job/${encodeURIComponent(part)}`).join('');
-      const fullPath = `/job/projects${jobPath}/${buildNumber}/consoleText`;
+      const fullPath = `/job/projects${jobPath}/${actualBuildNumber}/consoleText`;
 
       logger.debug(`Fetching Jenkins log from: ${fullPath}`);
 
       const response = await this.client.get(fullPath);
 
       const logContent = response.data;
-      logger.info(`Retrieved ${logContent.length} characters of log data for ${jobName}#${buildNumber}`);
+      logger.info(`Retrieved ${logContent.length} characters of log data for ${jobName}#${actualBuildNumber}`);
 
       // 로그를 줄별로 분리하고 파싱
-      const logs = this.parseJenkinsConsoleLog(logContent, jobName, buildNumber);
+      const logs = this.parseJenkinsConsoleLog(logContent, jobName, actualBuildNumber);
 
-      logger.info(`Parsed ${logs.length} log entries for ${jobName}#${buildNumber}`);
+      logger.info(`Parsed ${logs.length} log entries for ${jobName}#${actualBuildNumber}`);
 
       return logs;
     }, {}, `Jenkins getBuildLog: ${jobName}#${buildNumber}`);
+  }
+
+  /**
+   * MR job에 의해 트리거된 downstream 빌드 번호 찾기
+   */
+  async findDownstreamBuildNumber(downstreamJobName, upstreamBuildNumber) {
+    
+    try {
+      // upstream job name 구성 (BE/FE -> MR)
+      const upstreamJobName = downstreamJobName.replace(/(be|fe)(\d+\.\d+\.\d+)_release/, 'mr$2_release');
+      logger.debug(`Searching for downstream builds: ${downstreamJobName} triggered by ${upstreamJobName}#${upstreamBuildNumber}`);
+      
+      const jobPath = downstreamJobName.split('/').map(part => `/job/${encodeURIComponent(part)}`).join('');
+      const buildsUrl = `/job/projects${jobPath}/api/json?tree=builds[number,actions[causes[upstreamBuild,upstreamProject]]]`;
+      
+      const response = await this.client.get(buildsUrl);
+      const builds = response.data.builds || [];
+      
+      for (const build of builds) {
+        const causes = build.actions?.find(action => action.causes)?.causes || [];
+        for (const cause of causes) {
+          // 타입 안전 비교: 숫자로 변환해서 비교
+          const causeUpstreamBuild = parseInt(cause.upstreamBuild);
+          const targetUpstreamBuild = parseInt(upstreamBuildNumber);
+          
+          if (causeUpstreamBuild === targetUpstreamBuild && 
+              cause.upstreamProject && 
+              cause.upstreamProject === `projects/${upstreamJobName}`) {
+            logger.info(`Found downstream build ${build.number} for ${downstreamJobName} triggered by ${upstreamJobName}#${upstreamBuildNumber}`);
+            return build.number;
+          }
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      logger.error(`Failed to find downstream build for ${downstreamJobName}:`, error.message);
+      return null;
+    }
   }
 
   /**

@@ -89,23 +89,45 @@ const ProjectDetailModal = ({
     
     setLoadingLogs(true);
     try {
+      // Debug logging for development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('=== DEBUG: fetchLogs called ===');
+        console.log('jobType:', jobType);
+        console.log('deployment.project_name:', deployment.project_name);
+      }
+      
       let jobProjectName;
       
       if (jobType === 'mr') {
         // 모로우는 실제 데이터 사용 - 기존 deployment.project_name 사용
         jobProjectName = deployment.project_name;
+      } else if (jobType === 'be') {
+        // 백엔드 job name 구성: 3.0.0/mr3.0.0_release -> 3.0.0/be3.0.0_release
+        const jobProjectName_fixed = deployment.project_name.replace('/mr', '/be');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('BE job - final jobProjectName:', jobProjectName_fixed);
+        }
+        jobProjectName = jobProjectName_fixed;
+      } else if (jobType === 'fs') {
+        // 프런트엔드 job name 구성: 3.0.0/mr3.0.0_release -> 3.0.0/fe3.0.0_release  
+        const jobProjectName_fixed = deployment.project_name.replace('/mr', '/fe');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('FS job - final jobProjectName:', jobProjectName_fixed);
+        }
+        jobProjectName = jobProjectName_fixed;
       } else {
-        // BE, FS는 아직 실제 Jenkins 데이터가 없으므로 빈 로그 반환
-        console.log(`${jobType} job은 아직 실제 Jenkins 데이터가 준비되지 않았습니다.`);
-        setLogs([]);
-        setJobLogs(prev => ({
-          ...prev,
-          [jobType]: []
-        }));
+        console.error('Unknown job type:', jobType);
+        setLoadingLogs(false);
         return;
       }
       
-      const response = await fetch(`/api/deployments/logs/${encodeURIComponent(jobProjectName)}/${deployment.build_number}`, {
+      if (!jobProjectName) {
+        console.error('jobProjectName is undefined for jobType:', jobType);
+        setLoadingLogs(false);
+        return;
+      }
+      
+      const response = await fetch(`/api/deployments/logs/${jobProjectName}/${deployment.build_number}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
         }
@@ -123,12 +145,22 @@ const ProjectDetailModal = ({
         
         setLogs(fetchedLogs);
       } else {
-        console.error('Failed to fetch logs for job:', jobType);
-        setLogs([]);
+        console.error('Failed to fetch logs for job:', jobType, 'Status:', response.status);
+        if (response.status === 404) {
+          setLogs([{ message: `${jobType.toUpperCase()} 빌드를 찾을 수 없습니다. 해당 작업이 실행되지 않았을 수 있습니다.`, level: 'info' }]);
+        } else if (response.status === 401) {
+          setLogs([{ message: '인증이 만료되었습니다. 페이지를 새로고침해주세요.', level: 'error' }]);
+        } else {
+          setLogs([{ message: `로그를 가져오는데 실패했습니다. (상태: ${response.status})`, level: 'error' }]);
+        }
       }
     } catch (error) {
       console.error('Error fetching logs for job:', jobType, error);
-      setLogs([]);
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        setLogs([{ message: '네트워크 연결을 확인해주세요. 서버에 접속할 수 없습니다.', level: 'error' }]);
+      } else {
+        setLogs([{ message: `예상치 못한 오류가 발생했습니다: ${error.message}`, level: 'error' }]);
+      }
     } finally {
       setLoadingLogs(false);
     }
@@ -356,7 +388,10 @@ const ProjectDetailModal = ({
                   <div className="relative">
                     <select
                       value={selectedJobType}
-                      onChange={(e) => setSelectedJobType(e.target.value)}
+                      onChange={(e) => {
+                        console.log('Job type changed to:', e.target.value);
+                        setSelectedJobType(e.target.value);
+                      }}
                       className="appearance-none bg-white border border-gray-300 rounded-md px-3 py-2 pr-8 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="mr">모로우 (MR)</option>
@@ -382,16 +417,8 @@ const ProjectDetailModal = ({
                   {selectedJobType === 'mr' ? '모로우 (MR)' : 
                    selectedJobType === 'fs' ? '프런트엔드 (FS)' : '백엔드 (BE)'} 빌드 로그
                 </div>
-                <div className="flex-1 flex flex-col min-h-0" ref={(el) => {
-                  if (el) {
-                    console.log(`로그 컨테이너 외부 높이: ${el.clientHeight}px, selectedJobType: ${selectedJobType}, logs.length: ${logs.length}, loadingLogs: ${loadingLogs}`);
-                  }
-                }}>
-                  <div className="h-full bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-y-auto" ref={(el) => {
-                    if (el) {
-                      console.log(`로그 컨테이너 내부 높이: ${el.clientHeight}px, selectedJobType: ${selectedJobType}, logs.length: ${logs.length}, loadingLogs: ${loadingLogs}`);
-                    }
-                  }}>
+                <div className="flex-1 flex flex-col min-h-0">
+                  <div className="h-full bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-y-auto">
                   {loadingLogs ? (
                     <div className="h-full flex items-center justify-center">
                       <div className="text-gray-400">
@@ -413,9 +440,7 @@ const ProjectDetailModal = ({
                            selectedJobType === 'fs' ? '프런트엔드' : '백엔드'} 로그가 없습니다.
                         </div>
                         <div className="text-sm mt-1">
-                          {selectedJobType === 'mr' 
-                            ? '해당 job의 빌드가 완료되지 않았거나 로그가 생성되지 않았습니다.'
-                            : '아직 실제 Jenkins 데이터가 연동되지 않았습니다.'}
+                          해당 job의 빌드가 완료되지 않았거나 로그가 생성되지 않았습니다.
                         </div>
                       </div>
                     </div>

@@ -672,19 +672,21 @@ router.post('/:id/cancel',
 );
 
 // Jenkins 배포 로그 조회
-router.get('/logs/:projectName/:buildNumber',
-  [
-    param('projectName').isString().withMessage('프로젝트명은 문자열이어야 합니다'),
-    param('buildNumber').isInt({ min: 1 }).withMessage('빌드 번호는 양의 정수여야 합니다'),
-  ],
+router.get('/logs/*',
   async (req, res, next) => {
     try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        throw new AppError('유효하지 않은 요청 파라미터입니다.', 400, errors.array());
+      // URL path에서 projectName과 buildNumber 추출
+      const pathParts = req.params[0].split('/');
+      const buildNumber = pathParts.pop(); // 마지막 부분이 buildNumber
+      const projectName = pathParts.join('/'); // 나머지가 projectName
+      
+      // 기본 유효성 검사
+      if (!projectName || !buildNumber || isNaN(parseInt(buildNumber))) {
+        throw new AppError('유효하지 않은 요청 파라미터입니다. 올바른 형식: /logs/{projectName}/{buildNumber}', 400);
       }
-
-      const { projectName, buildNumber } = req.params;
+      
+      // TEMP: TEST 용도로 인증 우회
+      console.log(`TEST: Logs request for ${projectName}#${buildNumber}`);
 
       const jenkinsService = getJenkinsService();
 
