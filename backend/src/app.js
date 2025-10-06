@@ -25,7 +25,7 @@ const websocketManager = require('./services/websocketManager');
 const { getNASScanner } = require('./services/nasScanner');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.BACKEND_PORT || process.env.PORT || 3001;
 
 // Trust proxy for proper client IP handling behind reverse proxy
 app.set('trust proxy', true);

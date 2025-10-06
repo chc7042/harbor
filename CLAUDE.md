@@ -121,7 +121,7 @@ LDAP_BIND_CREDENTIALS=ldap-password
 LDAP_SEARCH_BASE=ou=users,dc=company,dc=com
 
 # Server Configuration
-PORT=3002                    # Backend API port
+BACKEND_PORT=3001            # Backend API port
 NODE_ENV=development
 FRONTEND_URL=http://localhost:5173
 ```
@@ -314,8 +314,8 @@ Frontend → VITE_API_URL → Backend:3001 (172.20.0.4) ← Database:5432 (172.2
 - **Fix**: Verify NAS mount path and permissions
 
 **🔴 Port Configuration Inconsistencies:**
-- `.env` file specifies PORT=3002
-- `docker-compose.prod.yml` uses PORT=3001 (actual running port)
+- Configuration files now use BACKEND_PORT=3001
+- All configuration files use consistent BACKEND_PORT=3001
 - **Fix**: Align all configuration files to use consistent port
 
 ### Production Debugging Commands
