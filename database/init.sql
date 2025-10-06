@@ -128,6 +128,41 @@ CREATE TABLE IF NOT EXISTS system_settings (
     updated_by VARCHAR(100)
 );
 
+-- NAS 배포 경로 캐시 테이블
+CREATE TABLE IF NOT EXISTS deployment_paths (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_name VARCHAR(100) NOT NULL,
+    version VARCHAR(20) NOT NULL,
+    build_number INTEGER NOT NULL,
+    build_date DATE NOT NULL,
+    nas_path TEXT NOT NULL,
+    download_file VARCHAR(255),
+    all_files JSONB,
+    verified_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    
+    -- 고유 제약 조건: 동일한 프로젝트/버전/빌드번호 조합은 하나만 존재
+    CONSTRAINT unique_deployment_path UNIQUE (project_name, version, build_number)
+);
+
+-- NAS 파일 메타데이터 테이블
+CREATE TABLE IF NOT EXISTS nas_files (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    file_path TEXT NOT NULL UNIQUE,
+    file_name VARCHAR(255) NOT NULL,
+    file_size BIGINT NOT NULL,
+    file_hash VARCHAR(64), -- SHA256
+    mime_type VARCHAR(100),
+    project_name VARCHAR(100),
+    version VARCHAR(50),
+    build_number INTEGER,
+    scan_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 감사 로그 테이블
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -181,6 +216,21 @@ CREATE INDEX IF NOT EXISTS idx_artifacts_is_available ON artifacts(is_available)
 CREATE INDEX IF NOT EXISTS idx_deployment_parameters_deployment_id ON deployment_parameters(deployment_id);
 CREATE INDEX IF NOT EXISTS idx_deployment_parameters_name ON deployment_parameters(parameter_name);
 
+-- 배포 경로 관련 인덱스
+CREATE INDEX IF NOT EXISTS idx_deployment_paths_lookup ON deployment_paths(project_name, version, build_number);
+CREATE INDEX IF NOT EXISTS idx_deployment_paths_build_date ON deployment_paths(build_date);
+CREATE INDEX IF NOT EXISTS idx_deployment_paths_verified_at ON deployment_paths(verified_at DESC);
+CREATE INDEX IF NOT EXISTS idx_deployment_paths_project_recent ON deployment_paths(project_name, build_date DESC);
+CREATE INDEX IF NOT EXISTS idx_deployment_paths_files_gin ON deployment_paths USING gin(all_files);
+
+-- NAS 파일 관련 인덱스
+CREATE INDEX IF NOT EXISTS idx_nas_files_file_path ON nas_files(file_path);
+CREATE INDEX IF NOT EXISTS idx_nas_files_project_name ON nas_files(project_name);
+CREATE INDEX IF NOT EXISTS idx_nas_files_version ON nas_files(version);
+CREATE INDEX IF NOT EXISTS idx_nas_files_build_number ON nas_files(build_number);
+CREATE INDEX IF NOT EXISTS idx_nas_files_scan_date ON nas_files(scan_date DESC);
+CREATE INDEX IF NOT EXISTS idx_nas_files_is_active ON nas_files(is_active);
+
 -- 감사 로그 관련 인덱스
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
@@ -212,6 +262,12 @@ CREATE TRIGGER update_deployments_updated_at BEFORE UPDATE ON deployments
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_artifacts_updated_at BEFORE UPDATE ON artifacts
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_deployment_paths_updated_at BEFORE UPDATE ON deployment_paths
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_nas_files_updated_at BEFORE UPDATE ON nas_files
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- 뷰 생성: 배포 통계 요약
@@ -295,6 +351,8 @@ COMMENT ON TABLE deployments IS '배포 이력 메인 테이블';
 COMMENT ON TABLE artifacts IS '배포된 아티팩트 파일 정보';
 COMMENT ON TABLE deployment_parameters IS '배포 매개변수 (빌드 파라미터 등)';
 COMMENT ON TABLE system_settings IS '시스템 설정';
+COMMENT ON TABLE deployment_paths IS 'NAS 경로 캐시 테이블 - Jenkins 빌드별 검증된 NAS 경로 저장';
+COMMENT ON TABLE nas_files IS 'NAS 파일 시스템 메타데이터 및 스캔 결과';
 COMMENT ON TABLE audit_logs IS '사용자 활동 감사 로그';
 
 -- 컬럼 코멘트 (주요 컬럼만)
