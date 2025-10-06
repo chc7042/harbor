@@ -116,8 +116,7 @@ services:
 
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-info}
-    volumes:
-      - nas_data:/nas:ro
+    volumes: []
     depends_on:
       postgres:
         condition: service_healthy
@@ -223,17 +222,7 @@ networks:
 volumes:
   postgres_data:
     driver: local
-  ldap_data:
-    driver: local
-  ldap_config:
-    driver: local
   redis_data:
     driver: local
   app_logs:
     driver: local
-  nas_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${NAS_HOST_PATH}
