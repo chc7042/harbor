@@ -102,7 +102,7 @@ services:
       DISABLE_RATE_LIMITING: true
 
       # NAS configuration
-      NAS_BASE_PATH: ${NAS_BASE_PATH:-/nas/release_version}
+      NAS_BASE_PATH: ${NAS_BASE_PATH:-/nas/version_release}
       NAS_PATH: ${NAS_PATH:-/nas}
       NAS_HOST: ${NAS_HOST}
       NAS_SHARE: ${NAS_SHARE}
