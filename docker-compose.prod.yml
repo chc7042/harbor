@@ -41,10 +41,10 @@ services:
     networks:
       - harbor-network
     ports:
-      - "3002:3002"
+      - "3001:3001"
     environment:
       NODE_ENV: production
-      PORT: 3002
+      PORT: ${BACKEND_PORT:-3001}
       NODE_OPTIONS: "--openssl-legacy-provider"
 
       # Database configuration
@@ -121,7 +121,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -148,7 +148,7 @@ services:
       dockerfile: Dockerfile.frontend
       target: production
       args:
-        - VITE_API_URL=${VITE_API_URL:-http://harbor.roboetech.com}
+        - VITE_API_URL=${VITE_API_URL:-}
         - VITE_WS_URL=${VITE_WS_URL:-ws://harbor.roboetech.com}
     container_name: harbor-frontend-prod
     restart: unless-stopped
