@@ -192,7 +192,6 @@ const ProjectDetailModal = ({
 
   useEffect(() => {
     if (isOpen && deployment) {
-      fetchDeploymentInfo();
       // 새 배포 모달이 열릴 때만 상태 초기화
       if (currentDeploymentId !== deployment.id) {
         setCurrentDeploymentId(deployment.id);
@@ -208,6 +207,17 @@ const ProjectDetailModal = ({
       setSelectedJobType('mr');
     }
   }, [isOpen, deployment]);
+
+  // 배포 버전 탭 활성화 시 배포 정보 가져오기
+  useEffect(() => {
+    console.log('ProjectDetailModal useEffect triggered - activeTab:', activeTab, 'isOpen:', isOpen, 'deployment:', !!deployment, 'deploymentInfo:', !!deploymentInfo);
+    if (activeTab === 'artifacts' && isOpen && deployment && !deploymentInfo) {
+      console.log('배포 버전 tab activated, calling fetchDeploymentInfo...');
+      fetchDeploymentInfo();
+    } else {
+      console.log('Conditions not met for fetchDeploymentInfo - activeTab:', activeTab, 'isOpen:', isOpen, 'deployment:', !!deployment, 'deploymentInfo:', !!deploymentInfo);
+    }
+  }, [activeTab, isOpen, deployment, deploymentInfo]);
 
   // 모달이 열리거나 닫힐 때 상태 초기화
   useEffect(() => {

@@ -1,4 +1,3 @@
-const SMB2 = require('@marsaud/smb2');
 const path = require('path');
 const fs = require('fs').promises;
 const { exec } = require('child_process');
@@ -11,30 +10,20 @@ const execAsync = promisify(exec);
 
 /**
  * NAS 연결 및 파일 시스템 접근 서비스
+ * SMB2 라이브러리가 인증 실패하므로 smbclient 기반으로 구현
  */
 class NASService {
   constructor() {
-    this.smbClient = null;
     this.isConnected = false;
     // Mock NAS 사용 여부 (기본값: false, 프로덕션에서는 항상 실제 NAS 사용)
     this.useMockNAS = process.env.ENABLE_MOCK_NAS === 'true';
-    this.connectionConfig = {
-      share: `\\\\${process.env.NAS_HOST || 'nas.roboetech.com'}\\${process.env.NAS_SHARE || 'release_version'}`,
-      domain: '', // 도메인 빈 문자열로 명시
-      username: process.env.NAS_USERNAME || 'nasadmin',
-      password: process.env.NAS_PASSWORD || 'Cmtes123',
-      autoCloseTimeout: 0,
-      maxCreditsToServer: 1,
-      maxCreditsToClient: 1,
-      // SMB 버전 및 추가 옵션
-      packetConcurrency: 1,
-      timeout: 60000, // 타임아웃 증가
-      // SMB2 프로토콜 관련 설정
-      highWaterMark: 16 * 1024,
-      ntlm: false, // NTLM 비활성화로 시도
-      smb2: true,
-    };
-
+    
+    // SMB 연결 설정 (smbclient 기반)
+    this.nasHost = process.env.NAS_HOST || 'nas.roboetech.com';
+    this.nasShare = process.env.NAS_SHARE || 'release_version';
+    this.nasUsername = process.env.NAS_USERNAME || 'roboe';
+    this.nasPassword = process.env.NAS_PASSWORD || 'roboe^^210901';
+    
     this.releaseBasePath = process.env.NAS_RELEASE_PATH || '';
     this.connectionRetries = 3;
     this.connectionTimeout = 30000; // 30초
@@ -43,104 +32,123 @@ class NASService {
     if (this.useMockNAS) {
       this.mockBasePath = process.env.NAS_MOUNT_PATH || path.resolve(__dirname, '../../mock-nas');
     }
+    
+    logger.info('NAS Service initialized with smbclient (SMB2 라이브러리 인증 실패로 인한 대안)', {
+      host: this.nasHost,
+      share: this.nasShare,
+      username: this.nasUsername,
+      useMockNAS: this.useMockNAS
+    });
   }
 
   /**
-   * NAS 서버에 연결
+   * 빌드 번호에 해당하는 파일들 검색
+   */
+  async findBuildFiles(basePath, buildNumber) {
+    try {
+      logger.info(`Searching for build ${buildNumber} files in ${basePath}`);
+      
+      // SMB 경로로 변환
+      const smbPath = basePath.replace(/\//g, '\\');
+      const smbCommand = `smbclient //${this.nasHost}/${this.nasShare} -U ${this.nasUsername}%"${this.nasPassword}"`;
+      
+      // 먼저 basePath의 하위 디렉터리들 확인 (날짜 디렉터리들)
+      const { stdout: dirList } = await execAsync(`${smbCommand} -c "cd ${smbPath}; ls"`);
+      const directories = dirList.split('\n')
+        .filter(line => line.includes('D') && !line.startsWith('.'))
+        .map(line => line.trim().split(/\s+/)[0])
+        .filter(dir => dir && !dir.startsWith('.'));
+      
+      logger.info(`Found directories in ${basePath}: ${directories.join(', ')}`);
+      
+      // 각 날짜 디렉터리에서 빌드 번호 디렉터리 확인
+      for (const dateDir of directories) {
+        try {
+          const buildPath = `${smbPath}\\${dateDir}`;
+          const { stdout: buildDirList } = await execAsync(`${smbCommand} -c "cd ${buildPath}; ls"`);
+          
+          if (buildDirList.includes(buildNumber.toString())) {
+            // 빌드 디렉터리 찾음, 파일 목록 가져오기
+            const filePath = `${buildPath}\\${buildNumber}`;
+            const { stdout: fileList } = await execAsync(`${smbCommand} -c "cd ${filePath}; ls"`);
+            
+            const files = fileList.split('\n')
+              .filter(line => line.includes('A') && !line.startsWith('.'))
+              .map(line => {
+                const parts = line.trim().split(/\s+/);
+                return parts[0];
+              })
+              .filter(file => file && this.allowedExtensions.some(ext => file.endsWith(ext)));
+            
+            logger.info(`Found ${files.length} files in build ${buildNumber}: ${files.join(', ')}`);
+            return files;
+          }
+        } catch (error) {
+          logger.debug(`No build ${buildNumber} found in ${dateDir}: ${error.message}`);
+          continue;
+        }
+      }
+      
+      logger.warn(`No files found for build ${buildNumber} in ${basePath}`);
+      return [];
+      
+    } catch (error) {
+      logger.error(`Error searching build files: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * NAS 서버에 연결 (smbclient 전용)
    */
   async connect() {
     if (this.isConnected) {
       return true;
     }
 
-    // 개발환경에서는 SMB 연결 건너뛰기
+    // 개발환경에서는 로컬 파일시스템 사용
     if (this.useMockNAS) {
-      logger.info('Development mode: Skipping SMB connection, using local filesystem');
+      logger.info('Development mode: Using mock NAS with local filesystem');
       this.isConnected = true;
       return true;
     }
 
     try {
-      logger.info('Connecting to NAS with config:', {
-        share: this.connectionConfig.share,
-        username: this.connectionConfig.username,
-        domain: this.connectionConfig.domain || '(empty)',
-        timeout: this.connectionConfig.timeout,
-        password: this.connectionConfig.password ? '***masked***' : '(empty)',
+      logger.info('Connecting to NAS using smbclient:', {
+        host: this.nasHost,
+        share: this.nasShare,
+        username: this.nasUsername,
+        password: this.nasPassword ? '***masked***' : '(empty)',
       });
 
-      this.smbClient = new SMB2(this.connectionConfig);
-
-      // 연결 테스트를 위해 루트 디렉토리 읽기 시도
-      await this.testConnection();
-
+      // smbclient로 연결 테스트
+      await this.testSmbclientConnection();
       this.isConnected = true;
-      logger.info('NAS connection established successfully');
+      logger.info('NAS connection established successfully using smbclient');
       return true;
 
     } catch (error) {
       this.isConnected = false;
-      this.smbClient = null;
-      logger.error('SMB2 library connection failed, trying smbclient fallback:', {
-        message: error.message,
-        code: error.code,
-      });
-
-      // Fallback to smbclient command
-      try {
-        await this.testSmbclientConnection();
-        this.isConnected = true;
-        this.useSmbclient = true;
-        logger.info('NAS connection established using smbclient fallback');
-        return true;
-      } catch (fallbackError) {
-        logger.error('Both SMB2 library and smbclient failed:', fallbackError.message);
-        throw new AppError(`NAS connection failed: ${error.message}`, 503);
-      }
+      logger.error('smbclient connection failed:', error.message);
+      throw new AppError(`NAS connection failed: ${error.message}`, 503);
     }
-  }
-
-  /**
-   * 연결 테스트
-   */
-  async testConnection() {
-    return withNASRetry(async () => {
-      return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Connection timeout'));
-        }, this.connectionTimeout);
-
-        this.smbClient.readdir('', (err, files) => {
-          clearTimeout(timeout);
-
-          if (err) {
-            reject(err);
-          } else {
-            logger.info(`NAS root directory contains ${files ? files.length : 0} items`);
-            resolve(true);
-          }
-        });
-      });
-    }, {}, 'NAS connection test');
   }
 
   /**
    * smbclient를 사용한 연결 테스트
    */
   async testSmbclientConnection() {
-    const host = process.env.NAS_HOST || 'nas.roboetech.com';
-    const share = process.env.NAS_SHARE || 'release_version';
-    const username = process.env.NAS_USERNAME || 'nasadmin';
-    const password = process.env.NAS_PASSWORD || 'Cmtes123';
-
-    const command = `smbclient //${host}/${share} -U ${username}%${password} -c "ls" 2>/dev/null`;
+    const command = `smbclient //${this.nasHost}/${this.nasShare} -U ${this.nasUsername}%${this.nasPassword} -c "ls" 2>/dev/null`;
 
     try {
-      const { stderr } = await execAsync(command);
+      const { stdout, stderr } = await execAsync(command);
       if (stderr && !stderr.includes('WARNING')) {
         throw new Error(`smbclient error: ${stderr}`);
       }
-      logger.info('smbclient connection test successful');
+      
+      // 루트 디렉토리 파일 수 로깅
+      const lines = stdout.split('\n').filter(line => line.trim() && !line.includes('blocks'));
+      logger.info(`smbclient connection test successful - found ${lines.length} items in root`);
       return true;
     } catch (error) {
       logger.error('smbclient connection test failed:', error.message);
@@ -152,21 +160,12 @@ class NASService {
    * NAS 연결 해제
    */
   async disconnect() {
-    if (this.smbClient) {
-      try {
-        // SMB2 클라이언트 종료
-        this.smbClient.disconnect();
-        this.isConnected = false;
-        this.smbClient = null;
-        logger.info('NAS connection closed');
-      } catch (error) {
-        logger.error('Error closing NAS connection:', error.message);
-      }
-    }
+    this.isConnected = false;
+    logger.info('NAS connection state reset (smbclient mode)');
   }
 
   /**
-   * 디렉토리 목록 조회
+   * 디렉토리 목록 조회 (smbclient 전용)
    */
   async listDirectory(dirPath = '') {
     await this.ensureConnection();
@@ -187,22 +186,8 @@ class NASService {
       }
     }
 
-    if (this.useSmbclient) {
-      return this.listDirectoryWithSmbclient(dirPath);
-    }
-
-    return withNASRetry(async () => {
-      return new Promise((resolve, reject) => {
-        this.smbClient.readdir(dirPath, (err, files) => {
-          if (err) {
-            logger.error(`Failed to list directory ${dirPath}:`, err.message);
-            reject(new AppError(`Directory listing failed: ${err.message}`, 500));
-          } else {
-            resolve(files || []);
-          }
-        });
-      });
-    }, {}, `NAS directory listing: ${dirPath}`);
+    // 프로덕션에서는 항상 smbclient 사용
+    return this.listDirectoryWithSmbclient(dirPath);
   }
 
   /**
@@ -210,13 +195,8 @@ class NASService {
    */
   async listDirectoryWithSmbclient(dirPath = '') {
     return withNASRetry(async () => {
-      const host = process.env.NAS_HOST || 'nas.roboetech.com';
-      const share = process.env.NAS_SHARE || 'release_version';
-      const username = process.env.NAS_USERNAME || 'nasadmin';
-      const password = process.env.NAS_PASSWORD || 'Cmtes123';
-
       const cdCommand = dirPath ? `cd "${dirPath}"; ` : '';
-      const command = `smbclient //${host}/${share} -U ${username}%${password} -c "${cdCommand}ls" 2>/dev/null`;
+      const command = `smbclient //${this.nasHost}/${this.nasShare} -U ${this.nasUsername}%${this.nasPassword} -c "${cdCommand}ls" 2>/dev/null`;
 
       const { stdout } = await execAsync(command);
       const files = [];
@@ -246,50 +226,24 @@ class NASService {
   }
 
   /**
-   * 파일 정보 조회
+   * 파일 정보 조회 (smbclient 전용)
    */
   async getFileInfo(filePath) {
     await this.ensureConnection();
 
-    if (this.useSmbclient) {
-      return this.getFileInfoWithSmbclient(filePath);
-    }
-
-    return new Promise((resolve, reject) => {
-      this.smbClient.stat(filePath, (err, stats) => {
-        if (err) {
-          logger.error(`Failed to get file info for ${filePath}:`, err.message);
-          reject(new AppError(`File info failed: ${err.message}`, 500));
-        } else {
-          resolve({
-            name: path.basename(filePath),
-            path: filePath,
-            isDirectory: stats.isDirectory(),
-            isFile: stats.isFile(),
-            size: stats.size,
-            created: stats.birthtime,
-            modified: stats.mtime,
-            accessed: stats.atime,
-          });
-        }
-      });
-    });
+    // 프로덕션에서는 항상 smbclient 사용
+    return this.getFileInfoWithSmbclient(filePath);
   }
 
   /**
    * smbclient를 사용한 파일 정보 조회
    */
   async getFileInfoWithSmbclient(filePath) {
-    const host = process.env.NAS_HOST || 'nas.roboetech.com';
-    const share = process.env.NAS_SHARE || 'release_version';
-    const username = process.env.NAS_USERNAME || 'nasadmin';
-    const password = process.env.NAS_PASSWORD || 'Cmtes123';
-
     const dirPath = path.dirname(filePath);
     const fileName = path.basename(filePath);
 
     const cdCommand = dirPath && dirPath !== '.' ? `cd "${dirPath}"; ` : '';
-    const command = `smbclient //${host}/${share} -U ${username}%${password} -c "${cdCommand}ls" 2>/dev/null`;
+    const command = `smbclient //${this.nasHost}/${this.nasShare} -U ${this.nasUsername}%${this.nasPassword} -c "${cdCommand}ls" 2>/dev/null`;
 
     try {
       const { stdout } = await execAsync(command);
@@ -553,7 +507,7 @@ class NASService {
   }
 
   /**
-   * 파일 다운로드
+   * 파일 다운로드 (smbclient 전용)
    */
   async downloadFile(filePath) {
     logger.info(`NAS downloadFile 요청 - 파일 경로: ${filePath}`);
@@ -571,24 +525,9 @@ class NASService {
         throw new AppError(`File download failed: ${error.message}`, 404);
       }
     } else {
-      // 프로덕션환경에서는 SMB 사용
+      // 프로덕션환경에서는 항상 smbclient 사용
       await this.ensureConnection();
-
-      if (this.useSmbclient) {
-        return this.downloadFileWithSmbclient(filePath);
-      }
-
-      return new Promise((resolve, reject) => {
-        this.smbClient.readFile(filePath, (err, data) => {
-          if (err) {
-            logger.error(`Failed to download file ${filePath}:`, err.message);
-            reject(new AppError(`File download failed: ${err.message}`, 404));
-          } else {
-            logger.info(`File downloaded successfully: ${filePath}, size: ${data.length} bytes`);
-            resolve(data);
-          }
-        });
-      });
+      return this.downloadFileWithSmbclient(filePath);
     }
   }
 
@@ -597,10 +536,6 @@ class NASService {
    */
   async downloadFileWithSmbclient(filePath) {
     return withNASRetry(async () => {
-      const host = process.env.NAS_HOST || 'nas.roboetech.com';
-      const share = process.env.NAS_SHARE || 'release_version';
-      const username = process.env.NAS_USERNAME || 'nasadmin';
-      const password = process.env.NAS_PASSWORD || 'Cmtes123';
 
       // 임시 파일 경로 생성 - 파일명에서 특수문자 제거
       const safeFileName = path.basename(filePath).replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -612,9 +547,9 @@ class NASService {
         logger.info(`임시 파일 경로: ${tempFilePath}`);
 
         // smbclient get 명령어 실행 - 타임아웃 증가
-        const command = `timeout 300 smbclient //${host}/${share} -U ${username}%${password} -c "get \\"${filePath}\\" \\"${tempFilePath}\\"" 2>&1`;
+        const command = `timeout 300 smbclient //${this.nasHost}/${this.nasShare} -U ${this.nasUsername}%${this.nasPassword} -c "get \\"${filePath}\\" \\"${tempFilePath}\\"" 2>&1`;
 
-        logger.info(`실행 명령어: ${command.replace(password, '***')}`);
+        logger.info(`실행 명령어: ${command.replace(this.nasPassword, '***')}`);
 
         const { stdout, stderr } = await execAsync(command, {
           timeout: 300000, // 5분 타임아웃
@@ -935,53 +870,62 @@ class NASService {
   }
 
   /**
-   * 버전별 NAS 아티팩트 전체 검색
+   * 버전별 NAS 아티팩트 전체 검색 (최적화됨)
    */
   async searchArtifactsByVersion(version, pattern = null) {
     try {
       await this.ensureConnection();
 
-      // 실제 NAS 구조에 맞는 검색 경로
+      // 실제 NAS 구조에 맞는 검색 경로 (우선순위 순)
       const searchPaths = [
-        `release/product/${version}`,  // 메인 경로: release/product/mr1.2.0
-        `release/product/mr${version}`, // mr 접두어 포함
-        `release/product/${version.replace('.', '')}`, // 점 제거
-        `release/dailybuild/${version}`, // 일일 빌드
-        `${version}`, // 직접 버전 디렉토리
-        `projects/${version}`, // 기존 fallback
+        `release/product/mr${version}`, // 가장 가능성 높은 경로
+        `release/product/${version}`,  
+        `release/dailybuild/${version}`, 
       ];
 
       const allArtifacts = [];
+      let foundInPath = false;
 
       for (const searchPath of searchPaths) {
         try {
           logger.info(`Searching for artifacts in path: ${searchPath}`);
 
-          // 디렉토리가 존재하는지 먼저 확인
+          // 디렉토리 존재 확인
+          const pathExists = await this.directoryExists(searchPath);
+          if (!pathExists) {
+            logger.debug(`Path does not exist: ${searchPath}`);
+            continue;
+          }
+
           const allItems = await this.listDirectory(searchPath);
+          logger.info(`Found ${allItems.length} items in ${searchPath}`);
 
-          for (const dirName of allItems) {
-            if (dirName.match(/^\d{6}$/)) { // 날짜 형식 디렉토리 (250926)
-              try {
-                const datePath = path.posix.join(searchPath, dirName);
-                const dirInfo = await this.getFileInfo(datePath);
-                if (!dirInfo.isDirectory) continue;
+          // 날짜 디렉토리만 필터링하고 최신 3개만 처리 (성능 최적화)
+          const dateDirs = allItems
+            .filter(item => item.match(/^\d{6}$/))
+            .sort()
+            .reverse()
+            .slice(0, 3); // 최신 3개 날짜만
 
-                logger.info(`Found date directory: ${datePath}`);
+          logger.info(`Processing ${dateDirs.length} recent date directories`);
 
-                // 날짜 디렉토리 안의 빌드 번호 디렉토리들을 검색
-                const buildItems = await this.listDirectory(datePath);
+          for (const dirName of dateDirs) {
+            try {
+              const datePath = path.posix.join(searchPath, dirName);
+              
+              const buildItems = await this.listDirectory(datePath);
+              
+              // 빌드 번호 디렉토리만 필터링하고 최신 5개만 처리
+              const buildDirs = buildItems
+                .filter(item => item.match(/^\d+$/))
+                .sort((a, b) => parseInt(b) - parseInt(a))
+                .slice(0, 5); // 최신 5개 빌드만
 
-                for (const buildDirName of buildItems) {
-                  if (buildDirName.match(/^\d+$/)) { // 숫자 디렉토리 (빌드 번호)
-                    try {
-                      const buildPath = path.posix.join(datePath, buildDirName);
-                      const buildDirInfo = await this.getFileInfo(buildPath);
-                      if (!buildDirInfo.isDirectory) continue;
-
-                      logger.info(`Found build directory: ${buildPath}`);
-
-                  // 실제 아티팩트 파일들 검색
+              for (const buildDirName of buildDirs) {
+                try {
+                  const buildPath = path.posix.join(datePath, buildDirName);
+                  
+                  // 아티팩트 파일들 검색
                   const artifactFiles = await this.searchFiles(buildPath);
 
                   const compressedFiles = artifactFiles.filter(file => {
@@ -990,9 +934,8 @@ class NASService {
                       return false;
                     }
 
-                    // 패턴 필터링 (mr, fs 등의 접두어)
+                    // 패턴 필터링
                     if (pattern) {
-                      // 파일명이 패턴으로 시작하는지 확인 (예: fs1.2.0_... or mr1.2.0_...)
                       return file.name.toLowerCase().startsWith(pattern.toLowerCase());
                     }
 
@@ -1012,46 +955,33 @@ class NASService {
                     });
                   }
 
-                      logger.info(`Found ${compressedFiles.length} artifacts in ${buildPath}`);
-                    } catch (error) {
-                      logger.warn(`Failed to process build directory ${buildDirName}:`, error.message);
-                    }
+                  if (compressedFiles.length > 0) {
+                    logger.info(`Found ${compressedFiles.length} artifacts in ${buildPath}`);
+                    foundInPath = true;
                   }
+
+                } catch (error) {
+                  logger.warn(`Failed to process build directory ${buildDirName}:`, error.message);
                 }
-              } catch (error) {
-                logger.warn(`Failed to process date directory ${dirName}:`, error.message);
               }
+            } catch (error) {
+              logger.warn(`Failed to process date directory ${dirName}:`, error.message);
             }
           }
 
-          // 직접 파일 검색도 시도 (기존 로직 유지)
-          const directFiles = await this.searchFiles(searchPath);
-          const compressedFiles = directFiles.filter(file =>
-            file.name.match(/\.(tar\.gz|zip|7z|enc\.tar\.gz)$/i) &&
-            (!pattern || file.name.toLowerCase().includes(pattern.toLowerCase())),
-          );
-
-          for (const file of compressedFiles) {
-            allArtifacts.push({
-              filename: file.name,
-              nasPath: file.path,
-              fileSize: file.size,
-              lastModified: file.modified,
-              buildNumber: this.extractBuildNumber(file.name),
-              version: version,
-              searchPath: searchPath,
-              verified: true,
-            });
-          }
-
-          if (compressedFiles.length > 0) {
-            logger.info(`Found ${compressedFiles.length} direct artifacts in ${searchPath}`);
+          // 성공한 경로에서 아티팩트를 찾았으면 다른 경로는 건너뛰기
+          if (foundInPath && allArtifacts.length > 0) {
+            logger.info(`Found artifacts in ${searchPath}, skipping other paths`);
+            break;
           }
 
         } catch (searchError) {
           logger.debug(`No artifacts found in path ${searchPath}: ${searchError.message}`);
         }
       }
+
+      // 최신순으로 정렬
+      allArtifacts.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
 
       logger.info(`Total artifacts found for version ${version}: ${allArtifacts.length}`);
       return allArtifacts;
@@ -1342,7 +1272,7 @@ class NASService {
         // smbclient put 명령어 실행
         const command = `smbclient //${host}/${share} -U ${username}%${password} -c "put \\"${tempFilePath}\\" \\"${filePath}\\"" 2>&1`;
 
-        logger.info(`실행 명령어: ${command.replace(password, '***')}`);
+        logger.info(`실행 명령어: ${command.replace(this.nasPassword, '***')}`);
 
         const { stdout, stderr } = await execAsync(command, {
           timeout: 300000, // 5분 타임아웃

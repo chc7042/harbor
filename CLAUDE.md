@@ -266,6 +266,7 @@ NEVER proactively create documentation files (*.md) or README files. Only create
 - **ALWAYS use the credentials and settings specified in the project configuration**
 - **PRODUCTION MEANS PRODUCTION - do not make arbitrary changes**
 - **When testing fails, ask for guidance instead of making assumptions**
+- **NAS 연결은 반드시 \\nas.roboetech.com\release_version 경로로 연결해야 함**
 
 ## Authentication Configuration
 - **Primary test account**: admin/admin (as specified in .env)

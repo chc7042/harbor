@@ -72,7 +72,13 @@ class DownloadManager {
         });
       }
 
-      const relativePath = path.replace('/nas/release_version/', '');
+      // NAS 마운트 경로 처리: /nas/release_version/ 또는 /nas/ 제거
+      let relativePath = path;
+      if (relativePath.startsWith('/nas/release_version/')) {
+        relativePath = relativePath.replace('/nas/release_version/', '');
+      } else if (relativePath.startsWith('/nas/')) {
+        relativePath = relativePath.replace('/nas/', '');
+      }
 
       logger.info(`[DOWNLOAD-${requestId}] =================================`);
       logger.info(`[DOWNLOAD-${requestId}] 다운로드 요청 시작`);

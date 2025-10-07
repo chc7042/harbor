@@ -43,8 +43,8 @@ class DownloadService {
       console.log(`[DOWNLOAD-${downloadId}] 파일명: ${fileName}`);
       console.log(`[DOWNLOAD-${downloadId}] 옵션:`, options);
 
-      // 다운로드 시작 알림 (스트리밍 최적화)
-      this.showUserFeedback('start', fileName, { downloadId });
+      // 다운로드 준비 알림
+      this.showUserFeedback('preparing', fileName, { downloadId });
       if (options.onProgress) {
         options.onProgress({ 
           type: 'start', 
@@ -92,13 +92,19 @@ class DownloadService {
           throw new Error(`지원되지 않는 다운로드 전략: ${strategy}`);
       }
 
-      // 다운로드 성공 처리
+      // 다운로드 시작 처리 (redirect 방식은 브라우저가 처리)
       const duration = Date.now() - startTime;
-      console.log(`[DOWNLOAD-${downloadId}] ✅ 다운로드 완료 (${duration}ms)`);
+      console.log(`[DOWNLOAD-${downloadId}] ✅ 다운로드 시작됨 (${duration}ms)`);
       console.log(`[DOWNLOAD-${downloadId}] =================================`);
 
-      // 다운로드 완료 알림
-      this.showUserFeedback('complete', fileName, { downloadId, duration });
+      // redirect 방식의 경우 완료 메시지 표시하지 않음 (브라우저가 직접 처리)
+      // 대신 시작 상태만 알림
+      if (strategy === 'redirect') {
+        this.showUserFeedback('started', fileName, { downloadId, duration });
+      } else {
+        // proxy나 direct 방식은 실제 완료 시점을 알 수 있으므로 완료 메시지 표시
+        this.showUserFeedback('complete', fileName, { downloadId, duration });
+      }
 
       // 다운로드 기록 저장
       this.saveDownloadHistory(downloadId, filePath, fileName, 'success', duration);
@@ -383,8 +389,14 @@ class DownloadService {
     // 토스트 알림
     if (this.toastManager) {
       switch (type) {
+        case 'preparing':
+          this.toastManager.showInfo(`${fileName} 다운로드 준비 중...`, { downloadId });
+          break;
         case 'start':
           this.toastManager.showDownloadStart(fileName, { downloadId });
+          break;
+        case 'started':
+          this.toastManager.showInfo(`${fileName} 다운로드를 요청했습니다. 브라우저 다운로드 창을 확인하세요.`, { downloadId });
           break;
         case 'progress':
           if (typeof progress === 'number') {
@@ -406,32 +418,19 @@ class DownloadService {
       }
     }
 
-    // 브라우저 알림 (중요한 이벤트만)
-    if (this.notificationService && (type === 'complete' || type === 'error')) {
+    // 브라우저 알림 (에러만 표시, redirect 방식은 완료 알림 제외)
+    if (this.notificationService && type === 'error') {
       try {
-        switch (type) {
-          case 'complete':
-            this.notificationService.showCustomNotification(
-              '다운로드 완료',
-              `${fileName} 다운로드가 완료되었습니다.`,
-              {
-                icon: '/favicon.ico',
-                tag: `download-${downloadId}`,
-                duration: 3000
-              }
-            );
-            break;
-          case 'error':
-            this.notificationService.showCustomNotification(
-              '다운로드 실패',
-              `${fileName} 다운로드 실패: ${error}`,
-              {
-                icon: '/favicon.ico',
-                tag: `download-error-${downloadId}`,
-                duration: 8000
-              }
-            );
-            break;
+        if (type === 'error') {
+          this.notificationService.showCustomNotification(
+            '다운로드 실패',
+            `${fileName} 다운로드 실패: ${error}`,
+            {
+              icon: '/favicon.ico',
+              tag: `download-error-${downloadId}`,
+              duration: 8000
+            }
+          );
         }
       } catch (notificationError) {
         console.warn('브라우저 알림 표시 실패:', notificationError);

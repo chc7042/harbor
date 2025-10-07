@@ -947,7 +947,149 @@ function determineEnvironment(jobName, parameters = {}) {
   return 'development';
 }
 
-// Jenkins 배포 정보 조회 (NAS 경로, 다운로드 파일 등)
+// Jenkins 배포 정보 조회 (3-segment URL: version/projectName/buildNumber)
+router.get('/deployment-info/:version/:projectName/:buildNumber',
+  [
+    param('version').isString().withMessage('버전은 문자열이어야 합니다'),
+    param('projectName').isString().withMessage('프로젝트명은 문자열이어야 합니다'),
+    param('buildNumber').isInt({ min: 1 }).withMessage('빌드 번호는 양의 정수여야 합니다'),
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: '입력 데이터가 올바르지 않습니다.',
+          errors: errors.array(),
+        });
+      }
+
+      const { version, projectName, buildNumber } = req.params;
+      
+      // 실제 projectName은 version/projectName 조합
+      const fullProjectName = `${version}/${projectName}`;
+
+      logger.info(`배포 정보 조회 요청 (3-segment) - 사용자: ${req.user.username}, 버전: ${version}, 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+      logger.info(`Full project name: ${fullProjectName}`);
+
+      const jenkinsService = getJenkinsService();
+      const nasService = getNASService();
+      const synologyApiService = require('../services/synologyApiService');
+
+      try {
+        logger.info(`배포 정보 조회 시작 - 프로젝트: ${fullProjectName}, 빌드: ${buildNumber}`);
+        
+        // Jenkins에서 빌드 정보 확인 - extractDeploymentInfoFromBuildLog를 통해 상태도 확인
+        let buildStatus = null;
+        try {
+          logger.info(`Jenkins 빌드 로그 추출 시도 - ${fullProjectName}#${buildNumber}`);
+          // 빌드 로그에서 정보를 먼저 추출해보고 상태 확인
+          const preliminaryInfo = await jenkinsService.extractDeploymentInfoFromBuildLog(fullProjectName, parseInt(buildNumber));
+          buildStatus = 'SUCCESS'; // 로그를 성공적으로 가져왔으면 빌드는 완료된 것으로 간주
+          logger.info(`Jenkins 빌드 로그 추출 성공 - ${fullProjectName}#${buildNumber}`);
+        } catch (error) {
+          logger.error(`빌드 로그 접근 실패 - ${fullProjectName}#${buildNumber}: ${error.message}`);
+          logger.error(`Error stack:`, error.stack);
+          buildStatus = 'UNKNOWN';
+        }
+
+        // Jenkins에서 배포 정보 조회 (PRD 기반 자동 경로 탐지 시스템 사용)
+        const deploymentInfo = await jenkinsService.extractDeploymentInfo(fullProjectName, parseInt(buildNumber));
+
+        // NAS 디렉토리 존재 확인 및 검증
+        if (deploymentInfo.nasPath || deploymentInfo.deploymentPath) {
+          const nasPath = deploymentInfo.nasPath || deploymentInfo.deploymentPath;
+
+          // Windows 경로를 Unix 경로로 변환
+          let unixPath = nasPath
+            .replace(/\\\\/g, '')              // \\ 제거
+            .replace('nas.roboetech.com', '')   // 호스트명 제거
+            .replace(/\\/g, '/')                // \ -> /
+            .replace(/^\/+/, '');               // 앞의 중복 슬래시 정리
+
+          // release_version 제거 (share 이름이므로 경로에서 제외)
+          unixPath = unixPath.replace(/^release_version\//, '');
+
+          logger.info(`Checking NAS directory existence: ${unixPath}`);
+
+          // 실제 NAS 디렉토리 존재 확인
+          const directoryExists = await nasService.directoryExists(unixPath);
+
+          if (directoryExists) {
+            // 디렉토리가 존재하면 파일 목록도 조회
+            try {
+              const files = await nasService.getDirectoryFiles(unixPath);
+              deploymentInfo.verifiedFiles = files;
+              deploymentInfo.directoryVerified = true;
+
+              // NAS에서 해당 버전 관련 파일들 찾기
+              const versionFiles = files.filter(file => {
+                const isDeploymentFile = file.endsWith('.tar.gz') || file.endsWith('.enc.tar.gz');
+                return isDeploymentFile;
+              });
+
+              deploymentInfo.allFiles = versionFiles;
+              deploymentInfo.verifiedAllFiles = versionFiles;
+
+              logger.info(`Found ${versionFiles.length} deployment files in NAS: ${versionFiles.join(', ')}`);
+
+              // 메인 다운로드 파일 설정 (V로 시작하는 비암호화 파일 우선)
+              const mainFile = versionFiles.find(f => f.startsWith('V') && !f.includes('.enc.'));
+              if (mainFile) {
+                deploymentInfo.downloadFile = mainFile;
+                deploymentInfo.downloadFileVerified = true;
+                logger.info(`Set download file to: ${mainFile}`);
+              }
+
+              logger.info(`NAS directory verified: ${unixPath} (${files.length} files found)`);
+            } catch (error) {
+              logger.warn(`Failed to get file list for ${unixPath}: ${error.message}`);
+              deploymentInfo.directoryVerified = true;
+              deploymentInfo.verificationWarning = 'Directory exists but file list unavailable';
+            }
+          }
+        }
+
+        return res.json({
+          success: true,
+          data: {
+            projectName: fullProjectName,
+            buildNumber: parseInt(buildNumber),
+            status: buildStatus,
+            deploymentPath: deploymentInfo.deploymentPath,
+            nasPath: deploymentInfo.nasPath,
+            downloadFile: deploymentInfo.downloadFile,
+            allFiles: deploymentInfo.allFiles || [],
+            verifiedFiles: deploymentInfo.verifiedFiles || [],
+            directoryVerified: deploymentInfo.directoryVerified || false,
+            downloadFileVerified: deploymentInfo.downloadFileVerified || false,
+            buildDate: deploymentInfo.buildDate,
+            buildNumber: deploymentInfo.buildNumber,
+          },
+          message: '배포 정보를 조회했습니다.',
+        });
+
+      } catch (innerError) {
+        logger.error(`Jenkins 배포 정보 조회 실패 - ${fullProjectName}#${buildNumber}: ${innerError.message}`);
+        logger.error(`Inner error stack:`, innerError.stack);
+
+        return res.status(404).json({
+          success: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: '요청한 리소스를 찾을 수 없습니다.',
+          },
+        });
+      }
+    } catch (error) {
+      logger.error(`배포 정보 조회 중 오류 발생: ${error.message}`);
+      next(error);
+    }
+  }
+);
+
+// Jenkins 배포 정보 조회 (NAS 경로, 다운로드 파일 등) - 2-segment URL fallback
 router.get('/deployment-info/:projectName/:buildNumber',
   [
     param('projectName').isString().withMessage('프로젝트명은 문자열이어야 합니다'),
@@ -973,14 +1115,19 @@ router.get('/deployment-info/:projectName/:buildNumber',
       const synologyApiService = require('../services/synologyApiService');
 
       try {
+        logger.info(`배포 정보 조회 시작 - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+        
         // Jenkins에서 빌드 정보 확인 - extractDeploymentInfoFromBuildLog를 통해 상태도 확인
         let buildStatus = null;
         try {
+          logger.info(`Jenkins 빌드 로그 추출 시도 - ${projectName}#${buildNumber}`);
           // 빌드 로그에서 정보를 먼저 추출해보고 상태 확인
           const preliminaryInfo = await jenkinsService.extractDeploymentInfoFromBuildLog(projectName, parseInt(buildNumber));
           buildStatus = 'SUCCESS'; // 로그를 성공적으로 가져왔으면 빌드는 완료된 것으로 간주
+          logger.info(`Jenkins 빌드 로그 추출 성공 - ${projectName}#${buildNumber}`);
         } catch (error) {
-          logger.warn(`빌드 로그 접근 실패 - ${projectName}#${buildNumber}: ${error.message}`);
+          logger.error(`빌드 로그 접근 실패 - ${projectName}#${buildNumber}: ${error.message}`);
+          logger.error(`Error stack:`, error.stack);
           buildStatus = 'UNKNOWN';
         }
 
