@@ -45,7 +45,7 @@ api.interceptors.response.use(
         }
 
         // 토큰 갱신 요청 (인터셉터 무한루프 방지를 위해 직접 axios 사용)
-        const refreshResponse = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
+        const refreshResponse = await axios.post(`${API_BASE_URL}/auth/refresh`, {
           refreshToken,
         });
 
