@@ -153,8 +153,8 @@ services:
       dockerfile: Dockerfile.frontend
       target: production
       args:
-        - VITE_API_URL=${VITE_API_URL:-/harbor-api}
-        - VITE_WS_URL=${VITE_WS_URL:-wss://harbor.roboetech.com}
+        - VITE_API_URL=/api
+        - VITE_WS_URL=wss://harbor.roboetech.com
     container_name: harbor-frontend-prod
     restart: unless-stopped
     networks:

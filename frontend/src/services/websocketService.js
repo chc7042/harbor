@@ -34,18 +34,15 @@ class WebSocketService {
         this.isConnecting = true;
         this.token = token;
 
-        // WebSocket URL 구성 - 브라우저의 현재 호스트 사용 (Nginx가 프록시함)
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.host;
-        const wsUrl = `${protocol}//${host}`;
+        // WebSocket URL 구성 - 환경변수 사용 (직접 백엔드 연결)
+        const wsBaseUrl = import.meta.env.VITE_WS_URL || 'wss://harbor.roboetech.com:3001';
         
         console.log('WebSocket configuration:', {
-          protocol,
-          host,
-          finalWsUrl: wsUrl
+          wsBaseUrl,
+          envVar: import.meta.env.VITE_WS_URL
         });
         
-        this.url = `${wsUrl}/ws?token=${encodeURIComponent(token)}`;
+        this.url = `${wsBaseUrl}/ws?token=${encodeURIComponent(token)}`;
 
         // 연결 시도 추적
         this.trackConnectionEvent('connection_attempt', { url: this.url });
