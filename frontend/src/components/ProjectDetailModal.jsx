@@ -15,6 +15,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import downloadService, { downloadFile } from '../services/downloadService';
+import { useToast } from './ToastContainer';
 
 // 파일 크기 포맷팅 함수
 const formatFileSize = (bytes) => {
@@ -39,6 +40,7 @@ const ProjectDetailModal = ({
   className = ''
 }) => {
   
+  const { showError, showWarning } = useToast();
   const [activeTab, setActiveTab] = useState('logs');
   const [copySuccess, setCopySuccess] = useState('');
   const [currentDeploymentId, setCurrentDeploymentId] = useState(null);
@@ -514,7 +516,7 @@ const ProjectDetailModal = ({
                       if (shareUrl) {
                         window.open(shareUrl, '_blank');
                       } else {
-                        alert('공유 폴더 URL이 설정되지 않았습니다. 잠시 후 다시 시도해주세요.');
+                        showWarning('공유 폴더 URL이 설정되지 않았습니다. 잠시 후 다시 시도해주세요.');
                       }
                     }}
                     disabled={
@@ -716,7 +718,7 @@ const ProjectDetailModal = ({
                                       if (deploymentInfo?.synologyShareUrl) {
                                         window.open(deploymentInfo.synologyShareUrl, '_blank');
                                       } else {
-                                        alert('공유 폴더 URL이 설정되지 않았습니다. 잠시 후 다시 시도해주세요.');
+                                        showWarning('공유 폴더 URL이 설정되지 않았습니다. 잠시 후 다시 시도해주세요.');
                                       }
                                     }}
                                   >
@@ -746,14 +748,16 @@ const ProjectDetailModal = ({
                                   if (file.startsWith('mr')) return 1; // Morrow
                                   if (file.startsWith('be')) return 2; // Backend  
                                   if (file.startsWith('fe')) return 3; // Frontend
-                                  return 4; // 기타
+                                  if (file.startsWith('fs')) return 4; // FullStack
+                                  return 5; // 기타
                                 };
                                 return getOrder(a) - getOrder(b);
                               }).map((file, index) => {
                                 const isEncrypted = file.includes('.enc.');
                                 const fileType = file.startsWith('mr') ? '모로우' :
                                                 file.startsWith('be') ? '백엔드' :
-                                                file.startsWith('fe') ? '프런트엔드' : '기타';
+                                                file.startsWith('fe') ? '프런트엔드' :
+                                                file.startsWith('fs') ? '풀스택' : '기타';
                                 
                                 // 파일이 실제로 NAS에 존재하는지 확인
                                 const fileExists = deploymentInfo.verifiedFiles ? deploymentInfo.verifiedFiles.includes(file) : true;

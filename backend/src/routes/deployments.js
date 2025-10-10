@@ -1059,6 +1059,51 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
             };
             logger.info(`Found verified deployment data in database for ${fullProjectName}#${buildNumber}`);
             logger.info(`DB allFiles: ${JSON.stringify(dbRecord.all_files)}`);
+            
+            // DB에서 데이터를 찾은 경우에도 Synology 공유 링크가 없으면 생성
+            if (!dbRecord.synology_share_url) {
+              logger.info('DB에서 데이터를 찾았지만 Synology 공유 링크가 없음, 생성 시도');
+              
+              // 버전 정보 추출
+              const extractedVersion = version.replace(/^(\d+\.\d+\.\d+).*/, '$1');
+              let date = '';
+              let buildNum = '';
+              
+              const dateMatch = fullProjectName.match(/_(\d{6})_/) || deploymentInfo.nasPath?.match(/\/(\d{6})\//);
+              const buildMatch = fullProjectName.match(/_(\d+)$/) || deploymentInfo.nasPath?.match(/\/(\d+)$/);
+              
+              if (dateMatch) date = dateMatch[1];
+              if (buildMatch) buildNum = buildMatch[1];
+              
+              // 기본값 설정
+              if (!date) date = '250116'; // 2.0.0 기본 날짜
+              if (!buildNum) buildNum = buildNumber;
+              
+              logger.info(`🔗 Synology API 호출 시작 (DB 데이터 보완) - getOrCreateVersionShareLink(${extractedVersion}, ${date}, ${buildNum})`);
+              try {
+                const shareResult = await Promise.race([
+                  synologyApiService.getOrCreateVersionShareLink(extractedVersion, date, buildNum),
+                  new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 10000)),
+                ]);
+                
+                logger.info(`🔗 Synology API 응답 (DB 데이터 보완):`, JSON.stringify(shareResult, null, 2));
+                
+                if (shareResult.success) {
+                  deploymentInfo.synologyShareUrl = shareResult.shareUrl;
+                  deploymentInfo.synologyShareId = shareResult.shareId;
+                  deploymentInfo.shareCreated = shareResult.isNew;
+                  
+                  logger.info(`Synology folder share link ${shareResult.isNew ? 'created' : 'found'} (DB 데이터 보완): ${shareResult.shareUrl}`);
+                } else {
+                  logger.warn(`Synology share link creation failed (DB 데이터 보완): ${shareResult.error}`);
+                }
+              } catch (shareError) {
+                logger.warn(`Synology share link error (DB 데이터 보완): ${shareError.message}`);
+              }
+            } else {
+              deploymentInfo.synologyShareUrl = dbRecord.synology_share_url;
+              logger.info('DB에서 기존 Synology 공유 링크 사용:', dbRecord.synology_share_url);
+            }
           } else {
             logger.warn(`DB에서 레코드를 찾지 못함 - ${fullProjectName}#${buildNumber}`);
           }
@@ -1156,12 +1201,14 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
           let date = '250310'; // 기본값
           let buildNum = buildNumber;
 
-          // 프로젝트명 패턴 매칭으로 정보 추출
-          const dateMatch = fullProjectName.match(/_(\d{6})_/) || deploymentInfo.nasPath?.match(/\/(\d{6})\//);
-          const buildMatch = fullProjectName.match(/_(\d+)$/) || deploymentInfo.nasPath?.match(/\/(\d+)$/);
+          // 프로젝트명 및 NAS 경로에서 날짜/빌드 번호 추출 (Windows 경로 지원)
+          const dateMatch = fullProjectName.match(/_(\d{6})_/) || deploymentInfo.nasPath?.match(/[\\\/](\d{6})[\\\/]/);
+          const buildMatch = fullProjectName.match(/_(\d+)$/) || deploymentInfo.nasPath?.match(/[\\\/](\d+)$/);
 
           if (dateMatch) date = dateMatch[1];
           if (buildMatch) buildNum = buildMatch[1];
+
+          logger.info(`🔍 날짜/빌드번호 추출 결과 (3-segment) - date: ${date}, buildNum: ${buildNum}, nasPath: ${deploymentInfo.nasPath}`);
 
           logger.info(`🔗 Synology API 호출 시작 (3-segment) - getOrCreateVersionShareLink(${extractedVersion}, ${date}, ${buildNum})`);
           try {
@@ -1326,16 +1373,16 @@ router.get('/deployment-info/:projectName/:buildNumber',
           let date = '250310';
           let buildNum = buildNumber;
 
-          // 프로젝트명 패턴 매칭으로 정보 추출
-          const versionMatch = projectName.match(/mr(\d+\.\d+\.\d+)/);
-          const dateMatch = projectName.match(/_(\d{6})_/);
-          const buildMatch = projectName.match(/_(\d+)$/);
+          // 프로젝트명 및 NAS 경로에서 정보 추출 (Windows 경로 지원)
+          const versionMatch = projectName.match(/mr(\d+\.\d+\.\d+)/) || deploymentInfo.nasPath?.match(/mr(\d+\.\d+\.\d+)/);
+          const dateMatch = projectName.match(/_(\d{6})_/) || deploymentInfo.nasPath?.match(/[\\\/](\d{6})[\\\/]/);
+          const buildMatch = projectName.match(/_(\d+)$/) || deploymentInfo.nasPath?.match(/[\\\/](\d+)$/);
 
           if (versionMatch) version = versionMatch[1];
           if (dateMatch) date = dateMatch[1];
           if (buildMatch) buildNum = buildMatch[1];
 
-          logger.info(`추출된 정보 (2-segment) - version: ${version}, date: ${date}, buildNum: ${buildNum}`);
+          logger.info(`추출된 정보 (2-segment) - version: ${version}, date: ${date}, buildNum: ${buildNum}, nasPath: ${deploymentInfo.nasPath}`);
 
           // Synology 공유 링크 생성 시도 (백그라운드로 실행, 오류가 나도 응답 차단하지 않음)
           logger.info(`🔗 Synology API 호출 시작 - getOrCreateVersionShareLink(${version}, ${date}, ${buildNum})`);
@@ -1584,8 +1631,9 @@ router.get('/deployment-info/:projectName/:buildNumber',
         // 시놀로지 공유 링크 및 파일별 다운로드 링크 생성 (디렉토리가 존재하는 경우만)
         if (deploymentInfo.directoryVerified && deploymentInfo.nasPath) {
           try {
-            // NAS 경로에서 버전, 날짜, 빌드 번호 추출
-            const pathMatch = deploymentInfo.nasPath.match(/mr(\d+\.\d+\.\d+)\\(\d+)\\(\d+)/);
+            // NAS 경로에서 버전, 날짜, 빌드 번호 추출 (Windows 및 Unix 경로 모두 지원)
+            logger.info(`Trying to extract version info from NAS path: ${deploymentInfo.nasPath}`);
+            const pathMatch = deploymentInfo.nasPath.match(/mr(\d+\.\d+\.\d+)[\\\/](\d+)[\\\/](\d+)/);
             if (pathMatch) {
               const [, version, date, buildNum] = pathMatch;
 
