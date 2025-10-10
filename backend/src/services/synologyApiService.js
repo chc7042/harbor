@@ -670,22 +670,36 @@ class SynologyApiService {
   async getOrCreateVersionShareLink(version, date, buildNumber) {
     // 여러 가능한 경로들을 시도 (가장 가능성 높은 순서대로)
     // 기본 smbclient 경로가 작동하므로 해당 경로 기준으로 시놀로지 절대경로 추측
+    
+    // mr 접두어가 있는 버전과 없는 버전 모두 지원
+    const versionPatterns = [
+      `mr${version}`,  // mr2.0.0, mr1.2.0 등
+      version,         // 2.0.0, 1.2.0 등
+      `${version.replace('mr', '')}`, // mr1.1.0 -> 1.1.0
+    ];
+    
     const possiblePaths = [
       '/',  // 루트 테스트
       '/volume1',  // 볼륨 테스트
       '/volume1/release_version',  // 공유 폴더 테스트
-      `/volume1/release_version/release/product/mr${version}/${date}/${buildNumber}`,
-      `/volume1/release_version/product/mr${version}/${date}/${buildNumber}`,
-      `/release_version/release/product/mr${version}/${date}/${buildNumber}`,
-      `/volume1/shared/release_version/release/product/mr${version}/${date}/${buildNumber}`,
-      `/volume1/shared/release/product/mr${version}/${date}/${buildNumber}`,
-      `/volume1/release/product/mr${version}/${date}/${buildNumber}`,
-      `/release/product/mr${version}/${date}/${buildNumber}`,
-      `/volume1/nas/release/product/mr${version}/${date}/${buildNumber}`,
-      `/volume1/public/release/product/mr${version}/${date}/${buildNumber}`,
-      `/nas/release/product/mr${version}/${date}/${buildNumber}`,
-      `/shared/release/product/mr${version}/${date}/${buildNumber}`,
     ];
+
+    // 각 버전 패턴에 대해 경로 생성
+    for (const versionPattern of versionPatterns) {
+      possiblePaths.push(
+        `/volume1/release_version/release/product/${versionPattern}/${date}/${buildNumber}`,
+        `/volume1/release_version/product/${versionPattern}/${date}/${buildNumber}`,
+        `/release_version/release/product/${versionPattern}/${date}/${buildNumber}`,
+        `/volume1/shared/release_version/release/product/${versionPattern}/${date}/${buildNumber}`,
+        `/volume1/shared/release/product/${versionPattern}/${date}/${buildNumber}`,
+        `/volume1/release/product/${versionPattern}/${date}/${buildNumber}`,
+        `/release/product/${versionPattern}/${date}/${buildNumber}`,
+        `/volume1/nas/release/product/${versionPattern}/${date}/${buildNumber}`,
+        `/volume1/public/release/product/${versionPattern}/${date}/${buildNumber}`,
+        `/nas/release/product/${versionPattern}/${date}/${buildNumber}`,
+        `/shared/release/product/${versionPattern}/${date}/${buildNumber}`
+      );
+    }
 
     let workingPath = null;
 
