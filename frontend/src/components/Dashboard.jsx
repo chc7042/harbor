@@ -382,18 +382,18 @@ const Dashboard = () => {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setIsUploadModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors shadow-sm"
                   >
-                    <Upload size={16} />
+                    <Upload size={14} />
                     파일 업로드
                   </button>
                   <button
                     onClick={handleOpenSharedFolder}
                     disabled={isOpeningFolder}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     title="공유 폴더 열기"
                   >
-                    <FolderOpen size={16} />
+                    <FolderOpen size={14} />
                     {isOpeningFolder ? '열기 중...' : '공유폴더 열기'}
                   </button>
                 </div>

@@ -431,7 +431,7 @@ const ProjectDetailModal = ({
                    selectedJobType === 'fs' ? '프런트엔드 (FS)' : '백엔드 (BE)'} 빌드 로그
                 </div>
                 <div className="flex-1 flex flex-col min-h-0">
-                  <div className="h-full bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-y-auto">
+                  <div className="h-full bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
                   {loadingLogs ? (
                     <div className="h-full flex items-center justify-center">
                       <div className="text-gray-400">
@@ -440,11 +440,30 @@ const ProjectDetailModal = ({
                       </div>
                     </div>
                   ) : logs.length > 0 ? (
-                    logs.map((log, index) => (
-                      <div key={index} className="whitespace-pre-wrap break-words">
-                        {log.message}
-                      </div>
-                    ))
+                    logs.map((log, index) => {
+                      // 로그 레벨 파싱 - 로그 메시지에서 레벨 추출
+                      const logMessage = log.message || log;
+                      const hasLevel = typeof logMessage === 'string' && 
+                                      (logMessage.includes('[SUCCESS]') || 
+                                       logMessage.includes('[ERROR]') || 
+                                       logMessage.includes('[WARN]'));
+                      
+                      let logLevel = 'INFO';
+                      if (logMessage.includes('[SUCCESS]')) logLevel = 'SUCCESS';
+                      else if (logMessage.includes('[ERROR]')) logLevel = 'ERROR';
+                      else if (logMessage.includes('[WARN]')) logLevel = 'WARN';
+                      
+                      return (
+                        <div key={index} className={`whitespace-pre-wrap break-words mb-1 ${
+                          logLevel === 'SUCCESS' ? 'text-green-400' :
+                          logLevel === 'ERROR' ? 'text-red-400' :
+                          logLevel === 'WARN' ? 'text-yellow-400' :
+                          'text-gray-100'
+                        }`}>
+                          {logMessage}
+                        </div>
+                      );
+                    })
                   ) : (
                     <div className="h-full flex items-center justify-center">
                       <div className="text-center text-gray-400">

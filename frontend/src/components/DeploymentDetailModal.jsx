@@ -360,7 +360,7 @@ const DeploymentDetailModal = ({
 
               <div className="flex-1 flex flex-col space-y-3 min-h-0">
                 <div className="flex-1 flex flex-col min-h-0">
-                  <div className="h-full bg-gray-900 text-gray-100 rounded-lg p-3 font-mono text-sm overflow-y-auto">
+                  <div className="h-full bg-gray-900 text-gray-100 rounded-lg p-3 font-mono text-sm overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
                     {loadingLogs ? (
                       <div className="h-full flex items-center justify-center">
                         <div className="text-center">
@@ -380,7 +380,12 @@ const DeploymentDetailModal = ({
                           }`}>
                             [{log.level}]
                           </span>
-                          <span className="ml-2">{log.message}</span>
+                          <span className={`ml-2 ${
+                            log.level === 'SUCCESS' ? 'text-green-400' :
+                            log.level === 'ERROR' ? 'text-red-400' :
+                            log.level === 'WARN' ? 'text-yellow-400' :
+                            'text-gray-100'
+                          }`}>{log.message}</span>
                         </div>
                       ))
                     ) : (
