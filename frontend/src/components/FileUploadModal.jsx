@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import FileUploader from './FileUploader';
 
 const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
-  const [currentPath, setCurrentPath] = useState('/nas/release_version/');
+  const [currentPath, setCurrentPath] = useState('\\\\nas.roboetech.com\\release_version\\release\\upload');
 
   const handleUploadComplete = (data) => {
     console.log('Upload completed:', data);
@@ -51,7 +51,7 @@ const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
               value={currentPath}
               onChange={(e) => setCurrentPath(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="/nas/release_version/"
+              placeholder="\\\\nas.roboetech.com\\release_version\\release\\upload"
             />
             <p className="text-xs text-gray-500 mt-1">
               파일이 업로드될 NAS 경로를 입력하세요

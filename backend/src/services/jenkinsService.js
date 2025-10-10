@@ -291,10 +291,10 @@ class JenkinsService {
         actualBuildNumber = await this.findDownstreamBuildNumber(jobName, buildNumber);
         if (!actualBuildNumber) {
           logger.warn(`No downstream build found for ${jobName} triggered by MR build ${buildNumber}`);
-          return [{ 
-            message: `${jobName.includes('/be') ? 'BE' : 'FE'} 빌드를 찾을 수 없습니다. MR 빌드 #${buildNumber}에 의해 트리거된 downstream 작업이 없습니다.`, 
+          return [{
+            message: `${jobName.includes('/be') ? 'BE' : 'FE'} 빌드를 찾을 수 없습니다. MR 빌드 #${buildNumber}에 의해 트리거된 downstream 작업이 없습니다.`,
             level: 'info',
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           }];
         }
         logger.info(`Found downstream build ${actualBuildNumber} for ${jobName} (triggered by MR build ${buildNumber})`);
@@ -325,34 +325,34 @@ class JenkinsService {
    * MR job에 의해 트리거된 downstream 빌드 번호 찾기
    */
   async findDownstreamBuildNumber(downstreamJobName, upstreamBuildNumber) {
-    
+
     try {
       // upstream job name 구성 (BE/FE -> MR)
       const upstreamJobName = downstreamJobName.replace(/(be|fe)(\d+\.\d+\.\d+)_release/, 'mr$2_release');
       logger.debug(`Searching for downstream builds: ${downstreamJobName} triggered by ${upstreamJobName}#${upstreamBuildNumber}`);
-      
+
       const jobPath = downstreamJobName.split('/').map(part => `/job/${encodeURIComponent(part)}`).join('');
       const buildsUrl = `/job/projects${jobPath}/api/json?tree=builds[number,actions[causes[upstreamBuild,upstreamProject]]]`;
-      
+
       const response = await this.client.get(buildsUrl);
       const builds = response.data.builds || [];
-      
+
       for (const build of builds) {
         const causes = build.actions?.find(action => action.causes)?.causes || [];
         for (const cause of causes) {
           // 타입 안전 비교: 숫자로 변환해서 비교
           const causeUpstreamBuild = parseInt(cause.upstreamBuild);
           const targetUpstreamBuild = parseInt(upstreamBuildNumber);
-          
-          if (causeUpstreamBuild === targetUpstreamBuild && 
-              cause.upstreamProject && 
+
+          if (causeUpstreamBuild === targetUpstreamBuild &&
+              cause.upstreamProject &&
               cause.upstreamProject === `projects/${upstreamJobName}`) {
             logger.info(`Found downstream build ${build.number} for ${downstreamJobName} triggered by ${upstreamJobName}#${upstreamBuildNumber}`);
             return build.number;
           }
         }
       }
-      
+
       return null;
     } catch (error) {
       logger.error(`Failed to find downstream build for ${downstreamJobName}:`, error.message);

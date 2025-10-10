@@ -13,9 +13,9 @@ router.get('/test-deployment-info/:version/:projectName/:buildNumber',
   async (req, res) => {
     const { version, projectName, buildNumber } = req.params;
     const fullProjectName = `${version}/${projectName}`;
-    
+
     console.log(`=== 테스트 deployment-info: ${fullProjectName}#${buildNumber} ===`);
-    
+
     try {
       const { Pool } = require('pg');
       const pool = new Pool({
@@ -28,7 +28,7 @@ router.get('/test-deployment-info/:version/:projectName/:buildNumber',
 
       const dbResult = await pool.query(
         'SELECT * FROM deployment_paths WHERE project_name = $1 AND build_number = $2',
-        [fullProjectName, parseInt(buildNumber)]
+        [fullProjectName, parseInt(buildNumber)],
       );
 
       await pool.end();
@@ -39,16 +39,16 @@ router.get('/test-deployment-info/:version/:projectName/:buildNumber',
           fullProjectName,
           buildNumber: parseInt(buildNumber),
           dbRows: dbResult.rows.length,
-          dbRecord: dbResult.rows[0] || null
-        }
+          dbRecord: dbResult.rows[0] || null,
+        },
       });
     } catch (error) {
       return res.json({
         success: false,
-        error: error.message
+        error: error.message,
       });
     }
-  }
+  },
 );
 
 // 모든 배포 라우트는 인증 필요
@@ -722,12 +722,12 @@ router.get('/logs/*',
       const pathParts = req.params[0].split('/');
       const buildNumber = pathParts.pop(); // 마지막 부분이 buildNumber
       const projectName = pathParts.join('/'); // 나머지가 projectName
-      
+
       // 기본 유효성 검사
       if (!projectName || !buildNumber || isNaN(parseInt(buildNumber))) {
         throw new AppError('유효하지 않은 요청 파라미터입니다. 올바른 형식: /logs/{projectName}/{buildNumber}', 400);
       }
-      
+
       // TEMP: TEST 용도로 인증 우회
       console.log(`TEST: Logs request for ${projectName}#${buildNumber}`);
 
@@ -1009,7 +1009,7 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
       }
 
       const { version, projectName, buildNumber } = req.params;
-      
+
       // 실제 projectName은 version/projectName 조합
       const fullProjectName = `${version}/${projectName}`;
 
@@ -1022,7 +1022,7 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
 
       try {
         logger.info(`배포 정보 조회 시작 - 프로젝트: ${fullProjectName}, 빌드: ${buildNumber}`);
-        
+
         // 1. 먼저 deployment_paths 테이블에서 기존 검증된 데이터 확인
         let deploymentInfo = null;
         try {
@@ -1038,7 +1038,7 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
 
           const dbResult = await pool.query(
             'SELECT * FROM deployment_paths WHERE project_name = $1 AND build_number = $2',
-            [fullProjectName, parseInt(buildNumber)]
+            [fullProjectName, parseInt(buildNumber)],
           );
 
           logger.info(`DB 쿼리 결과 - 행 개수: ${dbResult.rows.length}`);
@@ -1059,40 +1059,40 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
             };
             logger.info(`Found verified deployment data in database for ${fullProjectName}#${buildNumber}`);
             logger.info(`DB allFiles: ${JSON.stringify(dbRecord.all_files)}`);
-            
+
             // DB에서 데이터를 찾은 경우에도 Synology 공유 링크가 없으면 생성
             if (!dbRecord.synology_share_url) {
               logger.info('DB에서 데이터를 찾았지만 Synology 공유 링크가 없음, 생성 시도');
-              
+
               // 버전 정보 추출
               const extractedVersion = version.replace(/^(\d+\.\d+\.\d+).*/, '$1');
               let date = '';
               let buildNum = '';
-              
+
               const dateMatch = fullProjectName.match(/_(\d{6})_/) || deploymentInfo.nasPath?.match(/\/(\d{6})\//);
               const buildMatch = fullProjectName.match(/_(\d+)$/) || deploymentInfo.nasPath?.match(/\/(\d+)$/);
-              
+
               if (dateMatch) date = dateMatch[1];
               if (buildMatch) buildNum = buildMatch[1];
-              
+
               // 기본값 설정
               if (!date) date = '250116'; // 2.0.0 기본 날짜
               if (!buildNum) buildNum = buildNumber;
-              
+
               logger.info(`🔗 Synology API 호출 시작 (DB 데이터 보완) - getOrCreateVersionShareLink(${extractedVersion}, ${date}, ${buildNum})`);
               try {
                 const shareResult = await Promise.race([
                   synologyApiService.getOrCreateVersionShareLink(extractedVersion, date, buildNum),
                   new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 10000)),
                 ]);
-                
-                logger.info(`🔗 Synology API 응답 (DB 데이터 보완):`, JSON.stringify(shareResult, null, 2));
-                
+
+                logger.info('🔗 Synology API 응답 (DB 데이터 보완):', JSON.stringify(shareResult, null, 2));
+
                 if (shareResult.success) {
                   deploymentInfo.synologyShareUrl = shareResult.shareUrl;
                   deploymentInfo.synologyShareId = shareResult.shareId;
                   deploymentInfo.shareCreated = shareResult.isNew;
-                  
+
                   logger.info(`Synology folder share link ${shareResult.isNew ? 'created' : 'found'} (DB 데이터 보완): ${shareResult.shareUrl}`);
                 } else {
                   logger.warn(`Synology share link creation failed (DB 데이터 보완): ${shareResult.error}`);
@@ -1125,7 +1125,7 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
             logger.info(`Jenkins 빌드 로그 추출 성공 - ${fullProjectName}#${buildNumber}`);
           } catch (error) {
             logger.error(`빌드 로그 접근 실패 - ${fullProjectName}#${buildNumber}: ${error.message}`);
-            logger.error(`Error stack:`, error.stack);
+            logger.error('Error stack:', error.stack);
             buildStatus = 'UNKNOWN';
           }
 
@@ -1133,7 +1133,7 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
           deploymentInfo = await jenkinsService.extractDeploymentInfo(fullProjectName, parseInt(buildNumber));
         }
 
-        let buildStatus = 'SUCCESS';
+        const buildStatus = 'SUCCESS';
 
         // NAS 디렉토리 존재 확인 및 검증
         if (deploymentInfo.nasPath || deploymentInfo.deploymentPath) {
@@ -1197,7 +1197,7 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
         // Synology 공유 링크 생성 시도 (3-segment route)
         if (deploymentInfo && (deploymentInfo.nasPath || deploymentInfo.deploymentPath)) {
           // 프로젝트명에서 버전과 날짜 추출
-          let extractedVersion = version; // 3-segment route는 version 파라미터가 있음
+          const extractedVersion = version; // 3-segment route는 version 파라미터가 있음
           let date = '250310'; // 기본값
           let buildNum = buildNumber;
 
@@ -1216,8 +1216,8 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
               synologyApiService.getOrCreateVersionShareLink(extractedVersion, date, buildNum),
               new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 10000)),
             ]);
-            
-            logger.info(`🔗 Synology API 응답 (3-segment):`, JSON.stringify(shareResult, null, 2));
+
+            logger.info('🔗 Synology API 응답 (3-segment):', JSON.stringify(shareResult, null, 2));
 
             if (shareResult.success) {
               deploymentInfo.synologyShareUrl = shareResult.shareUrl;
@@ -1236,11 +1236,11 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
           if (deploymentInfo.allFiles && deploymentInfo.allFiles.length > 0) {
             try {
               const fileInfoResult = await synologyApiService.findActualFileNames(
-                deploymentInfo.nasPath, extractedVersion, date
+                deploymentInfo.nasPath, extractedVersion, date,
               );
               if (fileInfoResult.success) {
                 deploymentInfo.fileInfoMap = fileInfoResult.fileInfoMap || {};
-                logger.info(`File info map created (3-segment):`, JSON.stringify(deploymentInfo.fileInfoMap, null, 2));
+                logger.info('File info map created (3-segment):', JSON.stringify(deploymentInfo.fileInfoMap, null, 2));
               }
             } catch (fileInfoError) {
               logger.warn(`File info mapping failed (3-segment): ${fileInfoError.message}`);
@@ -1274,7 +1274,7 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
 
       } catch (innerError) {
         logger.error(`Jenkins 배포 정보 조회 실패 - ${fullProjectName}#${buildNumber}: ${innerError.message}`);
-        logger.error(`Inner error stack:`, innerError.stack);
+        logger.error('Inner error stack:', innerError.stack);
 
         return res.status(404).json({
           success: false,
@@ -1288,7 +1288,7 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
       logger.error(`배포 정보 조회 중 오류 발생: ${error.message}`);
       next(error);
     }
-  }
+  },
 );
 
 // Jenkins 배포 정보 조회 (NAS 경로, 다운로드 파일 등) - 2-segment URL fallback
@@ -1318,7 +1318,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
 
       try {
         logger.info(`배포 정보 조회 시작 (2-segment) - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
-        
+
         // 1. 먼저 deployment_paths 테이블에서 기존 검증된 데이터 확인
         let deploymentInfo = null;
         try {
@@ -1334,7 +1334,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
 
           const dbResult = await pool.query(
             'SELECT * FROM deployment_paths WHERE project_name = $1 AND build_number = $2',
-            [projectName, parseInt(buildNumber)]
+            [projectName, parseInt(buildNumber)],
           );
 
           logger.info(`DB 쿼리 결과 (2-segment) - 행 개수: ${dbResult.rows.length}`);
@@ -1367,7 +1367,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
         // 2. DB에 데이터가 있으면 Synology 공유 링크를 생성하고 반환
         logger.info(`🔍 DB 조회 결과 확인 - deploymentInfo exists: ${!!deploymentInfo}`);
         if (deploymentInfo) {
-          logger.info(`📋 deploymentInfo 내용:`, JSON.stringify(deploymentInfo, null, 2));
+          logger.info('📋 deploymentInfo 내용:', JSON.stringify(deploymentInfo, null, 2));
           // 프로젝트명에서 버전과 날짜 추출 (예: mr3.0.0_250310_26)
           let version = '3.0.0';
           let date = '250310';
@@ -1391,8 +1391,8 @@ router.get('/deployment-info/:projectName/:buildNumber',
               synologyApiService.getOrCreateVersionShareLink(version, date, buildNum),
               new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 10000)),
             ]);
-            
-            logger.info(`🔗 Synology API 응답:`, JSON.stringify(shareResult, null, 2));
+
+            logger.info('🔗 Synology API 응답:', JSON.stringify(shareResult, null, 2));
 
             if (shareResult.success) {
               deploymentInfo.synologyShareUrl = shareResult.shareUrl;
@@ -1442,7 +1442,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
           logger.info(`Jenkins 빌드 로그 추출 성공 - ${projectName}#${buildNumber}`);
         } catch (error) {
           logger.error(`빌드 로그 접근 실패 - ${projectName}#${buildNumber}: ${error.message}`);
-          logger.error(`Error stack:`, error.stack);
+          logger.error('Error stack:', error.stack);
           buildStatus = 'UNKNOWN';
         }
 

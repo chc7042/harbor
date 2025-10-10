@@ -146,7 +146,7 @@ class LDAPConfig {
 
     // 사용자명 결정 우선순위: searchUsername > UID from DN > existing username > CN from DN
     const uidFromDN = this.getUidFromDN(user.dn);
-    
+
     if (searchUsername && /^[a-zA-Z0-9._-]+$/.test(searchUsername)) {
       // 검색에 사용된 username이 영문이면 이를 사용 (nicolas.choi 같은 경우)
       user.username = searchUsername;
@@ -196,16 +196,16 @@ class LDAPConfig {
         'il.woo': 'Development',
         'Hieu Dao': 'Development',
         '고지성': 'Sales',
-        '김갑겸': 'Sales', 
+        '김갑겸': 'Sales',
         '김경민': 'Finance',
         '김대진': 'Development',
         '김범관': 'Development',
         '김정한': 'Sales',
         '도대국': 'Finance',
         'nicolas.choi': 'Development',
-        '최현창': 'Development'
+        '최현창': 'Development',
       };
-      
+
       const mappedDepartment = nameToDepartmentMap[user.username] || nameToDepartmentMap[user.fullName];
       if (mappedDepartment) {
         user.department = mappedDepartment;
@@ -232,11 +232,11 @@ class LDAPConfig {
     // 가능한 부서 속성들을 순서대로 시도
     const departmentAttributes = [
       'department',
-      'departmentNumber', 
+      'departmentNumber',
       'ou',
       'organizationalUnit',
       'division',
-      'businessCategory'
+      'businessCategory',
     ];
 
     for (const attr of departmentAttributes) {
@@ -272,11 +272,11 @@ class LDAPConfig {
     const groupToDepartmentMap = {
       'dev_team': 'Development',
       'sales': 'Sales',
-      'financial': 'Finance'
+      'financial': 'Finance',
     };
 
     const client = this.createClient();
-    
+
     try {
       const bindAsync = promisify(client.bind).bind(client);
       await bindAsync(this.config.bindDN, this.config.bindCredentials);
@@ -286,24 +286,24 @@ class LDAPConfig {
         try {
           const searchAsync = promisify(client.search).bind(client);
           const groupDN = `cn=${groupName},ou=groups,dc=roboetech,dc=com`;
-          
+
           const searchResult = await searchAsync(groupDN, {
             scope: 'base',
             filter: `(|(member=${userDN})(memberUid=${this.getUidFromDN(userDN)}))`,
-            attributes: ['cn']
+            attributes: ['cn'],
           });
 
           const found = await new Promise((resolve, reject) => {
             let hasEntry = false;
-            
+
             searchResult.on('searchEntry', () => {
               hasEntry = true;
             });
-            
+
             searchResult.on('end', () => {
               resolve(hasEntry);
             });
-            
+
             searchResult.on('error', (err) => {
               reject(err);
             });

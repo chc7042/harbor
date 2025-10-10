@@ -70,12 +70,12 @@ router.get('/download',
 
       // 경로 정리: /nas/release_version/ 제거
       let cleanPath = path.replace('/nas/release_version/', '');
-      
+
       // 추가 중복 경로 정리 (더 강력한 정리)
       cleanPath = cleanPath.replace(/^\/+release_version\/+/g, ''); // 시작부분 release_version/ 제거
       cleanPath = cleanPath.replace(/^release_version\/+/g, ''); // 시작부분 release_version/ 제거
       cleanPath = cleanPath.replace(/\/+/g, '/'); // 연속된 슬래시 제거
-      
+
       // 시작 슬래시 제거 (있다면)
       if (cleanPath.startsWith('/')) {
         cleanPath = cleanPath.substring(1);
@@ -84,7 +84,7 @@ router.get('/download',
       // 최종 Synology API 경로 구성
       const finalPath = '/release_version/' + cleanPath;
       const fileName = cleanPath.split('/').pop();
-      
+
       logger.info(`파일 다운로드 요청 - 사용자: ${req.user.username}`);
       logger.info(`원본 경로: ${path}`);
       logger.info(`정리된 경로: ${cleanPath}`);
@@ -94,10 +94,10 @@ router.get('/download',
       // Synology 직접 다운로드 URL 생성 및 리다이렉트 (기존 방식 복원)
       try {
         const downloadUrl = await downloadService.createDownloadUrl(finalPath);
-        
+
         if (downloadUrl.success && downloadUrl.downloadUrl) {
           logger.info(`✅ 직접 다운로드 URL 생성: ${fileName} -> ${downloadUrl.downloadUrl}`);
-          
+
           // 직접 다운로드 URL로 리다이렉트 (즉시 다운로드 시작)
           res.redirect(downloadUrl.downloadUrl);
           return;
@@ -197,13 +197,29 @@ router.get('/status',
   },
 );
 
-// 파일 업로드 (필요한 경우)
+// 파일 업로드
 router.post('/upload',
-  upload.single('file'),
+  (req, res, next) => {
+    logger.info('파일 업로드 시작 - multer 처리 전');
+    upload.single('file')(req, res, (err) => {
+      if (err) {
+        logger.error('Multer 오류:', err.message);
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'MULTER_ERROR',
+            message: `파일 업로드 오류: ${err.message}`,
+          },
+        });
+      }
+      logger.info('Multer 처리 완료');
+      next();
+    });
+  },
   async (req, res, next) => {
     try {
       const { path = '' } = req.body;
-      const file = req.file;
+      const {file} = req;
 
       if (!file) {
         return res.status(400).json({
@@ -215,22 +231,64 @@ router.post('/upload',
         });
       }
 
-      // 파일 업로드 로직 (필요시 구현)
-      logger.info(`파일 업로드 요청: ${file.originalname}, 크기: ${file.size}`);
+      // 파일 크기 검증 (추가 체크)
+      const maxFileSize = parseInt(process.env.NAS_MAX_FILE_SIZE, 10) || 2147483648; // 2GB
+      if (file.size > maxFileSize) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'FILE_TOO_LARGE',
+            message: `파일 크기가 너무 큽니다. 최대 크기: ${Math.round(maxFileSize / (1024 * 1024))}MB`,
+          },
+        });
+      }
 
-      res.json({
-        success: true,
-        message: '파일 업로드가 완료되었습니다.',
-        data: {
-          filename: file.originalname,
-          size: file.size,
-          path: path,
-        },
-      });
+      // 파일명 안전성 검증
+      const dangerousChars = /[<>:"|?*\x00-\x1F]/g;
+      if (dangerousChars.test(file.originalname)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_FILENAME',
+            message: '파일명에 허용되지 않는 문자가 포함되어 있습니다.',
+          },
+        });
+      }
+
+      logger.info(`파일 업로드 요청: ${file.originalname}, 크기: ${file.size}, 업로드 경로: ${path}`);
+      logger.info(`파일 업로드 사용자: ${req.user.username}`);
+
+      // NAS 서비스를 통해 파일 업로드 (경로 검증은 NAS 서비스에서 처리)
+      const nasService = getNASService();
+      const uploadResult = await nasService.uploadFile(file.buffer, path, file.originalname);
+
+      if (uploadResult.success) {
+        logger.info(`파일 업로드 성공: ${file.originalname} -> ${uploadResult.path}`);
+
+        res.json({
+          success: true,
+          message: '파일 업로드가 완료되었습니다.',
+          data: {
+            filename: uploadResult.filename,
+            size: uploadResult.size,
+            path: uploadResult.path,
+            uploadPath: path,
+          },
+        });
+      } else {
+        throw new Error('파일 업로드에 실패했습니다.');
+      }
 
     } catch (error) {
       logger.error('파일 업로드 오류:', error.message);
-      next(error);
+
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'UPLOAD_FAILED',
+          message: error.message || '파일 업로드에 실패했습니다.',
+        },
+      });
     }
   },
 );

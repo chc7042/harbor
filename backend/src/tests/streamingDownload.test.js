@@ -19,17 +19,17 @@ app.use('/api/files', fileRoutes);
 describe('대용량 파일 스트리밍 다운로드 검증', () => {
   let authToken;
   const testFilePath = '/nas/release_version/test_large_files/large_test_file_600MB.tar.gz';
-  
+
   beforeAll(() => {
     // 테스트용 JWT 토큰 생성
     authToken = jwt.sign(
-      { 
+      {
         userId: 'test-user',
         username: 'test-user',
-        email: 'test@example.com'
+        email: 'test@example.com',
       },
       process.env.JWT_SECRET || 'test-secret',
-      { expiresIn: '1h' }
+      { expiresIn: '1h' },
     );
   });
 
@@ -45,28 +45,28 @@ describe('대용량 파일 스트리밍 다운로드 검증', () => {
         .get('/api/files/download')
         .query({
           path: testFilePath,
-          token: authToken
+          token: authToken,
         })
         .expect(200)
         .buffer(false) // 스트리밍을 위해 버퍼링 비활성화
         .parse((res, callback) => {
-          let chunks = [];
-          
+          const chunks = [];
+
           res.on('data', (chunk) => {
             if (!firstByteReceived) {
               firstByteReceived = true;
               firstByteTime = Date.now() - startTime;
               responseStarted = true;
             }
-            
+
             totalBytesReceived += chunk.length;
             chunks.push(chunk);
           });
-          
+
           res.on('end', () => {
             callback(null, Buffer.concat(chunks));
           });
-          
+
           res.on('error', callback);
         });
 
@@ -77,10 +77,10 @@ describe('대용량 파일 스트리밍 다운로드 검증', () => {
       expect(response.headers['content-disposition']).toContain('attachment');
       expect(totalBytesReceived).toBeGreaterThan(0);
 
-      console.log(`✅ 스트리밍 검증 결과:`);
+      console.log('✅ 스트리밍 검증 결과:');
       console.log(`  ⚡ 첫 바이트 시간: ${firstByteTime}ms`);
       console.log(`  📊 총 수신 바이트: ${Math.round(totalBytesReceived / 1024 / 1024)}MB`);
-      console.log(`  🎯 통과 기준: < 5000ms 첫 바이트 시간`);
+      console.log('  🎯 통과 기준: < 5000ms 첫 바이트 시간');
     }, 30000); // 30초 타임아웃
 
     it('should handle streaming download via redirect strategy', async () => {
@@ -88,15 +88,15 @@ describe('대용량 파일 스트리밍 다운로드 검증', () => {
         .get('/api/files/download')
         .query({
           path: testFilePath,
-          token: authToken
+          token: authToken,
         })
         .expect((res) => {
           // 리다이렉트 또는 스트리밍 응답 확인
           const isRedirect = res.status >= 300 && res.status < 400;
           const isStreaming = res.status === 200 && res.headers['content-type'] === 'application/octet-stream';
-          
+
           expect(isRedirect || isStreaming).toBe(true);
-          
+
           if (isStreaming) {
             expect(res.headers['content-disposition']).toContain('attachment');
             expect(res.headers['cache-control']).toBe('no-cache');
@@ -109,7 +109,7 @@ describe('대용량 파일 스트리밍 다운로드 검증', () => {
         .get('/api/files/download')
         .query({
           path: '/nas/release_version/release/product/mr3.0.0/250310/26/V3.0.0_250310_0843.tar.gz',
-          token: authToken
+          token: authToken,
         })
         .expect((res) => {
           // 인증 성공 시 다운로드 시작 또는 리다이렉트
@@ -121,7 +121,7 @@ describe('대용량 파일 스트리밍 다운로드 검증', () => {
       await request(app)
         .get('/api/files/download')
         .query({
-          path: testFilePath
+          path: testFilePath,
         })
         .expect(401);
     });
@@ -131,7 +131,7 @@ describe('대용량 파일 스트리밍 다운로드 검증', () => {
         .get('/api/files/download')
         .query({
           path: '/nas/release_version/non_existent_file.tar.gz',
-          token: authToken
+          token: authToken,
         })
         .expect(404);
     });
@@ -141,7 +141,7 @@ describe('대용량 파일 스트리밍 다운로드 검증', () => {
     it('should not consume excessive memory during large file streaming', async () => {
       const initialMemory = process.memoryUsage();
       let maxMemoryIncrease = 0;
-      
+
       // 메모리 모니터링 시작
       const memoryInterval = setInterval(() => {
         const currentMemory = process.memoryUsage();
@@ -154,7 +154,7 @@ describe('대용량 파일 스트리밍 다운로드 검증', () => {
           .get('/api/files/download')
           .query({
             path: testFilePath,
-            token: authToken
+            token: authToken,
           })
           .expect((res) => {
             expect([200, 302]).toContain(res.status);
@@ -166,9 +166,9 @@ describe('대용량 파일 스트리밍 다운로드 검증', () => {
         const maxMemoryIncreaseMB = Math.round(maxMemoryIncrease / 1024 / 1024);
         expect(maxMemoryIncreaseMB).toBeLessThan(100);
 
-        console.log(`🧠 메모리 효율성 검증:`);
+        console.log('🧠 메모리 효율성 검증:');
         console.log(`  📈 최대 메모리 증가: ${maxMemoryIncreaseMB}MB`);
-        console.log(`  🎯 통과 기준: < 100MB 증가`);
+        console.log('  🎯 통과 기준: < 100MB 증가');
         console.log(`  ✅ 스트리밍 효과: ${maxMemoryIncreaseMB < 50 ? '우수' : '보통'}`);
 
       } finally {
@@ -181,17 +181,17 @@ describe('대용량 파일 스트리밍 다운로드 검증', () => {
     it('should attempt multiple strategies for download', async () => {
       // 작은 파일로 전략 테스트
       const smallFilePath = '/nas/release_version/release/product/mr3.0.0/250310/26/V3.0.0_250310_0843.tar.gz';
-      
+
       const response = await request(app)
         .get('/api/files/download')
         .query({
           path: smallFilePath,
-          token: authToken
+          token: authToken,
         })
         .expect((res) => {
           // 성공적인 다운로드 시작 확인
           expect([200, 302]).toContain(res.status);
-          
+
           if (res.status === 200) {
             expect(res.headers['content-type']).toBe('application/octet-stream');
           }
@@ -210,7 +210,7 @@ describe('스트리밍 다운로드 성능 벤치마크', () => {
     authToken = jwt.sign(
       { userId: 'benchmark-user', username: 'benchmark', email: 'benchmark@test.com' },
       process.env.JWT_SECRET || 'test-secret',
-      { expiresIn: '1h' }
+      { expiresIn: '1h' },
     );
   });
 
@@ -218,12 +218,12 @@ describe('스트리밍 다운로드 성능 벤치마크', () => {
     const testCases = [
       {
         name: '소형 파일 (< 1MB)',
-        path: '/nas/release_version/release/product/mr3.0.0/250310/26/V3.0.0_250310_0843.tar.gz'
+        path: '/nas/release_version/release/product/mr3.0.0/250310/26/V3.0.0_250310_0843.tar.gz',
       },
       {
         name: '대형 파일 (600MB)',
-        path: '/nas/release_version/test_large_files/large_test_file_600MB.tar.gz'
-      }
+        path: '/nas/release_version/test_large_files/large_test_file_600MB.tar.gz',
+      },
     ];
 
     const results = [];
@@ -238,7 +238,7 @@ describe('스트리밍 다운로드 성능 벤치마크', () => {
           .get('/api/files/download')
           .query({
             path: testCase.path,
-            token: authToken
+            token: authToken,
           })
           .timeout(10000) // 10초 타임아웃
           .buffer(false)
@@ -248,14 +248,14 @@ describe('스트리밍 다운로드 성능 벤치마크', () => {
                 firstByteTime = Date.now() - startTime;
               }
             });
-            
+
             res.on('end', () => {
               completed = true;
               callback(null, 'completed');
             });
-            
+
             res.on('error', callback);
-            
+
             // 스트리밍 시작 확인 후 조기 종료 (벤치마크용)
             setTimeout(() => {
               res.destroy();
@@ -267,7 +267,7 @@ describe('스트리밍 다운로드 성능 벤치마크', () => {
           name: testCase.name,
           firstByteTime: firstByteTime || 'N/A',
           completed: response.status === 200,
-          status: response.status
+          status: response.status,
         });
 
       } catch (error) {
@@ -275,7 +275,7 @@ describe('스트리밍 다운로드 성능 벤치마크', () => {
           name: testCase.name,
           firstByteTime: 'Error',
           completed: false,
-          error: error.message
+          error: error.message,
         });
       }
     }
@@ -283,7 +283,7 @@ describe('스트리밍 다운로드 성능 벤치마크', () => {
     // 벤치마크 결과 출력
     console.log('\n📊 스트리밍 다운로드 성능 벤치마크 결과:');
     console.log('='.repeat(60));
-    
+
     results.forEach(result => {
       console.log(`📁 ${result.name}:`);
       console.log(`  ⚡ 첫 바이트 시간: ${result.firstByteTime}ms`);

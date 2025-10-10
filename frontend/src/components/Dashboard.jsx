@@ -328,37 +328,43 @@ const Dashboard = () => {
         {/* 뷰 모드 탭 */}
         <div className="mb-6 bg-white p-4 rounded border">
           <div className="border-b border-gray-200">
-            <div className="flex justify-between items-center mb-2">
-              <button
-                onClick={() => setIsUploadModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                <Upload size={16} />
-                파일 업로드
-              </button>
+            <div className="flex justify-between items-start mb-4">
+              <nav className="flex space-x-8">
+                <button
+                  onClick={() => setViewMode('projects')}
+                  className={`py-2 px-4 border-b-2 font-medium text-sm cursor-pointer ${
+                    viewMode === 'projects'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  프로젝트 계층 구조
+                </button>
+                <button
+                  onClick={() => setViewMode('deployments')}
+                  className={`py-2 px-4 border-b-2 font-medium text-sm cursor-pointer ${
+                    viewMode === 'deployments'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  배포 이력
+                </button>
+              </nav>
+              
+              <div className="flex flex-col items-end">
+                <button
+                  onClick={() => setIsUploadModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  <Upload size={16} />
+                  파일 업로드
+                </button>
+                <p className="text-xs text-gray-500 mt-1 text-right">
+                  긴급하게 공유해야 할 경우 파일 업로드를 통해서 공유하세요
+                </p>
+              </div>
             </div>
-            <nav className="-mb-px flex space-x-8">
-              <button
-                onClick={() => setViewMode('projects')}
-                className={`py-2 px-4 border-b-2 font-medium text-sm cursor-pointer ${
-                  viewMode === 'projects'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                프로젝트 계층 구조
-              </button>
-              <button
-                onClick={() => setViewMode('deployments')}
-                className={`py-2 px-4 border-b-2 font-medium text-sm cursor-pointer ${
-                  viewMode === 'deployments'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                배포 이력
-              </button>
-            </nav>
           </div>
         </div>
 

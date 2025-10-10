@@ -14,7 +14,7 @@ class DownloadService {
   async createDownloadUrl(filePath) {
     try {
       logger.info(`Creating download URL for: ${filePath}`);
-      
+
       // Synology API 직접 다운로드 URL 생성 시도
       const directResult = await this.synologyApiService.createDirectDownloadUrl(filePath);
       if (directResult.success && directResult.directNasUrl) {
@@ -22,7 +22,7 @@ class DownloadService {
         return {
           success: true,
           downloadUrl: directResult.directNasUrl,
-          method: 'direct'
+          method: 'direct',
         };
       }
 
@@ -33,7 +33,7 @@ class DownloadService {
         return {
           success: true,
           downloadUrl: shareResult.directNasUrl,
-          method: 'share'
+          method: 'share',
         };
       }
 
@@ -42,7 +42,7 @@ class DownloadService {
       logger.error(`Failed to create download URL for ${filePath}:`, error.message);
       return {
         success: false,
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -53,13 +53,13 @@ class DownloadService {
   async streamFile(filePath) {
     try {
       logger.info(`Streaming file: ${filePath}`);
-      
+
       const result = await this.synologyApiService.downloadFile(filePath);
       if (result.success && result.data) {
         return {
           success: true,
           data: result.data,
-          method: 'stream'
+          method: 'stream',
         };
       }
 
@@ -68,7 +68,7 @@ class DownloadService {
       logger.error(`Failed to stream file ${filePath}:`, error.message);
       return {
         success: false,
-        error: error.message
+        error: error.message,
       };
     }
   }

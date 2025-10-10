@@ -189,6 +189,86 @@ class SynologyApiService {
   }
 
   /**
+   * 폴더 생성 (Synology FileStation API 사용)
+   * @param {string} folderPath - 생성할 폴더 경로
+   */
+  async createFolder(folderPath) {
+    try {
+      await this.ensureValidSession();
+
+      logger.info(`Creating folder: ${folderPath}`);
+
+      // 상위 폴더들을 재귀적으로 생성하기 위해 경로를 분해
+      const pathParts = folderPath.split('/').filter(part => part.length > 0);
+      let currentPath = '';
+
+      for (let i = 0; i < pathParts.length; i++) {
+        currentPath += '/' + pathParts[i];
+        
+        // 각 레벨의 폴더가 존재하는지 확인
+        const existsCheck = await this.checkPathExists(currentPath);
+        if (existsCheck.exists) {
+          logger.info(`Folder already exists: ${currentPath}`);
+          continue;
+        }
+
+        // 폴더 생성
+        logger.info(`Creating folder: ${currentPath}`);
+        const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/';
+        const folderName = pathParts[i];
+
+        const response = await axios.post(`${this.baseUrl}/webapi/entry.cgi`, 
+          new URLSearchParams({
+            api: 'SYNO.FileStation.CreateFolder',
+            version: 2,
+            method: 'create',
+            folder_path: parentPath,
+            name: folderName,
+            force_parent: 'true',
+            _sid: this.sessionId,
+          }), {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            timeout: 30000,
+          });
+
+        logger.info(`Folder creation response for ${currentPath}:`, JSON.stringify(response.data, null, 2));
+
+        if (!response.data || !response.data.success) {
+          const errorCode = response.data?.error?.code;
+          const errorMessage = response.data?.error?.message || 'Unknown error';
+          
+          // 폴더가 이미 존재하는 경우는 성공으로 처리
+          if (errorCode === 1006) { // Folder already exists
+            logger.info(`Folder already exists (error 1006): ${currentPath}`);
+            continue;
+          }
+          
+          logger.error(`Failed to create folder ${currentPath}: ${errorCode} - ${errorMessage}`);
+          throw new Error(`Folder creation failed: ${errorCode} - ${errorMessage}`);
+        }
+
+        logger.info(`Successfully created folder: ${currentPath}`);
+      }
+
+      return {
+        success: true,
+        path: folderPath,
+        message: 'Folder created successfully'
+      };
+
+    } catch (error) {
+      logger.error(`Failed to create folder ${folderPath}:`, error.message);
+      return {
+        success: false,
+        error: error.message,
+        path: folderPath
+      };
+    }
+  }
+
+  /**
    * 기존 공유 링크 조회
    * @param {string} path - 조회할 경로
    */
@@ -670,14 +750,14 @@ class SynologyApiService {
   async getOrCreateVersionShareLink(version, date, buildNumber) {
     // 여러 가능한 경로들을 시도 (가장 가능성 높은 순서대로)
     // 기본 smbclient 경로가 작동하므로 해당 경로 기준으로 시놀로지 절대경로 추측
-    
+
     // mr 접두어가 있는 버전과 없는 버전 모두 지원
     const versionPatterns = [
       `mr${version}`,  // mr2.0.0, mr1.2.0 등
       version,         // 2.0.0, 1.2.0 등
       `${version.replace('mr', '')}`, // mr1.1.0 -> 1.1.0
     ];
-    
+
     const possiblePaths = [
       '/',  // 루트 테스트
       '/volume1',  // 볼륨 테스트
@@ -697,7 +777,7 @@ class SynologyApiService {
         `/volume1/nas/release/product/${versionPattern}/${date}/${buildNumber}`,
         `/volume1/public/release/product/${versionPattern}/${date}/${buildNumber}`,
         `/nas/release/product/${versionPattern}/${date}/${buildNumber}`,
-        `/shared/release/product/${versionPattern}/${date}/${buildNumber}`
+        `/shared/release/product/${versionPattern}/${date}/${buildNumber}`,
       );
     }
 
@@ -906,7 +986,7 @@ class SynologyApiService {
       logger.info('File info response data:', response.data);
 
       if (response.data && response.data.success) {
-        const files = response.data.data.files;
+        const {files} = response.data.data;
         if (files && files.length > 0) {
           const fileData = files[0];
           logger.info(`File info retrieved for ${filePath}:`, JSON.stringify(fileData, null, 2));
@@ -936,7 +1016,7 @@ class SynologyApiService {
   async downloadFile(filePath) {
     try {
       await this.ensureValidSession();
-      
+
       logger.info(`Downloading file: ${filePath}`);
 
       const response = await axios.get(`${this.baseUrl}/webapi/entry.cgi`, {
@@ -958,7 +1038,7 @@ class SynologyApiService {
           success: true,
           data: Buffer.from(response.data),
           filename: filePath.split('/').pop(),
-          size: response.data.length
+          size: response.data.length,
         };
       } else {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -968,7 +1048,164 @@ class SynologyApiService {
       logger.error(`Failed to download file ${filePath}:`, error.message);
       return {
         success: false,
-        error: error.message
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * 파일 업로드 (Synology FileStation API 사용)
+   */
+  async uploadFile(fileBuffer, targetPath, originalName) {
+    try {
+      await this.ensureValidSession();
+
+      logger.info(`Synology API 파일 업로드 시작: ${originalName}`);
+      logger.info(`업로드 경로: ${targetPath}`);
+      logger.info(`세션 ID: ${this.sessionId ? 'Present' : 'Missing'}`);
+
+      // Synology API 경로 정규화 (공유 폴더 기준)
+      let dirPath = targetPath;
+      
+      // 백슬래시를 슬래시로 변환
+      dirPath = dirPath.replace(/\\/g, '/');
+      
+      // /volume1/ 접두어 제거 (Synology API에서는 공유 폴더명으로 시작)
+      if (dirPath.startsWith('/volume1/')) {
+        dirPath = dirPath.replace('/volume1/', '/');
+      }
+      
+      // 연속된 슬래시 제거
+      dirPath = dirPath.replace(/\/+/g, '/');
+      
+      // 시작 슬래시 확인
+      if (!dirPath.startsWith('/')) {
+        dirPath = '/' + dirPath;
+      }
+      
+      if (!dirPath.endsWith('/')) {
+        dirPath += '/';
+      }
+      
+      logger.info(`원본 경로: ${targetPath}`);
+      logger.info(`정규화된 업로드 디렉토리: ${dirPath}`);
+
+      // 업로드 디렉토리 경로 (마지막 슬래시 제거)
+      const parentPath = dirPath.slice(0, -1);
+      logger.info(`최종 업로드 대상 디렉토리: ${parentPath}`);
+
+      // API 파라미터 정의
+      const apiParams = {
+        api: 'SYNO.FileStation.Upload',
+        version: '2',
+        method: 'upload',
+        path: parentPath,
+        overwrite: 'true',
+        _sid: this.sessionId
+      };
+
+      // FormData 생성
+      const FormData = require('form-data');
+      const form = new FormData();
+      
+      // API 파라미터를 FormData에 추가
+      Object.entries(apiParams).forEach(([key, value]) => {
+        form.append(key, value);
+      });
+      
+      // 파일을 FormData에 추가
+      form.append('file', fileBuffer, {
+        filename: originalName,
+        contentType: 'application/octet-stream'
+      });
+
+      // URL에도 파라미터 추가 (Error 119 해결)
+      const urlParams = new URLSearchParams(apiParams);
+      const uploadUrl = `${this.baseUrl}/webapi/entry.cgi?${urlParams}`;
+      
+      logger.info(`업로드 URL: ${uploadUrl}`);
+      logger.info(`업로드 디렉토리: ${parentPath}`);
+      logger.info(`세션 ID: ${this.sessionId ? this.sessionId.substring(0, 10) + '...' : 'MISSING'}`);
+      logger.info(`파일 크기: ${fileBuffer.length} bytes`);
+      logger.info(`파일명: ${originalName}`);
+
+      // 업로드 전 경로 존재 여부 확인 (공유 폴더 기반 경로)
+      logger.info('업로드 경로 단계별 확인 중...');
+      
+      // Synology FileStation API는 공유 폴더 경로를 사용 (/volume1 접두어 없음)
+      const pathsToCheck = [
+        '/release_version',
+        '/release_version/release',
+        '/release_version/release/upload'
+      ];
+      
+      for (const checkPath of pathsToCheck) {
+        const pathResult = await this.checkPathExists(checkPath);
+        logger.info(`경로 ${checkPath}: ${JSON.stringify(pathResult)}`);
+        
+        if (!pathResult.exists) {
+          // 경로가 없으면 생성 시도
+          logger.warn(`경로가 존재하지 않음, 생성 시도: ${checkPath}`);
+          const createResult = await this.createFolder(checkPath);
+          
+          if (!createResult.success) {
+            logger.error(`경로 생성 실패: ${checkPath} - ${createResult.error}`);
+            throw new Error(`Path does not exist and cannot be created: ${checkPath}. Upload target: ${parentPath}`);
+          } else {
+            logger.info(`경로 생성 성공: ${checkPath}`);
+          }
+        }
+      }
+
+      logger.info('업로드 요청 시작...');
+      
+      // 업로드 요청 (Content-Length 자동 처리)
+      const response = await axios.post(uploadUrl, form, {
+        headers: {
+          ...form.getHeaders(),
+          // Content-Length를 수동으로 설정하지 않음 (자동 처리)
+        },
+        timeout: 300000, // 5분 타임아웃으로 조정
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            logger.info(`업로드 진행률: ${percentCompleted}% (${progressEvent.loaded}/${progressEvent.total} bytes)`);
+          }
+        }
+      });
+      
+      logger.info('업로드 요청 완료');
+
+      logger.info(`Synology 업로드 응답 상태: ${response.status}`);
+      logger.info('Synology 업로드 응답 데이터:', JSON.stringify(response.data, null, 2));
+
+      if (response.data && response.data.success) {
+        logger.info(`파일 업로드 성공: ${originalName} -> ${dirPath}`);
+        return {
+          success: true,
+          filename: originalName,
+          path: dirPath + originalName,
+          size: fileBuffer.length,
+        };
+      } else {
+        const errorCode = response.data?.error?.code;
+        const errorMessage = response.data?.error?.message || 'Unknown upload error';
+        logger.error(`Synology 업로드 실패 - Error code: ${errorCode}, Message: ${errorMessage}`);
+        logger.error(`전체 응답: ${JSON.stringify(response.data, null, 2)}`);
+        throw new Error(`Upload failed: ${errorCode} - ${errorMessage}`);
+      }
+
+    } catch (error) {
+      if (error.response) {
+        logger.error(`Synology 업로드 HTTP 오류: ${error.response.status} - ${error.response.statusText}`);
+        logger.error('응답 데이터:', error.response.data);
+      }
+      logger.error(`Synology 파일 업로드 실패: ${error.message}`);
+      return {
+        success: false,
+        error: error.message,
       };
     }
   }

@@ -51,23 +51,39 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
 
   const handleUpload = async (file) => {
     try {
+      console.log('📤 FileUploader: Starting upload process', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        currentPath
+      });
+
       validateFile(file);
       setIsUploading(true);
       setProgress(0);
       setUploadStatus('업로드 준비 중...');
 
-      const uploadPath = currentPath || '/nas/release_version/';
+      const uploadPath = currentPath || '\\\\nas.roboetech.com\\release_version\\release\\upload';
       
-      // 파일 크기에 따라 업로드 방식 선택
-      const useStreaming = file.size > STREAM_THRESHOLD;
+      console.log('📤 FileUploader: Upload path set to:', uploadPath);
+      
+      // 파일 크기에 따라 업로드 방식 선택 (일시적으로 스트리밍 비활성화)
+      const useStreaming = false; // file.size > STREAM_THRESHOLD;
       const uploadFunction = useStreaming ? uploadFileStream : uploadFile;
       
+      console.log('📤 FileUploader: Using upload function:', useStreaming ? 'uploadFileStream' : 'uploadFile');
+      console.log('📤 FileUploader: Calling upload function...');
+      
       const result = await uploadFunction(file, uploadPath, (progressInfo) => {
+        console.log('📤 FileUploader: Progress update:', progressInfo);
         setProgress(progressInfo.progress || 0);
         setUploadStatus(progressInfo.message || '');
       });
 
+      console.log('📤 FileUploader: Upload function returned:', result);
+
       if (result.success) {
+        console.log('📤 FileUploader: Upload successful!');
         setUploadStatus('업로드가 완료되었습니다!');
         onUploadComplete && onUploadComplete(result.data);
         
@@ -81,10 +97,19 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
           }
         }, 2000);
       } else {
+        console.error('📤 FileUploader: Upload failed with result:', result);
         throw new Error(result.error);
       }
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('📤 FileUploader: Upload error caught:', error);
+      console.error('📤 FileUploader: Error stack:', error.stack);
+      console.error('📤 FileUploader: Error details:', {
+        message: error.message,
+        name: error.name,
+        code: error.code,
+        response: error.response
+      });
+      
       setUploadStatus(error.message || '업로드에 실패했습니다.');
       onUploadError && onUploadError(error.message);
       

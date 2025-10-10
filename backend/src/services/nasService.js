@@ -11,7 +11,7 @@ class NASService {
     this.isDevelopment = process.env.NODE_ENV === 'development';
     this.synologyApiService = require('./synologyApiService');
     this.releaseBasePath = process.env.NAS_RELEASE_PATH || 'release_version';
-    
+
     // 개발환경에서는 mock 디렉토리 사용
     if (this.isDevelopment) {
       this.mockBasePath = process.env.NAS_MOUNT_PATH || path.join(__dirname, '../../mock-nas');
@@ -90,7 +90,7 @@ class NASService {
    * 디렉토리 파일 목록 조회 (기존 호환성을 위한 메서드)
    */
   async getDirectoryFiles(dirPath = '') {
-    return await this.listDirectory(dirPath);
+    return this.listDirectory(dirPath);
   }
 
   /**
@@ -417,6 +417,117 @@ class NASService {
       return fileInfo.isDirectory;
     } catch (error) {
       return false;
+    }
+  }
+
+  /**
+   * 업로드 경로 검증 및 정규화
+   */
+  validateAndNormalizeUploadPath(targetPath) {
+    if (!targetPath || typeof targetPath !== 'string') {
+      return '/release_version/release/upload';
+    }
+
+    let normalizedPath = targetPath.trim();
+
+    // UNC 경로 처리 (\\nas.roboetech.com\release_version -> /release_version)
+    if (normalizedPath.startsWith('\\\\nas.roboetech.com\\')) {
+      // UNC 경로에서 공유 폴더 부분만 추출
+      normalizedPath = normalizedPath.replace('\\\\nas.roboetech.com\\', '/');
+      normalizedPath = normalizedPath.replace(/\\/g, '/');
+    } else {
+      // 백슬래시를 슬래시로 변환
+      normalizedPath = normalizedPath.replace(/\\/g, '/');
+    }
+
+    // 경로 정리
+    normalizedPath = normalizedPath.replace(/\/+/g, '/'); // 연속된 슬래시 제거
+    
+    // 허용되지 않는 경로 패턴 체크
+    const forbiddenPatterns = [
+      /\.\./,           // 상위 디렉토리 접근
+      /\/etc\//,        // 시스템 디렉토리
+      /\/usr\//,        // 시스템 디렉토리
+      /\/var\//,        // 시스템 디렉토리
+      /\/root\//,       // 루트 디렉토리
+      /\/volume\d+\//,  // volume 경로 직접 접근 금지
+    ];
+
+    for (const pattern of forbiddenPatterns) {
+      if (pattern.test(normalizedPath)) {
+        throw new AppError('업로드 경로가 허용되지 않습니다.', 400);
+      }
+    }
+
+    // Synology FileStation API는 공유 폴더명으로 시작하는 경로 사용
+    // /volume1/ 접두어가 있으면 제거 (API에서는 사용하지 않음)
+    if (normalizedPath.startsWith('/volume1/')) {
+      normalizedPath = normalizedPath.replace('/volume1/', '/');
+    }
+
+    // release_version 공유 폴더가 기본 경로
+    if (!normalizedPath.startsWith('/release_version/')) {
+      if (normalizedPath.startsWith('/')) {
+        // 다른 절대경로인 경우 release_version 하위로 이동
+        normalizedPath = '/release_version' + normalizedPath;
+      } else {
+        // 상대경로인 경우 기본 업로드 디렉토리에 추가
+        normalizedPath = '/release_version/release/upload/' + normalizedPath;
+      }
+    }
+
+    // 기본 업로드 경로 설정 (경로가 공유 폴더만 지정된 경우)
+    if (normalizedPath === '/release_version' || normalizedPath === '/release_version/') {
+      normalizedPath = '/release_version/release/upload';
+    }
+
+    // 끝에 슬래시가 있으면 제거 (파일명이 붙을 것이므로)
+    if (normalizedPath.endsWith('/')) {
+      normalizedPath = normalizedPath.slice(0, -1);
+    }
+
+    return normalizedPath;
+  }
+
+  /**
+   * 파일 업로드 - Synology API 사용
+   */
+  async uploadFile(fileBuffer, targetPath, originalName) {
+    logger.info(`NAS uploadFile 요청 - 파일: ${originalName}, 경로: ${targetPath}`);
+
+    try {
+      // 업로드 경로 검증 및 정규화
+      const normalizedPath = this.validateAndNormalizeUploadPath(targetPath);
+
+      logger.info(`파일 업로드 경로 변환:`);
+      logger.info(`- 원본 경로: ${targetPath}`);
+      logger.info(`- 정규화된 경로: ${normalizedPath}`);
+
+      // Synology API를 통한 파일 업로드
+      await this.ensureConnection();
+      const uploadResult = await this.synologyApiService.uploadFile(fileBuffer, normalizedPath, originalName);
+
+      if (uploadResult.success) {
+        logger.info(`Synology API를 통한 파일 업로드 성공:`);
+        logger.info(`- 파일명: ${uploadResult.filename}`);
+        logger.info(`- 업로드 경로: ${uploadResult.path}`);
+        logger.info(`- 파일 크기: ${uploadResult.size} bytes`);
+
+        return {
+          success: true,
+          path: uploadResult.path,
+          filename: uploadResult.filename,
+          size: uploadResult.size,
+          method: 'synology-api',
+        };
+      } else {
+        throw new Error(`Synology API 업로드 실패: ${uploadResult.error}`);
+      }
+
+    } catch (error) {
+      logger.error(`파일 업로드 실패: ${error.message}`);
+      logger.error(`Error stack: ${error.stack}`);
+      throw new AppError(`File upload failed: ${error.message}`, 500);
     }
   }
 }

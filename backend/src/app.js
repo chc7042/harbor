@@ -86,18 +86,25 @@ app.use(cors({
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// JSON 파서를 커스텀 에러 핸들러와 함께 사용
-app.use(express.json({ 
-  limit: '10mb',
-  verify: (req, res, buf, encoding) => {
-    try {
-      JSON.parse(buf);
-    } catch (err) {
-      logger.warn(`클라이언트 에러: ${err.message}`);
-      throw err;
-    }
+// JSON 파서를 커스텀 에러 핸들러와 함께 사용 (multipart 요청 제외)
+app.use((req, res, next) => {
+  // multipart/form-data 요청은 JSON 파서를 건너뛰기
+  if (req.headers['content-type'] && req.headers['content-type'].startsWith('multipart/form-data')) {
+    return next();
   }
-}));
+  
+  express.json({ 
+    limit: '10mb',
+    verify: (req, res, buf, encoding) => {
+      try {
+        JSON.parse(buf);
+      } catch (err) {
+        logger.warn(`클라이언트 에러: ${err.message}`);
+        throw err;
+      }
+    }
+  })(req, res, next);
+});
 
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

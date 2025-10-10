@@ -147,6 +147,14 @@ export const downloadFile = async (downloadUrl, fileName, onProgress = null) => 
 // 파일 업로드 함수
 export const uploadFile = async (file, path, onProgress = null) => {
   try {
+    console.log('🚀 API: Starting file upload', {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      path: path,
+      apiBaseURL: api.defaults.baseURL
+    });
+
     // 업로드 시작 알림
     if (onProgress) {
       onProgress({ type: 'start', message: '업로드를 시작합니다...' });
@@ -156,12 +164,22 @@ export const uploadFile = async (file, path, onProgress = null) => {
     formData.append('file', file);
     formData.append('path', path);
 
+    console.log('🚀 API: FormData created, making POST request to /files/upload');
+    console.log('🚀 API: Request headers will include multipart/form-data');
+    console.log('🚀 API: Authorization token:', localStorage.getItem('accessToken') ? 'Present' : 'Missing');
+
     const response = await api.post('/files/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      timeout: 600000, // 10분 타임아웃
+      timeout: 300000, // 5분 타임아웃
       onUploadProgress: (progressEvent) => {
+        console.log('🚀 API: Upload progress:', {
+          loaded: progressEvent.loaded,
+          total: progressEvent.total,
+          percentage: progressEvent.total ? Math.round((progressEvent.loaded * 100) / progressEvent.total) : 0
+        });
+        
         if (onProgress && progressEvent.total) {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
           onProgress({ 
@@ -175,6 +193,12 @@ export const uploadFile = async (file, path, onProgress = null) => {
       },
     });
 
+    console.log('🚀 API: Upload response received:', {
+      status: response.status,
+      statusText: response.statusText,
+      data: response.data
+    });
+
     if (onProgress) {
       onProgress({ type: 'complete', message: '업로드가 완료되었습니다.' });
     }
@@ -184,7 +208,19 @@ export const uploadFile = async (file, path, onProgress = null) => {
       data: response.data.data 
     };
   } catch (error) {
-    console.error('File upload error:', error);
+    console.error('🚀 API: File upload error:', error);
+    console.error('🚀 API: Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name,
+      stack: error.stack,
+      response: error.response ? {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data,
+        headers: error.response.headers
+      } : 'No response object'
+    });
     
     let errorMessage = '업로드에 실패했습니다.';
     
@@ -195,6 +231,8 @@ export const uploadFile = async (file, path, onProgress = null) => {
     } else if (error.response?.data?.error?.message) {
       errorMessage = error.response.data.error.message;
     }
+    
+    console.error('🚀 API: Final error message:', errorMessage);
     
     if (onProgress) {
       onProgress({ type: 'error', message: errorMessage });
