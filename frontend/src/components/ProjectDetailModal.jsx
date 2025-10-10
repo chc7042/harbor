@@ -38,6 +38,7 @@ const ProjectDetailModal = ({
   onClose,
   className = ''
 }) => {
+  
   const [activeTab, setActiveTab] = useState('logs');
   const [copySuccess, setCopySuccess] = useState('');
   const [currentDeploymentId, setCurrentDeploymentId] = useState(null);
@@ -496,43 +497,38 @@ const ProjectDetailModal = ({
                     </div>
                   )}
 
-                  <button 
+                  <button
                     className={`text-sm flex items-center whitespace-nowrap ${
-                      loadingDeploymentInfo || 
-                      (!deploymentInfo?.downloadFile && 
-                       (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0))
+                      loadingDeploymentInfo
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed border border-gray-300 opacity-60 hover:bg-gray-300 hover:text-gray-500 px-4 py-2 rounded-md'
                         : 'btn-secondary'
                     }`}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      
+                      
                       // 실제 배포 경로가 있을 때만 열기
                       const shareUrl = deploymentInfo?.synologyShareUrl;
                       
                       if (shareUrl) {
                         window.open(shareUrl, '_blank');
+                      } else {
+                        alert('공유 폴더 URL이 설정되지 않았습니다. 잠시 후 다시 시도해주세요.');
                       }
                     }}
                     disabled={
-                      loadingDeploymentInfo || 
-                      (!deploymentInfo?.downloadFile && 
-                       (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0))
+                      loadingDeploymentInfo
                     }
                   >
                     <HardDrive className={`w-4 h-4 mr-2 ${
-                      loadingDeploymentInfo || 
-                      (!deploymentInfo?.downloadFile && 
-                       (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0))
+                      loadingDeploymentInfo
                         ? 'text-gray-400'
                         : ''
                     }`} />
                     {loadingDeploymentInfo 
                       ? '경로 확인중...' 
-                      : (!deploymentInfo?.downloadFile && 
-                         (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0))
-                        ? '파일 없음'
-                        : '공유 폴더 열기'
+                      : '공유 폴더 열기'
                     }
                   </button>
                 </div>
@@ -624,10 +620,17 @@ const ProjectDetailModal = ({
                                                     .replace('\\\\nas.roboetech.com\\', '/nas/')
                                                     .replace(/\\/g, '/');
                                                 }
-                                                if (!nasPath.startsWith('/nas/release_version/')) {
+                                                // nas_path가 이미 /release_version/으로 시작하므로 /nas/ prefix만 추가
+                                                if (nasPath.startsWith('/release_version/')) {
+                                                  filePath = `/nas${nasPath}/${file}`;
+                                                } else if (!nasPath.startsWith('/nas/release_version/')) {
+                                                  // 다른 형태의 경로인 경우 기존 로직 사용
                                                   nasPath = '/nas/release_version/' + nasPath.replace(/^\/nas\//, '');
+                                                  filePath = `${nasPath}/${file}`;
+                                                } else {
+                                                  // 이미 완전한 경로인 경우
+                                                  filePath = `${nasPath}/${file}`;
                                                 }
-                                                filePath = `${nasPath}/${file}`;
                                               } else {
                                                 // 폴백: 버전 기반 경로 구성
                                                 const versionMatch = deployment.project_name?.match(/^(\d+\.\d+\.\d+)/) || 
@@ -712,6 +715,8 @@ const ProjectDetailModal = ({
                                       // 공유 폴더 열기
                                       if (deploymentInfo?.synologyShareUrl) {
                                         window.open(deploymentInfo.synologyShareUrl, '_blank');
+                                      } else {
+                                        alert('공유 폴더 URL이 설정되지 않았습니다. 잠시 후 다시 시도해주세요.');
                                       }
                                     }}
                                   >
@@ -882,10 +887,17 @@ const ProjectDetailModal = ({
                                                   .replace('\\\\nas.roboetech.com\\', '/nas/')
                                                   .replace(/\\/g, '/');
                                               }
-                                              if (!nasPath.startsWith('/nas/release_version/')) {
+                                              // nas_path가 이미 /release_version/으로 시작하므로 /nas/ prefix만 추가
+                                              if (nasPath.startsWith('/release_version/')) {
+                                                filePath = `/nas${nasPath}/${file}`;
+                                              } else if (!nasPath.startsWith('/nas/release_version/')) {
+                                                // 다른 형태의 경로인 경우 기존 로직 사용
                                                 nasPath = '/nas/release_version/' + nasPath.replace(/^\/nas\//, '');
+                                                filePath = `${nasPath}/${file}`;
+                                              } else {
+                                                // 이미 완전한 경로인 경우
+                                                filePath = `${nasPath}/${file}`;
                                               }
-                                              filePath = `${nasPath}/${file}`;
                                             } else {
                                               // 폴백: 버전 기반 경로 구성
                                               const versionMatch = deployment.project_name?.match(/^(\d+\.\d+\.\d+)/) || 

@@ -3,13 +3,38 @@ import { useAuth } from '../contexts/AuthContext';
 import websocketService from '../services/websocketService';
 import toast from 'react-hot-toast';
 
+// WebSocket 상태를 전역으로 관리하기 위한 singleton 상태
+let globalConnectionState = 'disconnected';
+let globalIsConnected = false;
+let globalConnectionInfo = null;
+let globalLastError = null;
+let listeners = new Set();
+let isEventListenersInitialized = false;
+
+const notifyListeners = () => {
+  listeners.forEach(listener => listener());
+};
+
 export const useWebSocket = () => {
   const { user } = useAuth();
-  const [connectionState, setConnectionState] = useState('disconnected');
-  const [isConnected, setIsConnected] = useState(false);
-  const [connectionInfo, setConnectionInfo] = useState(null);
-  const [lastError, setLastError] = useState(null);
+  const [connectionState, setConnectionState] = useState(globalConnectionState);
+  const [isConnected, setIsConnected] = useState(globalIsConnected);
+  const [connectionInfo, setConnectionInfo] = useState(globalConnectionInfo);
+  const [lastError, setLastError] = useState(globalLastError);
   const reconnectTimeoutRef = useRef(null);
+
+  // 상태 변경 리스너 등록
+  useEffect(() => {
+    const updateState = () => {
+      setConnectionState(globalConnectionState);
+      setIsConnected(globalIsConnected);
+      setConnectionInfo(globalConnectionInfo);
+      setLastError(globalLastError);
+    };
+
+    listeners.add(updateState);
+    return () => listeners.delete(updateState);
+  }, []);
 
   // WebSocket 연결
   const connect = useCallback(async () => {
@@ -19,22 +44,27 @@ export const useWebSocket = () => {
     if (!token) return;
 
     try {
-      setConnectionState('connecting');
+      globalConnectionState = 'connecting';
+      notifyListeners();
       await websocketService.connect(token);
-      setIsConnected(true);
-      setConnectionState('connected');
+      globalIsConnected = true;
+      globalConnectionState = 'connected';
+      notifyListeners();
     } catch (error) {
       console.error('WebSocket connection failed:', error);
-      setIsConnected(false);
-      setConnectionState('error');
+      globalIsConnected = false;
+      globalConnectionState = 'error';
+      globalLastError = error;
+      notifyListeners();
     }
   }, [user]);
 
   // WebSocket 연결 해제
   const disconnect = useCallback(() => {
     websocketService.disconnect();
-    setIsConnected(false);
-    setConnectionState('disconnected');
+    globalIsConnected = false;
+    globalConnectionState = 'disconnected';
+    notifyListeners();
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
     }
@@ -47,8 +77,9 @@ export const useWebSocket = () => {
       
       if (result.success) {
         toast.success(result.message);
-        setIsConnected(true);
-        setConnectionState('connected');
+        globalIsConnected = true;
+        globalConnectionState = 'connected';
+        notifyListeners();
         // 토스트 상태 초기화
         sessionStorage.removeItem('ws_disconnect_toast_shown');
         sessionStorage.removeItem('ws_error_toast_shown');
@@ -65,21 +96,23 @@ export const useWebSocket = () => {
     }
   }, []);
 
-  // 이벤트 리스너 설정
+  // 이벤트 리스너 설정 (전역으로 한 번만)
   useEffect(() => {
-    if (!user) return;
+    if (!user || isEventListenersInitialized) return;
 
     // 연결 이벤트
     const handleConnection = () => {
-      setIsConnected(true);
-      setConnectionState('connected');
+      globalIsConnected = true;
+      globalConnectionState = 'connected';
+      notifyListeners();
       console.log('WebSocket connected');
     };
 
     // 연결 해제 이벤트
     const handleDisconnection = (data) => {
-      setIsConnected(false);
-      setConnectionState('disconnected');
+      globalIsConnected = false;
+      globalConnectionState = 'disconnected';
+      notifyListeners();
       console.log('WebSocket disconnected:', data);
 
       // 비정상 종료인 경우 토스트 알림 (세션당 한 번만)
@@ -94,8 +127,10 @@ export const useWebSocket = () => {
 
     // 에러 이벤트
     const handleError = (data) => {
-      setIsConnected(false);
-      setConnectionState('error');
+      globalIsConnected = false;
+      globalConnectionState = 'error';
+      globalLastError = data;
+      notifyListeners();
       console.error('WebSocket error:', data);
       
       // 에러 토스트 중복 방지
@@ -108,7 +143,8 @@ export const useWebSocket = () => {
 
     // 최대 재연결 시도 도달
     const handleMaxReconnectAttempts = () => {
-      setConnectionState('failed');
+      globalConnectionState = 'failed';
+      notifyListeners();
       
       // 최대 재연결 토스트 중복 방지
       const maxReconnectToastShown = sessionStorage.getItem('ws_max_reconnect_toast_shown');
@@ -130,7 +166,8 @@ export const useWebSocket = () => {
     // 재연결 실패
     const handleReconnectFailed = (data) => {
       console.error(`재연결 실패 (${data.attempt}/${data.maxAttempts}):`, data);
-      setLastError(data);
+      globalLastError = data;
+      notifyListeners();
       
       // 사용자 친화적 메시지 표시
       const errorMessage = data.userMessage || `재연결 실패 (${data.attempt}/${data.maxAttempts})`;
@@ -140,19 +177,22 @@ export const useWebSocket = () => {
     // 수동 재연결 실패
     const handleManualReconnectFailed = (data) => {
       console.error('Manual reconnect failed:', data);
-      setLastError(data);
+      globalLastError = data;
+      notifyListeners();
     };
 
     // 수동 재연결 성공
     const handleManualReconnectSuccess = (data) => {
       console.log('Manual reconnect succeeded:', data);
-      setLastError(null); // 에러 상태 초기화
+      globalLastError = null; // 에러 상태 초기화
+      notifyListeners();
     };
 
     // 연결 확립
     const handleConnectionEstablished = (data) => {
       console.log('WebSocket connection established:', data);
-      setLastError(null); // 에러 상태 초기화
+      globalLastError = null; // 에러 상태 초기화
+      notifyListeners();
       
       // 세션당 한 번만 토스트 표시
       const toastShown = sessionStorage.getItem('ws_connection_toast_shown');
@@ -162,7 +202,7 @@ export const useWebSocket = () => {
       }
     };
 
-    // 이벤트 리스너 등록
+    // 이벤트 리스너 등록 (한 번만)
     websocketService.on('connection', handleConnection);
     websocketService.on('disconnection', handleDisconnection);
     websocketService.on('error', handleError);
@@ -173,8 +213,11 @@ export const useWebSocket = () => {
     websocketService.on('manual_reconnect_success', handleManualReconnectSuccess);
     websocketService.on('connection_established', handleConnectionEstablished);
 
-    // 초기 연결
+    // 초기 연결 (한 번만)
     connect();
+    
+    // 이벤트 리스너 초기화 완료 표시
+    isEventListenersInitialized = true;
 
     // 정리
     return () => {

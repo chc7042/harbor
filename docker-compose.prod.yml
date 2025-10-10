@@ -101,13 +101,17 @@ services:
       LOCKOUT_DURATION: 1
       DISABLE_RATE_LIMITING: true
 
+      # Synology NAS API configuration
+      SYNOLOGY_BASE_URL: ${SYNOLOGY_BASE_URL}
+      SYNOLOGY_USERNAME: ${SYNOLOGY_USERNAME}
+      SYNOLOGY_PASSWORD: ${SYNOLOGY_PASSWORD}
+      SYNOLOGY_SESSION_NAME: ${SYNOLOGY_SESSION_NAME}
+      SYNOLOGY_DEVICE_NAME: ${SYNOLOGY_DEVICE_NAME:-Harbor-Backend}
+      SYNOLOGY_DEVICE_ID: ${SYNOLOGY_DEVICE_ID:-harbor-backend-001}
+      SYNOLOGY_FORMAT: ${SYNOLOGY_FORMAT:-sid}
+      
       # NAS configuration
-      NAS_BASE_PATH: ${NAS_BASE_PATH:-/nas/release_version}
-      NAS_PATH: ${NAS_PATH:-/nas}
-      NAS_HOST: ${NAS_HOST}
-      NAS_SHARE: ${NAS_SHARE}
-      NAS_USERNAME: ${NAS_USERNAME}
-      NAS_PASSWORD: ${NAS_PASSWORD}
+      NAS_RELEASE_PATH: ${NAS_RELEASE_PATH:-release_version}
       NAS_SCAN_INTERVAL: ${NAS_SCAN_INTERVAL:-*/15 * * * *}
       NAS_MAX_FILE_SIZE: ${NAS_MAX_FILE_SIZE:-2147483648}
       NAS_ALLOWED_EXTENSIONS: ${NAS_ALLOWED_EXTENSIONS:-.tar.gz,.zip,.jar,.war,.tgz}
@@ -118,7 +122,6 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
       - ./backend/src:/app/src
-      - nas_data:/nas:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -228,9 +231,3 @@ volumes:
     driver: local
   app_logs:
     driver: local
-  nas_data:
-    driver: local
-    driver_opts:
-      type: cifs
-      o: "username=${NAS_USERNAME},password=${NAS_PASSWORD},uid=1000,gid=1000,file_mode=0644,dir_mode=0755,vers=3.0"
-      device: "//${NAS_HOST}/${NAS_SHARE}"

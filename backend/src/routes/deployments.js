@@ -8,6 +8,49 @@ const { getNASService } = require('../services/nasService');
 
 const router = express.Router();
 
+// DEBUG: 인증 없는 테스트 엔드포인트 (인증 미들웨어 이전에 배치)
+router.get('/test-deployment-info/:version/:projectName/:buildNumber',
+  async (req, res) => {
+    const { version, projectName, buildNumber } = req.params;
+    const fullProjectName = `${version}/${projectName}`;
+    
+    console.log(`=== 테스트 deployment-info: ${fullProjectName}#${buildNumber} ===`);
+    
+    try {
+      const { Pool } = require('pg');
+      const pool = new Pool({
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        database: process.env.DB_NAME,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+      });
+
+      const dbResult = await pool.query(
+        'SELECT * FROM deployment_paths WHERE project_name = $1 AND build_number = $2',
+        [fullProjectName, parseInt(buildNumber)]
+      );
+
+      await pool.end();
+
+      return res.json({
+        success: true,
+        debug: {
+          fullProjectName,
+          buildNumber: parseInt(buildNumber),
+          dbRows: dbResult.rows.length,
+          dbRecord: dbResult.rows[0] || null
+        }
+      });
+    } catch (error) {
+      return res.json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+);
+
 // 모든 배포 라우트는 인증 필요
 router.use(authenticateToken);
 
@@ -980,22 +1023,72 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
       try {
         logger.info(`배포 정보 조회 시작 - 프로젝트: ${fullProjectName}, 빌드: ${buildNumber}`);
         
-        // Jenkins에서 빌드 정보 확인 - extractDeploymentInfoFromBuildLog를 통해 상태도 확인
-        let buildStatus = null;
+        // 1. 먼저 deployment_paths 테이블에서 기존 검증된 데이터 확인
+        let deploymentInfo = null;
         try {
-          logger.info(`Jenkins 빌드 로그 추출 시도 - ${fullProjectName}#${buildNumber}`);
-          // 빌드 로그에서 정보를 먼저 추출해보고 상태 확인
-          const preliminaryInfo = await jenkinsService.extractDeploymentInfoFromBuildLog(fullProjectName, parseInt(buildNumber));
-          buildStatus = 'SUCCESS'; // 로그를 성공적으로 가져왔으면 빌드는 완료된 것으로 간주
-          logger.info(`Jenkins 빌드 로그 추출 성공 - ${fullProjectName}#${buildNumber}`);
-        } catch (error) {
-          logger.error(`빌드 로그 접근 실패 - ${fullProjectName}#${buildNumber}: ${error.message}`);
-          logger.error(`Error stack:`, error.stack);
-          buildStatus = 'UNKNOWN';
+          logger.info(`DB 쿼리 시도 - 프로젝트: ${fullProjectName}, 빌드: ${buildNumber}`);
+          const { Pool } = require('pg');
+          const pool = new Pool({
+            host: process.env.DB_HOST,
+            port: process.env.DB_PORT,
+            database: process.env.DB_NAME,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASSWORD,
+          });
+
+          const dbResult = await pool.query(
+            'SELECT * FROM deployment_paths WHERE project_name = $1 AND build_number = $2',
+            [fullProjectName, parseInt(buildNumber)]
+          );
+
+          logger.info(`DB 쿼리 결과 - 행 개수: ${dbResult.rows.length}`);
+
+          if (dbResult.rows.length > 0) {
+            const dbRecord = dbResult.rows[0];
+            logger.info(`DB 레코드 발견 - all_files: ${JSON.stringify(dbRecord.all_files)}`);
+            deploymentInfo = {
+              deploymentPath: dbRecord.path,
+              nasPath: dbRecord.nas_path,
+              downloadFile: dbRecord.download_file,
+              allFiles: dbRecord.all_files || [],
+              verifiedFiles: dbRecord.all_files || [],
+              directoryVerified: true,
+              downloadFileVerified: true,
+              buildDate: dbRecord.build_date,
+              buildNumber: dbRecord.build_number,
+            };
+            logger.info(`Found verified deployment data in database for ${fullProjectName}#${buildNumber}`);
+            logger.info(`DB allFiles: ${JSON.stringify(dbRecord.all_files)}`);
+          } else {
+            logger.warn(`DB에서 레코드를 찾지 못함 - ${fullProjectName}#${buildNumber}`);
+          }
+          await pool.end();
+        } catch (dbError) {
+          logger.error(`Database query failed: ${dbError.message}`);
+          logger.error(`DB 연결 정보 - host: ${process.env.DB_HOST}, port: ${process.env.DB_PORT}, db: ${process.env.DB_NAME}, user: ${process.env.DB_USER}`);
         }
 
-        // Jenkins에서 배포 정보 조회 (PRD 기반 자동 경로 탐지 시스템 사용)
-        const deploymentInfo = await jenkinsService.extractDeploymentInfo(fullProjectName, parseInt(buildNumber));
+        // 2. DB에 데이터가 없으면 Jenkins에서 동적으로 조회
+        if (!deploymentInfo) {
+          // Jenkins에서 빌드 정보 확인 - extractDeploymentInfoFromBuildLog를 통해 상태도 확인
+          let buildStatus = null;
+          try {
+            logger.info(`Jenkins 빌드 로그 추출 시도 - ${fullProjectName}#${buildNumber}`);
+            // 빌드 로그에서 정보를 먼저 추출해보고 상태 확인
+            const preliminaryInfo = await jenkinsService.extractDeploymentInfoFromBuildLog(fullProjectName, parseInt(buildNumber));
+            buildStatus = 'SUCCESS'; // 로그를 성공적으로 가져왔으면 빌드는 완료된 것으로 간주
+            logger.info(`Jenkins 빌드 로그 추출 성공 - ${fullProjectName}#${buildNumber}`);
+          } catch (error) {
+            logger.error(`빌드 로그 접근 실패 - ${fullProjectName}#${buildNumber}: ${error.message}`);
+            logger.error(`Error stack:`, error.stack);
+            buildStatus = 'UNKNOWN';
+          }
+
+          // Jenkins에서 배포 정보 조회 (PRD 기반 자동 경로 탐지 시스템 사용)
+          deploymentInfo = await jenkinsService.extractDeploymentInfo(fullProjectName, parseInt(buildNumber));
+        }
+
+        let buildStatus = 'SUCCESS';
 
         // NAS 디렉토리 존재 확인 및 검증
         if (deploymentInfo.nasPath || deploymentInfo.deploymentPath) {
@@ -1008,8 +1101,13 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
             .replace(/\\/g, '/')                // \ -> /
             .replace(/^\/+/, '');               // 앞의 중복 슬래시 정리
 
-          // release_version 제거 (share 이름이므로 경로에서 제외)
-          unixPath = unixPath.replace(/^release_version\//, '');
+          // release_version을 Synology API용 절대 경로로 변환
+          if (!unixPath.startsWith('/release_version/')) {
+            unixPath = unixPath.replace(/^release_version\//, '/release_version/');
+            if (!unixPath.startsWith('/release_version/')) {
+              unixPath = '/release_version/' + unixPath;
+            }
+          }
 
           logger.info(`Checking NAS directory existence: ${unixPath}`);
 
@@ -1051,6 +1149,59 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
           }
         }
 
+        // Synology 공유 링크 생성 시도 (3-segment route)
+        if (deploymentInfo && (deploymentInfo.nasPath || deploymentInfo.deploymentPath)) {
+          // 프로젝트명에서 버전과 날짜 추출
+          let extractedVersion = version; // 3-segment route는 version 파라미터가 있음
+          let date = '250310'; // 기본값
+          let buildNum = buildNumber;
+
+          // 프로젝트명 패턴 매칭으로 정보 추출
+          const dateMatch = fullProjectName.match(/_(\d{6})_/) || deploymentInfo.nasPath?.match(/\/(\d{6})\//);
+          const buildMatch = fullProjectName.match(/_(\d+)$/) || deploymentInfo.nasPath?.match(/\/(\d+)$/);
+
+          if (dateMatch) date = dateMatch[1];
+          if (buildMatch) buildNum = buildMatch[1];
+
+          logger.info(`🔗 Synology API 호출 시작 (3-segment) - getOrCreateVersionShareLink(${extractedVersion}, ${date}, ${buildNum})`);
+          try {
+            const shareResult = await Promise.race([
+              synologyApiService.getOrCreateVersionShareLink(extractedVersion, date, buildNum),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 10000)),
+            ]);
+            
+            logger.info(`🔗 Synology API 응답 (3-segment):`, JSON.stringify(shareResult, null, 2));
+
+            if (shareResult.success) {
+              deploymentInfo.synologyShareUrl = shareResult.shareUrl;
+              deploymentInfo.synologyShareId = shareResult.shareId;
+              deploymentInfo.shareCreated = shareResult.isNew;
+
+              logger.info(`Synology folder share link ${shareResult.isNew ? 'created' : 'found'} (3-segment): ${shareResult.shareUrl}`);
+            } else {
+              logger.warn(`Synology share link creation failed (3-segment): ${shareResult.error}`);
+            }
+          } catch (shareError) {
+            logger.warn(`Synology share link error (3-segment): ${shareError.message}`);
+          }
+
+          // 파일 정보 매핑 생성
+          if (deploymentInfo.allFiles && deploymentInfo.allFiles.length > 0) {
+            try {
+              const fileInfoResult = await synologyApiService.findActualFileNames(
+                deploymentInfo.nasPath, extractedVersion, date
+              );
+              if (fileInfoResult.success) {
+                deploymentInfo.fileInfoMap = fileInfoResult.fileInfoMap || {};
+                logger.info(`File info map created (3-segment):`, JSON.stringify(deploymentInfo.fileInfoMap, null, 2));
+              }
+            } catch (fileInfoError) {
+              logger.warn(`File info mapping failed (3-segment): ${fileInfoError.message}`);
+              deploymentInfo.fileInfoMap = {};
+            }
+          }
+        }
+
         return res.json({
           success: true,
           data: {
@@ -1066,6 +1217,10 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
             downloadFileVerified: deploymentInfo.downloadFileVerified || false,
             buildDate: deploymentInfo.buildDate,
             buildNumber: deploymentInfo.buildNumber,
+            synologyShareUrl: deploymentInfo.synologyShareUrl,
+            synologyShareId: deploymentInfo.synologyShareId,
+            shareCreated: deploymentInfo.shareCreated,
+            fileInfoMap: deploymentInfo.fileInfoMap || {},
           },
           message: '배포 정보를 조회했습니다.',
         });
@@ -1115,8 +1270,121 @@ router.get('/deployment-info/:projectName/:buildNumber',
       const synologyApiService = require('../services/synologyApiService');
 
       try {
-        logger.info(`배포 정보 조회 시작 - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+        logger.info(`배포 정보 조회 시작 (2-segment) - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
         
+        // 1. 먼저 deployment_paths 테이블에서 기존 검증된 데이터 확인
+        let deploymentInfo = null;
+        try {
+          logger.info(`DB 쿼리 시도 (2-segment) - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+          const { Pool } = require('pg');
+          const pool = new Pool({
+            host: process.env.DB_HOST,
+            port: process.env.DB_PORT,
+            database: process.env.DB_NAME,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASSWORD,
+          });
+
+          const dbResult = await pool.query(
+            'SELECT * FROM deployment_paths WHERE project_name = $1 AND build_number = $2',
+            [projectName, parseInt(buildNumber)]
+          );
+
+          logger.info(`DB 쿼리 결과 (2-segment) - 행 개수: ${dbResult.rows.length}`);
+
+          if (dbResult.rows.length > 0) {
+            const dbRecord = dbResult.rows[0];
+            logger.info(`DB 레코드 발견 (2-segment) - all_files: ${JSON.stringify(dbRecord.all_files)}`);
+            deploymentInfo = {
+              deploymentPath: dbRecord.path,
+              nasPath: dbRecord.nas_path,
+              downloadFile: dbRecord.download_file,
+              allFiles: dbRecord.all_files || [],
+              verifiedFiles: dbRecord.all_files || [],
+              directoryVerified: true,
+              downloadFileVerified: true,
+              buildDate: dbRecord.build_date,
+              buildNumber: dbRecord.build_number,
+            };
+            logger.info(`Found verified deployment data in database (2-segment) for ${projectName}#${buildNumber}`);
+            logger.info(`DB allFiles (2-segment): ${JSON.stringify(dbRecord.all_files)}`);
+          } else {
+            logger.warn(`DB에서 레코드를 찾지 못함 (2-segment) - ${projectName}#${buildNumber}`);
+          }
+          await pool.end();
+        } catch (dbError) {
+          logger.error(`Database query failed (2-segment): ${dbError.message}`);
+          logger.error(`DB 연결 정보 (2-segment) - host: ${process.env.DB_HOST}, port: ${process.env.DB_PORT}, db: ${process.env.DB_NAME}, user: ${process.env.DB_USER}`);
+        }
+
+        // 2. DB에 데이터가 있으면 Synology 공유 링크를 생성하고 반환
+        logger.info(`🔍 DB 조회 결과 확인 - deploymentInfo exists: ${!!deploymentInfo}`);
+        if (deploymentInfo) {
+          logger.info(`📋 deploymentInfo 내용:`, JSON.stringify(deploymentInfo, null, 2));
+          // 프로젝트명에서 버전과 날짜 추출 (예: mr3.0.0_250310_26)
+          let version = '3.0.0';
+          let date = '250310';
+          let buildNum = buildNumber;
+
+          // 프로젝트명 패턴 매칭으로 정보 추출
+          const versionMatch = projectName.match(/mr(\d+\.\d+\.\d+)/);
+          const dateMatch = projectName.match(/_(\d{6})_/);
+          const buildMatch = projectName.match(/_(\d+)$/);
+
+          if (versionMatch) version = versionMatch[1];
+          if (dateMatch) date = dateMatch[1];
+          if (buildMatch) buildNum = buildMatch[1];
+
+          logger.info(`추출된 정보 (2-segment) - version: ${version}, date: ${date}, buildNum: ${buildNum}`);
+
+          // Synology 공유 링크 생성 시도 (백그라운드로 실행, 오류가 나도 응답 차단하지 않음)
+          logger.info(`🔗 Synology API 호출 시작 - getOrCreateVersionShareLink(${version}, ${date}, ${buildNum})`);
+          try {
+            const shareResult = await Promise.race([
+              synologyApiService.getOrCreateVersionShareLink(version, date, buildNum),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 10000)),
+            ]);
+            
+            logger.info(`🔗 Synology API 응답:`, JSON.stringify(shareResult, null, 2));
+
+            if (shareResult.success) {
+              deploymentInfo.synologyShareUrl = shareResult.shareUrl;
+              deploymentInfo.synologyShareId = shareResult.shareId;
+              deploymentInfo.shareCreated = shareResult.isNew;
+
+              logger.info(`Synology folder share link ${shareResult.isNew ? 'created' : 'found'} (2-segment): ${shareResult.shareUrl}`);
+            } else {
+              logger.warn(`Synology share link creation failed (2-segment): ${shareResult.error}`);
+            }
+          } catch (shareError) {
+            logger.warn(`Synology share link error (2-segment): ${shareError.message}`);
+          }
+
+          return res.json({
+            success: true,
+            data: {
+              projectName,
+              buildNumber: parseInt(buildNumber),
+              status: 'SUCCESS',
+              deploymentPath: deploymentInfo.deploymentPath,
+              nasPath: deploymentInfo.nasPath,
+              downloadFile: deploymentInfo.downloadFile,
+              allFiles: deploymentInfo.allFiles || [],
+              verifiedFiles: deploymentInfo.verifiedFiles || [],
+              directoryVerified: deploymentInfo.directoryVerified || false,
+              downloadFileVerified: deploymentInfo.downloadFileVerified || false,
+              buildDate: deploymentInfo.buildDate,
+              buildNumber: deploymentInfo.buildNumber,
+              synologyShareUrl: deploymentInfo.synologyShareUrl,
+              synologyShareId: deploymentInfo.synologyShareId,
+              shareCreated: deploymentInfo.shareCreated,
+              fileInfoMap: deploymentInfo.fileInfoMap || {},
+            },
+            message: '배포 정보를 조회했습니다.',
+          });
+        }
+
+        // 3. DB에 데이터가 없으면 Jenkins에서 동적으로 조회
         // Jenkins에서 빌드 정보 확인 - extractDeploymentInfoFromBuildLog를 통해 상태도 확인
         let buildStatus = null;
         try {
@@ -1155,7 +1423,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
         }
 
         // Jenkins에서 배포 정보 조회 (PRD 기반 자동 경로 탐지 시스템 사용)
-        const deploymentInfo = await jenkinsService.extractDeploymentInfo(projectName, parseInt(buildNumber));
+        deploymentInfo = await jenkinsService.extractDeploymentInfo(projectName, parseInt(buildNumber));
 
         // NAS 디렉토리 존재 확인 및 검증
         if (deploymentInfo.nasPath || deploymentInfo.deploymentPath) {
@@ -1168,8 +1436,13 @@ router.get('/deployment-info/:projectName/:buildNumber',
             .replace(/\\/g, '/')                // \ -> /
             .replace(/^\/+/, '');               // 앞의 중복 슬래시 정리
 
-          // release_version 제거 (share 이름이므로 경로에서 제외)
-          unixPath = unixPath.replace(/^release_version\//, '');
+          // release_version을 Synology API용 절대 경로로 변환
+          if (!unixPath.startsWith('/release_version/')) {
+            unixPath = unixPath.replace(/^release_version\//, '/release_version/');
+            if (!unixPath.startsWith('/release_version/')) {
+              unixPath = '/release_version/' + unixPath;
+            }
+          }
 
           logger.info(`Checking NAS directory existence: ${unixPath}`);
 

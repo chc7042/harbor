@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useWebSocket, useSystemNotifications } from '../hooks/useWebSocket';
+import websocketService from '../services/websocketService';
 import Header from './Header';
 import SearchFilter from './SearchFilter';
 import DeploymentTable from './DeploymentTable';
@@ -9,7 +10,6 @@ import DeploymentDetailModal from './DeploymentDetailModal';
 import Pagination from './Pagination';
 import ProjectHierarchy from './ProjectHierarchy';
 import FileUploadModal from './FileUploadModal';
-import { useDeploymentUpdates } from '../hooks/useWebSocket';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 import { Upload } from 'lucide-react';
@@ -19,7 +19,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { isConnected, connectionState } = useWebSocket();
 
-  // 시스템 알림 활성화
+  // 시스템 알림 활성화 (useWebSocket을 공유하여 중복 연결 방지)
   useSystemNotifications();
 
   const [deployments, setDeployments] = useState([]);
@@ -66,26 +66,33 @@ const Dashboard = () => {
   }, [currentPage, itemsPerPage, searchTerm, filters, sortConfig]);
 
   // WebSocket으로 실시간 배포 업데이트 수신
-  useDeploymentUpdates((updatedDeployment) => {
-    if (updatedDeployment && updatedDeployment.id) {
-      setDeployments(prev => 
-        prev.map(deployment => 
-          deployment && deployment.id === updatedDeployment.id ? updatedDeployment : deployment
-        )
-      );
-    }
-  });
+  useEffect(() => {
+    if (!isConnected) return;
 
-  const fetchProjects = async () => {
+    const handleDeploymentUpdate = (updatedDeployment) => {
+      if (updatedDeployment && updatedDeployment.id) {
+        setDeployments(prev => 
+          prev.map(deployment => 
+            deployment && deployment.id === updatedDeployment.id ? updatedDeployment : deployment
+          )
+        );
+      }
+    };
+
+    // WebSocket 서비스에서 직접 이벤트 리스닝
+    websocketService.on('deployment_update', handleDeploymentUpdate);
+
+    return () => {
+      websocketService.off('deployment_update', handleDeploymentUpdate);
+    };
+  }, [isConnected]);
+
+  const fetchProjects = useCallback(async () => {
     try {
-      console.log('Fetching projects...'); // 디버깅용
       const response = await api.get('/projects');
-      console.log('Projects API Response:', response.data); // 디버깅용
       
       // API 응답 구조에 맞게 데이터 추출
       const projectData = response.data?.data || response.data || [];
-      console.log('Extracted project data:', projectData); // 디버깅용
-      console.log('Project data length:', projectData.length); // 디버깅용
       
       // 프로젝트를 버전 번호 기준으로 내림차순 정렬 (3.0.0, 2.0.0, 1.2.0 순서)
       const sortedProjects = projectData.sort((a, b) => {
@@ -121,11 +128,10 @@ const Dashboard = () => {
       setProjects(sortedProjects);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
-      console.error('Error response:', error.response?.data); // 디버깅용
       toast.error('프로젝트 목록을 불러오는데 실패했습니다.');
       setProjects([]); // 에러 시 빈 배열로 설정
     }
-  };
+  }, []);
 
   const fetchDeployments = async () => {
     try {
@@ -195,10 +201,7 @@ const Dashboard = () => {
       }
       
       const apiUrl = `/deployments/recent?${params}`;
-      console.log('API URL:', apiUrl); // 디버깅용
       const response = await api.get(apiUrl);
-      console.log('API Response:', response.data); // 디버깅용
-      console.log('Query params:', Object.fromEntries(params)); // 디버깅용
       
       // response.data가 있고 success가 true이거나, data 배열이 직접 있는 경우 처리
       const deploymentData = response.data?.data || response.data || [];
@@ -233,7 +236,6 @@ const Dashboard = () => {
           setTotalPages(Math.ceil(transformedData.length / itemsPerPage));
         }
       } else {
-        console.log('No deployment data found');
         setDeployments([]);
         setTotalItems(0);
         setTotalPages(1);
@@ -281,18 +283,18 @@ const Dashboard = () => {
     setSelectedDeployment(null);
   };
 
-  const handleJobClick = (job) => {
+  const handleJobClick = useCallback((job) => {
     // 작업 클릭 시 해당 작업의 상세 정보 표시
     if (job.url) {
       window.open(job.url, '_blank');
     }
-  };
+  }, []);
 
-  const handleUploadComplete = (data) => {
+  const handleUploadComplete = useCallback((data) => {
     toast.success(`파일 업로드 완료: ${data.filename}`);
     // 프로젝트 목록 새로고침 (업로드된 파일이 반영될 수 있도록)
     fetchProjects();
-  };
+  }, [fetchProjects]);
 
   if (loading) {
     return (
@@ -324,10 +326,9 @@ const Dashboard = () => {
         </div>
 
         {/* 뷰 모드 탭 */}
-        <div className="mb-6 bg-white p-4 rounded border" style={{display: 'block', visibility: 'visible'}}>
-          <div className="border-b border-gray-200" style={{display: 'block'}}>
+        <div className="mb-6 bg-white p-4 rounded border">
+          <div className="border-b border-gray-200">
             <div className="flex justify-between items-center mb-2">
-              <h4 className="text-gray-700">현재 뷰 모드: {viewMode}</h4>
               <button
                 onClick={() => setIsUploadModalOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -336,33 +337,24 @@ const Dashboard = () => {
                 파일 업로드
               </button>
             </div>
-            <nav className="-mb-px flex space-x-8" style={{display: 'flex'}}>
-              {console.log('Current viewMode:', viewMode)} {/* 디버깅용 */}
+            <nav className="-mb-px flex space-x-8">
               <button
-                onClick={() => {
-                  console.log('Clicking projects tab');
-                  setViewMode('projects');
-                }}
+                onClick={() => setViewMode('projects')}
                 className={`py-2 px-4 border-b-2 font-medium text-sm cursor-pointer ${
                   viewMode === 'projects'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
-                style={{display: 'inline-block'}}
               >
                 프로젝트 계층 구조
               </button>
               <button
-                onClick={() => {
-                  console.log('Clicking deployments tab');
-                  setViewMode('deployments');
-                }}
+                onClick={() => setViewMode('deployments')}
                 className={`py-2 px-4 border-b-2 font-medium text-sm cursor-pointer ${
                   viewMode === 'deployments'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
-                style={{display: 'inline-block'}}
               >
                 배포 이력
               </button>

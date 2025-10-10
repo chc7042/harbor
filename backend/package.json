@@ -21,7 +21,6 @@
     "health": "node healthcheck.js"
   },
   "dependencies": {
-    "@marsaud/smb2": "^0.18.0",
     "axios": "^1.6.0",
     "bcrypt": "^5.1.1",
     "chokidar": "^3.5.3",

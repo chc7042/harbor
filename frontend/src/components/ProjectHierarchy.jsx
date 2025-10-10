@@ -36,8 +36,6 @@ const ProjectHierarchy = ({
   const [editingMemo, setEditingMemo] = useState(null);
   const [memoText, setMemoText] = useState('');
   
-  // 디버깅용 로그
-  console.log('ProjectHierarchy props:', { projects, deployments });
 
   const toggleProject = (projectName) => {
     const newExpanded = new Set(expandedProjects);
@@ -215,10 +213,6 @@ const ProjectHierarchy = ({
   };
 
   const handleDeploymentCardClick = (deployment) => {
-    console.log('ProjectHierarchy - handleDeploymentCardClick deployment:', deployment);
-    console.log('ProjectHierarchy - project_name:', deployment.project_name);
-    console.log('ProjectHierarchy - build_number:', deployment.build_number);
-    
     setSelectedDeployment(deployment);
     setIsModalOpen(true);
     

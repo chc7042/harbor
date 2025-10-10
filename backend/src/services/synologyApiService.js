@@ -4,7 +4,7 @@ const logger = require('../config/logger');
 
 class SynologyApiService {
   constructor() {
-    this.baseUrl = 'https://nas.roboetech.com:5001';
+    this.baseUrl = process.env.SYNOLOGY_BASE_URL || 'http://nas.roboetech.com:5000';
     this.sessionId = null;
     this.sessionExpiry = null;
   }
@@ -21,10 +21,10 @@ class SynologyApiService {
           api: 'SYNO.API.Auth',
           version: 6,
           method: 'login',
-          account: 'nasadmin',
-          passwd: 'Cmtes123',
-          session: 'FileStation',
-          format: 'sid',
+          account: process.env.SYNOLOGY_USERNAME || 'nasadmin',
+          passwd: process.env.SYNOLOGY_PASSWORD || 'Cmtes123',
+          session: process.env.SYNOLOGY_SESSION_NAME || 'FileStation',
+          format: process.env.SYNOLOGY_FORMAT || 'sid',
         },
         timeout: 10000,
       });
@@ -165,6 +165,7 @@ class SynologyApiService {
           version: 2,
           method: 'list',
           folder_path: path,
+          additional: '["size","time","type"]',
           _sid: this.sessionId,
         },
         timeout: 10000,
@@ -442,7 +443,7 @@ class SynologyApiService {
   /**
    * 세션 기반 다운로드 URL 생성
    */
-  async createSessionBasedUrl(filePath, requestId, _options) {
+  async createSessionBasedUrl(filePath, requestId, options = {}) {
     if (!this.sessionId) {
       throw new Error('세션이 없습니다.');
     }
@@ -472,7 +473,7 @@ class SynologyApiService {
   /**
    * 공개 다운로드 URL 생성 (세션 없이)
    */
-  async createPublicUrl(filePath, _requestId, _options) {
+  async createPublicUrl(filePath, requestId, _options) {
     const normalizedPath = this.normalizePath(filePath);
 
     // 공개 접근 가능한 URL 패턴들 시도
@@ -831,6 +832,14 @@ class SynologyApiService {
   }
 
   /**
+   * 파일 목록 조회 (files API용) - 기존 호환성을 위한 메서드
+   * @param {string} dirPath - 디렉토리 경로
+   */
+  async listFiles(dirPath = '') {
+    return await this.listDirectoryFiles(dirPath);
+  }
+
+  /**
    * 로그아웃
    */
   async logout() {
@@ -854,6 +863,99 @@ class SynologyApiService {
     } finally {
       this.sessionId = null;
       this.sessionExpiry = null;
+    }
+  }
+
+  /**
+   * 단일 파일/폴더의 정보를 조회
+   * @param {string} filePath - 파일/폴더 경로
+   */
+  async getFileInfo(filePath) {
+    try {
+      await this.ensureValidSession();
+
+      logger.info(`Getting file info for path: ${filePath}`);
+
+      const response = await axios.get(`${this.baseUrl}/webapi/entry.cgi`, {
+        params: {
+          api: 'SYNO.FileStation.List',
+          version: 2,
+          method: 'getinfo',
+          path: filePath,
+          additional: '["size","time","type"]',
+          _sid: this.sessionId,
+        },
+        timeout: 10000,
+      });
+
+      logger.info(`File info response status: ${response.status}`);
+      logger.info('File info response data:', response.data);
+
+      if (response.data && response.data.success) {
+        const files = response.data.data.files;
+        if (files && files.length > 0) {
+          const fileData = files[0];
+          logger.info(`File info retrieved for ${filePath}:`, JSON.stringify(fileData, null, 2));
+          return {
+            success: true,
+            data: fileData,
+          };
+        } else {
+          logger.warn(`No file data returned for ${filePath}`);
+          return { success: false, error: 'File not found' };
+        }
+      } else {
+        const errorCode = response.data?.error?.code;
+        const errorMessage = response.data?.error?.message || 'Unknown error';
+        logger.warn(`File info request failed for ${filePath} - Error code: ${errorCode}, Message: ${errorMessage}`);
+        return { success: false, error: `${errorCode} - ${errorMessage}` };
+      }
+    } catch (error) {
+      logger.error(`Failed to get file info for ${filePath}:`, error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 파일 다운로드 (바이너리 데이터)
+   */
+  async downloadFile(filePath) {
+    try {
+      await this.ensureValidSession();
+      
+      logger.info(`Downloading file: ${filePath}`);
+
+      const response = await axios.get(`${this.baseUrl}/webapi/entry.cgi`, {
+        params: {
+          api: 'SYNO.FileStation.Download',
+          version: 2,
+          method: 'download',
+          path: filePath,
+          mode: 'download',
+          _sid: this.sessionId,
+        },
+        responseType: 'arraybuffer', // 바이너리 데이터로 받기
+        timeout: 300000, // 5분 타임아웃
+      });
+
+      if (response.status === 200) {
+        logger.info(`File downloaded successfully: ${filePath}, size: ${response.data.length} bytes`);
+        return {
+          success: true,
+          data: Buffer.from(response.data),
+          filename: filePath.split('/').pop(),
+          size: response.data.length
+        };
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+    } catch (error) {
+      logger.error(`Failed to download file ${filePath}:`, error.message);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
 }
