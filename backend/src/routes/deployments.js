@@ -1800,4 +1800,51 @@ router.get('/deployment-info/:projectName/:buildNumber',
   },
 );
 
+// Upload 폴더 공유 링크 가져오기
+router.get('/share/upload',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      logger.info(`Upload 폴더 공유 링크 요청 - 사용자: ${req.user.username}`);
+
+      const nasService = getNASService();
+
+      // 파일 업로드에서 사용하는 동일한 경로 사용
+      const uploadPath = nasService.validateAndNormalizeUploadPath('\\\\nas.roboetech.com\\release_version\\release\\upload');
+
+      try {
+        // upload 폴더에 대해서는 직접 경로로 공유 링크 생성
+        const directShareResult = await nasService.synologyApiService.createShareLink(uploadPath);
+
+        if (directShareResult.success && directShareResult.shareUrl) {
+          logger.info(`Upload 폴더 직접 공유 링크 생성 성공: ${directShareResult.shareUrl}`);
+
+          res.json({
+            success: true,
+            shareUrl: directShareResult.shareUrl,
+            shareId: directShareResult.shareId,
+            path: uploadPath,
+            method: 'direct',
+            message: 'Upload 폴더 공유 링크를 성공적으로 가져왔습니다.',
+          });
+        } else {
+          throw new Error(directShareResult.error || 'Upload 폴더 공유 링크 생성 실패');
+        }
+      } catch (directError) {
+        logger.error(`Upload 폴더 공유 링크 생성 실패: ${directError.message}`);
+        throw new Error(`공유 링크 생성 실패: ${directError.message}`);
+      }
+
+    } catch (error) {
+      logger.error('Upload 폴더 공유 링크 요청 처리 실패:', error.message);
+
+      res.status(500).json({
+        success: false,
+        message: 'Upload 폴더 공유 링크 가져오기에 실패했습니다.',
+        error: error.message,
+      });
+    }
+  }
+);
+
 module.exports = router;

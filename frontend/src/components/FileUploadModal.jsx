@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, FolderOpen } from 'lucide-react';
 import FileUploader from './FileUploader';
 
 const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
-  const [currentPath, setCurrentPath] = useState('\\\\nas.roboetech.com\\release_version\\release\\upload');
+  const currentPath = '\\\\nas.roboetech.com\\release_version\\release\\upload';
+  const [isOpeningFolder, setIsOpeningFolder] = useState(false);
 
   const handleUploadComplete = (data) => {
     console.log('Upload completed:', data);
@@ -19,6 +20,36 @@ const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
   const handleUploadError = (error) => {
     console.error('Upload error:', error);
     // 에러는 FileUploader 컴포넌트에서 처리됨
+  };
+
+  const handleOpenSharedFolder = async () => {
+    try {
+      setIsOpeningFolder(true);
+
+      // upload 폴더에 대한 공유 링크 가져오기
+      const response = await fetch('/api/deployments/share/upload', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.shareUrl) {
+          // 새 창에서 공유 폴더 열기
+          window.open(data.shareUrl, '_blank');
+        } else {
+          throw new Error(data.error || '공유 폴더 링크 생성에 실패했습니다.');
+        }
+      } else {
+        throw new Error('서버 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      console.error('공유 폴더 열기 실패:', error);
+      alert(`공유 폴더 열기에 실패했습니다: ${error.message}`);
+    } finally {
+      setIsOpeningFolder(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -46,15 +77,28 @@ const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               업로드 경로
             </label>
-            <input
-              type="text"
-              value={currentPath}
-              onChange={(e) => setCurrentPath(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="\\\\nas.roboetech.com\\release_version\\release\\upload"
-            />
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                value={currentPath}
+                readOnly
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600 cursor-not-allowed"
+                placeholder="\\\\nas.roboetech.com\\release_version\\release\\upload"
+              />
+              <button
+                onClick={handleOpenSharedFolder}
+                disabled={isOpeningFolder}
+                className="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                title="공유 폴더 열기"
+              >
+                <FolderOpen size={16} />
+                <span className="text-sm">
+                  {isOpeningFolder ? '열기 중...' : '폴더 열기'}
+                </span>
+              </button>
+            </div>
             <p className="text-xs text-gray-500 mt-1">
-              파일이 업로드될 NAS 경로를 입력하세요
+              파일이 업로드될 NAS 경로를 입력하세요. '폴더 열기' 버튼으로 브라우저에서 업로드 폴더를 확인할 수 있습니다.
             </p>
           </div>
 

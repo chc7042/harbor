@@ -12,7 +12,7 @@ import ProjectHierarchy from './ProjectHierarchy';
 import FileUploadModal from './FileUploadModal';
 import api from '../services/api';
 import toast from 'react-hot-toast';
-import { Upload } from 'lucide-react';
+import { Upload, FolderOpen } from 'lucide-react';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -53,6 +53,7 @@ const Dashboard = () => {
   const [selectedDeployment, setSelectedDeployment] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isOpeningFolder, setIsOpeningFolder] = useState(false);
 
   // 뷰 모드 상태 (deployments: 배포이력, projects: 프로젝트 계층)
   const [viewMode, setViewMode] = useState('projects');
@@ -296,6 +297,31 @@ const Dashboard = () => {
     fetchProjects();
   }, [fetchProjects]);
 
+  const handleOpenSharedFolder = async () => {
+    try {
+      setIsOpeningFolder(true);
+
+      // upload 폴더에 대한 공유 링크 가져오기
+      const response = await api.get('/deployments/share/upload', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.data.success && response.data.shareUrl) {
+        // 새 창에서 공유 폴더 열기
+        window.open(response.data.shareUrl, '_blank');
+      } else {
+        throw new Error(response.data.error || '공유 폴더 링크 생성에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('공유 폴더 열기 실패:', error);
+      toast.error(`공유 폴더 열기에 실패했습니다: ${error.message}`);
+    } finally {
+      setIsOpeningFolder(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-primary-50">
@@ -353,13 +379,24 @@ const Dashboard = () => {
               </nav>
               
               <div className="flex flex-col items-end">
-                <button
-                  onClick={() => setIsUploadModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
-                >
-                  <Upload size={16} />
-                  파일 업로드
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setIsUploadModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
+                  >
+                    <Upload size={16} />
+                    파일 업로드
+                  </button>
+                  <button
+                    onClick={handleOpenSharedFolder}
+                    disabled={isOpeningFolder}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="공유 폴더 열기"
+                  >
+                    <FolderOpen size={16} />
+                    {isOpeningFolder ? '열기 중...' : '공유폴더 열기'}
+                  </button>
+                </div>
                 <p className="text-xs text-gray-500 mt-1 text-right">
                   긴급하게 공유해야 할 경우 파일 업로드를 통해서 공유하세요
                 </p>
