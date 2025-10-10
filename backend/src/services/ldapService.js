@@ -204,7 +204,7 @@ class LDAPService {
         const searchResult = await searchAsync(this.config.getConfig().searchBase, searchOptions);
 
         return new Promise((resolve, reject) => {
-          let user = null;
+          let userEntry = null;
           let entryCount = 0;
           let searchCompleted = false;
 
@@ -222,7 +222,7 @@ class LDAPService {
           searchResult.on('searchEntry', (entry) => {
             entryCount++;
             if (entryCount === 1) {
-              user = this.config.mapUserAttributes(entry);
+              userEntry = entry;
             }
           });
 
@@ -233,7 +233,7 @@ class LDAPService {
             reject(new Error(errorMsg));
           });
 
-          searchResult.on('end', (result) => {
+          searchResult.on('end', async (result) => {
             cleanup();
 
             if (result.status !== 0) {
@@ -244,7 +244,12 @@ class LDAPService {
             if (entryCount === 0) {
               resolve(null);
             } else if (entryCount === 1) {
-              resolve(user);
+              try {
+                const user = await this.config.mapUserAttributes(userEntry, username);
+                resolve(user);
+              } catch (mappingError) {
+                reject(new Error(`User attribute mapping failed: ${mappingError.message}`));
+              }
             } else {
               reject(new Error(`Multiple users found for username: ${username}`));
             }

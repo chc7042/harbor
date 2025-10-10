@@ -12,23 +12,34 @@ const UserAvatar = ({ user, size = 32, className = "" }) => {
       return;
     }
 
-    // Gravatar 이미지 존재 확인
-    const gravatarUrl = getGravatarUrl(user.email, size);
+    // Gravatar 이미지 존재 확인 (캐시 우회를 위해 타임스탬프 추가)
+    const baseGravatarUrl = getGravatarUrl(user.email, size);
+    const gravatarUrl = `${baseGravatarUrl}&_=${Date.now()}`;
     
+    // 이미지 로드 테스트
     const img = new Image();
     img.onload = () => {
-      setAvatarUrl(gravatarUrl);
+      setAvatarUrl(baseGravatarUrl); // 실제 표시에는 캐시 파라미터 없는 URL 사용
       setUseGravatar(true);
       setIsLoading(false);
     };
-    
     img.onerror = () => {
       setUseGravatar(false);
       setIsLoading(false);
     };
     
+    // 타임아웃 설정 (3초 후 fallback 사용)
+    const timeout = setTimeout(() => {
+      if (isLoading) {
+        setUseGravatar(false);
+        setIsLoading(false);
+      }
+    }, 3000);
+
     img.src = gravatarUrl;
-  }, [user?.email, size]);
+
+    return () => clearTimeout(timeout);
+  }, [user?.email, size, isLoading]);
 
   if (isLoading) {
     return (
