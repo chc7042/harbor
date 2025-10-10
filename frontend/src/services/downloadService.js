@@ -330,7 +330,10 @@ class DownloadService {
    */
   createDownloadUrl(filePath, token, options = {}) {
     const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    const baseUrl = `${API_BASE_URL}/api/files/download`;
+    // API_BASE_URL이 이미 /api를 포함하고 있으므로 중복 제거
+    const baseUrl = API_BASE_URL.endsWith('/api') || API_BASE_URL.includes('/api') 
+      ? `${API_BASE_URL}/files/download` 
+      : `${API_BASE_URL}/api/files/download`;
     
     const params = new URLSearchParams({
       path: filePath

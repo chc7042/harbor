@@ -233,7 +233,15 @@ async function startServer() {
     });
 
     // WebSocket 서버 초기화 (서버 시작 직후, 재시도 로직 포함)
-    await initializeWebSocketWithRetry(server, 3);
+    logger.info('WebSocket 서버 초기화 시작...');
+    try {
+      await initializeWebSocketWithRetry(server, 3);
+      logger.info('WebSocket 서버 초기화 성공');
+    } catch (wsError) {
+      logger.error('WebSocket 서버 초기화 실패, 서버는 HTTP만 지원합니다:', wsError.message);
+    }
+    
+    logger.info('서버 초기화 진행 중...');
 
     // NAS 스캐너 초기화 (비동기적으로 백그라운드에서 진행)
     initializeNASScanner(dbConnected);
