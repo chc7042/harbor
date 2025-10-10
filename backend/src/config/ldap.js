@@ -135,6 +135,16 @@ class LDAPConfig {
    * 사용자 속성 매핑 (그룹 기반 부서 매핑 포함)
    */
   async mapUserAttributes(ldapEntry, searchUsername = null) {
+    // 모든 LDAP 속성을 로그에 출력 (디버깅용)
+    console.log('=== LDAP Entry All Attributes ===');
+    console.log('DN:', ldapEntry.dn);
+    if (ldapEntry.attributes) {
+      ldapEntry.attributes.forEach(attr => {
+        console.log(`${attr.type}:`, attr.values);
+      });
+    }
+    console.log('=== End LDAP Attributes ===');
+
     const user = {
       username: this.getAttributeValue(ldapEntry, this.config.attributeMap.username),
       email: this.getAttributeValue(ldapEntry, this.config.attributeMap.email),
@@ -143,6 +153,23 @@ class LDAPConfig {
       employeeId: this.getAttributeValue(ldapEntry, this.config.attributeMap.employeeId),
       dn: ldapEntry.dn,
     };
+
+    // DN에서 직접 한글 이름 추출 (LDAP 속성이 undefined인 경우)
+    if (!user.fullName && ldapEntry.dn) {
+      const dnParts = ldapEntry.dn.split(',');
+      for (const part of dnParts) {
+        const trimmedPart = part.trim();
+        if (trimmedPart.toLowerCase().startsWith('cn=')) {
+          const cnValue = trimmedPart.substring(3);
+          // 한글이 포함된 경우 직접 사용
+          if (/[\u3131-\uD79D]/.test(cnValue)) {
+            user.fullName = cnValue;
+            console.log(`Extracted Korean name from DN: ${cnValue}`);
+            break;
+          }
+        }
+      }
+    }
 
     // 사용자명 결정 우선순위: searchUsername > UID from DN > existing username > CN from DN
     const uidFromDN = this.getUidFromDN(user.dn);
@@ -353,7 +380,36 @@ class LDAPConfig {
     }
 
     // 첫 번째 값 반환 (대부분의 속성이 단일 값)
-    return attribute.values[0];
+    let value = attribute.values[0];
+    
+    // UTF-8 Buffer인 경우 문자열로 변환
+    if (Buffer.isBuffer(value)) {
+      try {
+        value = value.toString('utf8');
+      } catch (err) {
+        console.warn(`Failed to decode UTF-8 for attribute ${attributeName}:`, err.message);
+      }
+    }
+    
+    // Base64로 인코딩된 UTF-8 문자열인 경우 디코딩 시도
+    if (typeof value === 'string' && value.length > 0) {
+      try {
+        // Base64인지 확인 (영문자, 숫자, +, /, = 로만 구성되어 있고 4의 배수 길이)
+        if (/^[A-Za-z0-9+/]+=*$/.test(value) && value.length % 4 === 0) {
+          const decoded = Buffer.from(value, 'base64').toString('utf8');
+          // 디코딩된 결과가 유효한 UTF-8 문자열이고 한글이 포함되어 있으면 사용
+          if (decoded && /[\u3131-\uD79D]/.test(decoded)) {
+            console.log(`Decoded base64 for ${attributeName}: ${value} -> ${decoded}`);
+            value = decoded;
+          }
+        }
+      } catch (err) {
+        // Base64 디코딩 실패 시 원본 값 유지
+        console.debug(`Base64 decode failed for ${attributeName}, using original value:`, err.message);
+      }
+    }
+    
+    return value;
   }
 
   /**
