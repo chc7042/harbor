@@ -21,6 +21,7 @@ import {
   User
 } from 'lucide-react';
 import ProjectDetailModal from './ProjectDetailModal';
+import { useAuth } from '../contexts/AuthContext';
 
 const ProjectHierarchy = ({ 
   projects = [], 
@@ -29,6 +30,7 @@ const ProjectHierarchy = ({
   onDeploymentClick,
   className = '' 
 }) => {
+  const { user } = useAuth();
   const [expandedProjects, setExpandedProjects] = useState(new Set());
   const [selectedDeployment, setSelectedDeployment] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -170,8 +172,16 @@ const ProjectHierarchy = ({
 
   // 메모 관리 함수들
   const getCurrentUser = () => {
-    // localStorage나 context에서 현재 사용자 정보 가져오기
-    return localStorage.getItem('username') || 'admin';
+    // AuthContext에서 현재 사용자 정보 가져오기
+    if (!user) {
+      console.warn('User not loaded yet from AuthContext');
+      return 'Loading...';
+    }
+    
+    // 실제 사용자 정보 반환 (name 우선, 없으면 username)
+    const currentUser = user.name || user.username || user.email || 'Unknown User';
+    console.log('Current user:', currentUser, 'from user object:', user);
+    return currentUser;
   };
 
   const loadMemos = () => {
@@ -193,15 +203,26 @@ const ProjectHierarchy = ({
   };
 
   const handleSaveMemo = (deploymentId) => {
+    const currentUser = getCurrentUser();
+    
+    // 사용자가 아직 로딩 중이면 저장하지 않음
+    if (currentUser === 'Loading...' || !user) {
+      console.warn('Cannot save memo: user not loaded yet');
+      alert('사용자 정보를 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
     const newMemos = {
       ...memos,
       [deploymentId]: {
         text: memoText,
-        author: getCurrentUser(),
+        author: currentUser,
         timestamp: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
     };
+    
+    console.log('Saving memo with author:', currentUser);
     saveMemos(newMemos);
     setEditingMemo(null);
     setMemoText('');
@@ -225,6 +246,44 @@ const ProjectHierarchy = ({
   useEffect(() => {
     loadMemos();
   }, []);
+
+  // 임시: 'admin' 메모들을 현재 사용자로 업데이트하는 함수
+  const updateAdminMemos = () => {
+    if (!user) return;
+    
+    const currentUser = getCurrentUser();
+    if (currentUser === 'Loading...' || currentUser === 'Unknown User') return;
+
+    const savedMemos = localStorage.getItem('projectMemos');
+    if (!savedMemos) return;
+
+    const parsedMemos = JSON.parse(savedMemos);
+    let hasUpdates = false;
+
+    // 'admin'으로 저장된 메모들을 현재 사용자로 업데이트
+    Object.keys(parsedMemos).forEach(deploymentId => {
+      const memo = parsedMemos[deploymentId];
+      if (memo.author === 'admin') {
+        memo.author = currentUser;
+        memo.updatedAt = new Date().toISOString();
+        hasUpdates = true;
+      }
+    });
+
+    if (hasUpdates) {
+      console.log('Updated admin memos to current user:', currentUser);
+      localStorage.setItem('projectMemos', JSON.stringify(parsedMemos));
+      setMemos(parsedMemos);
+    }
+  };
+
+  // 사용자 정보가 로드되면 admin 메모 업데이트 시도
+  useEffect(() => {
+    if (user) {
+      updateAdminMemos();
+    }
+  }, [user]);
+
 
   return (
     <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>

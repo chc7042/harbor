@@ -19,6 +19,10 @@ npm run test:coverage   # Run tests with coverage report
 npm run lint            # Run ESLint
 npm run lint:fix        # Fix ESLint issues
 npm run health          # Run health check
+
+# Run specific tests
+npx jest auth.test.js   # Run specific test file
+npx jest --testNamePattern="login" # Run tests matching pattern
 ```
 
 ### Frontend (React/Vite)
@@ -32,6 +36,10 @@ npm run test:watch      # Run tests in watch mode
 npm run test:coverage   # Run tests with coverage
 npm run lint            # Run ESLint
 npm run lint:fix        # Fix ESLint issues
+
+# Run specific tests
+npx vitest run Dashboard # Run specific test file/component
+npx vitest run --reporter=verbose # Run with detailed output
 ```
 
 ### Full System (Monorepo Commands)
@@ -128,8 +136,8 @@ FRONTEND_URL=http://localhost:5173
 
 **Frontend (.env)**:
 ```bash
-VITE_API_URL=http://localhost:3002
-VITE_WS_URL=ws://localhost:3002
+VITE_API_URL=http://localhost:3001
+VITE_WS_URL=ws://localhost:3001
 ```
 
 ## Key Development Patterns
@@ -216,7 +224,7 @@ All API routes follow consistent patterns:
 
 When starting the development environment:
 
-1. **Backend** starts on port 3002 with hot reload via nodemon
+1. **Backend** starts on port 3001 with hot reload via nodemon
 2. **Frontend** starts on port 5173 with Vite proxy to backend
 3. **Database** connection failures are gracefully handled in development
 4. **LDAP** authentication can be tested with provided test credentials
@@ -362,6 +370,3 @@ docker network inspect harbor_harbor-network # Inspect network configuration
 3. Test NAS connectivity from host system
 4. Restart backend container if mount issues persist
 
-## Task Master AI Instructions
-**Import Task Master's development workflow commands and guidelines, treat as if import is in the main CLAUDE.md file.**
-@./.taskmaster/CLAUDE.md
