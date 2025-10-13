@@ -172,18 +172,28 @@ app.use('/api/health', healthRoutes);
 // API 라우트
 if (isRateLimitingDisabled) {
   app.use('/api/auth', authRoutes);
+  app.use('/auth', authRoutes); // NPM strips /api prefix
 } else {
   app.use('/api/auth', authLimiter, authRoutes);
+  app.use('/auth', authLimiter, authRoutes); // NPM strips /api prefix
 }
 app.use('/api/deployments', deploymentRoutes);
+app.use('/deployments', deploymentRoutes); // NPM strips /api prefix
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/dashboard', dashboardRoutes); // NPM strips /api prefix
 app.use('/api/projects', projectRoutes);
+app.use('/projects', projectRoutes); // NPM strips /api prefix
 app.use('/api/webhooks', webhookRoutes);
+app.use('/webhooks', webhookRoutes); // NPM strips /api prefix
 // WebSocket routes removed - polling used instead
 app.use('/api/nas', nasRoutes);
+app.use('/nas', nasRoutes); // NPM strips /api prefix
 app.use('/api/nas-archive', nasArchiveRoutes);
+app.use('/nas-archive', nasArchiveRoutes); // NPM strips /api prefix
 app.use('/api/files', fileRoutes);
+app.use('/files', fileRoutes); // NPM strips /api prefix
 app.use('/api/metrics', metricsRoutes);
+app.use('/metrics', metricsRoutes); // NPM strips /api prefix
 
 // 404 핸들러
 app.use('*', (req, res) => {

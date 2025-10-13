@@ -59,7 +59,7 @@ const DeploymentDetailModal = ({
       // Jenkins 로그 API 호출 - 프로젝트 이름과 빌드 번호를 사용
       const response = await fetch(`/api/deployments/logs/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
@@ -97,7 +97,7 @@ const DeploymentDetailModal = ({
       console.log('Making fetch request to:', url);
       const response = await fetch(url, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       

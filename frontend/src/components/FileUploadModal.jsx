@@ -29,7 +29,7 @@ const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
       // upload 폴더에 대한 공유 링크 가져오기
       const response = await fetch('/deployments/share/upload', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
 

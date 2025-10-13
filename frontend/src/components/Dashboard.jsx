@@ -275,7 +275,7 @@ const Dashboard = () => {
       // upload 폴더에 대한 공유 링크 가져오기
       const response = await api.get('/deployments/share/upload', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
 

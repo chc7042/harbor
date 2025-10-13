@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/authSimple');
 const { getJenkinsService } = require('../services/jenkinsService');
 const logger = require('../config/logger');
 

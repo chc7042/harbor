@@ -105,6 +105,7 @@ class SimpleJWTUtils {
 
       logger.error('JWT verification failed', {
         requestId, verifyDuration, errorType, errorName: error.name,
+        errorMessage: error.message, tokenLength: token?.length
       });
 
       throw new Error(`Invalid token [${errorType}]: ${error.message}`);
@@ -172,12 +173,14 @@ const authenticateToken = async (req, res, next) => {
     }
 
     if (!token) {
+      logger.warn(`[AUTH-${requestId}] No token found - AuthHeader: ${authHeader ? 'present' : 'missing'}, Query: ${tokenFromQuery ? 'present' : 'missing'}`);
       AuthLogger.logTokenExtraction(requestId, tokenSource, false, 0, 'No token found');
       AuthLogger.logSecurityEvent(requestId, 'AUTH_FAILURE', { reason: 'NO_TOKEN' });
       return res.status(401).json(createErrorResponse('Authentication required', 'AUTH_REQUIRED'));
     }
 
     // Verify the token
+    logger.info(`[AUTH-${requestId}] Token found from ${tokenSource}, length: ${token?.length}, first 10 chars: ${token?.substring(0, 10)}...`);
     const decoded = SimpleJWTUtils.verifyToken(token, requestId);
 
     // Set user information on request object

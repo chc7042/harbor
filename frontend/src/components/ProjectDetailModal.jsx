@@ -64,7 +64,7 @@ const ProjectDetailModal = ({
     try {
       const response = await fetch(`/api/deployments/deployment-info/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
@@ -132,7 +132,7 @@ const ProjectDetailModal = ({
       
       const response = await fetch(`/api/deployments/logs/${jobProjectName}/${deployment.build_number}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       

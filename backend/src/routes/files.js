@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/authSimple');
 const { getNASService } = require('../services/nasService');
 const downloadService = require('../services/downloadService');
 const logger = require('../config/logger');

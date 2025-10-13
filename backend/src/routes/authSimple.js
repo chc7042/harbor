@@ -129,7 +129,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
     const ldapService = getLDAPService();
     const authResult = await ldapService.authenticateUser(username, password);
 
-    if (!authResult.success) {
+    if (!authResult) {
       logger.warn(`[AUTH-${requestId}] LDAP authentication failed for ${username}`);
       auditLog(req, 'LOGIN_FAILED', { 
         username,
@@ -143,7 +143,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
       ));
     }
 
-    const userData = authResult.user;
+    const userData = authResult;
 
     // Check if user exists in database, create if not
     let dbUser = await findOrCreateUser(userData);

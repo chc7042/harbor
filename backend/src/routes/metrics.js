@@ -6,7 +6,7 @@ const {
   resetMetrics,
   getHealthWithMetrics,
 } = require('../controllers/metricsController');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/authSimple');
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
