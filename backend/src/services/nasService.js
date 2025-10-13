@@ -7,7 +7,8 @@ const { AppError } = require('../middleware/error');
  */
 class NASService {
   constructor() {
-    this.synologyApiService = require('./synologyApiService');
+    const SynologyApiService = require('./synologyApiService');
+    this.synologyApiService = new SynologyApiService();
     this.releaseBasePath = process.env.NAS_RELEASE_PATH || 'release_version';
   }
 

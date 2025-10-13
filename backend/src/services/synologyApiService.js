@@ -523,7 +523,7 @@ class SynologyApiService {
   /**
    * 세션 기반 다운로드 URL 생성
    */
-  async createSessionBasedUrl(filePath, _requestId, options = {}) {
+  async createSessionBasedUrl(filePath, requestId, options = {}) {
     if (!this.sessionId) {
       throw new Error('세션이 없습니다.');
     }
@@ -553,7 +553,7 @@ class SynologyApiService {
   /**
    * 공개 다운로드 URL 생성 (세션 없이)
    */
-  async createPublicUrl(filePath, _requestId, _options) {
+  async createPublicUrl(filePath, requestId, _options) {
     const normalizedPath = this.normalizePath(filePath);
 
     // 공개 접근 가능한 URL 패턴들 시도
@@ -586,7 +586,7 @@ class SynologyApiService {
   /**
    * 대안 API URL 생성
    */
-  async createAlternativeUrl(filePath, _requestId, _options) {
+  async createAlternativeUrl(filePath, requestId, _options) {
     const normalizedPath = this.normalizePath(filePath);
 
     // Synology의 다른 API 엔드포인트들 시도
@@ -618,6 +618,11 @@ class SynologyApiService {
 
     if (normalized.startsWith('/nas/release_version/')) {
       normalized = '/' + normalized.replace('/nas/release_version/', '');
+    }
+
+    // /volume1/ 접두어 제거 (Synology API는 공유 폴더명으로 시작)
+    if (normalized.startsWith('/volume1/')) {
+      normalized = normalized.replace('/volume1/', '/');
     }
 
     // 중복 슬래시 제거
@@ -1211,4 +1216,4 @@ class SynologyApiService {
   }
 }
 
-module.exports = new SynologyApiService();
+module.exports = SynologyApiService;

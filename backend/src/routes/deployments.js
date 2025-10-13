@@ -975,7 +975,8 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
 
       const jenkinsService = getJenkinsService();
       const nasService = getNASService();
-      const synologyApiService = require('../services/synologyApiService');
+      const SynologyApiService = require('../services/synologyApiService');
+      const synologyApiService = new SynologyApiService();
 
       try {
         logger.info(`배포 정보 조회 시작 - 프로젝트: ${fullProjectName}, 빌드: ${buildNumber}`);
@@ -1271,7 +1272,8 @@ router.get('/deployment-info/:projectName/:buildNumber',
 
       const jenkinsService = getJenkinsService();
       const nasService = getNASService();
-      const synologyApiService = require('../services/synologyApiService');
+      const SynologyApiService = require('../services/synologyApiService');
+      const synologyApiService = new SynologyApiService();
 
       try {
         logger.info(`배포 정보 조회 시작 (2-segment) - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);

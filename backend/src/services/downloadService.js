@@ -5,7 +5,8 @@ const logger = require('../config/logger');
  */
 class DownloadService {
   constructor() {
-    this.synologyApiService = require('./synologyApiService');
+    const SynologyApiService = require('./synologyApiService');
+    this.synologyApiService = new SynologyApiService();
   }
 
   /**
