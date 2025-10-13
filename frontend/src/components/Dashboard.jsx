@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useWebSocket, useSystemNotifications } from '../hooks/useWebSocket';
-import websocketService from '../services/websocketService';
+import { useDeploymentPolling, useProjectPolling, usePollingStatus } from '../hooks/usePolling';
+import pollingService from '../services/pollingService';
 import Header from './Header';
 import SearchFilter from './SearchFilter';
 import DeploymentTable from './DeploymentTable';
@@ -17,13 +17,14 @@ import { Upload, FolderOpen } from 'lucide-react';
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { isConnected, connectionState } = useWebSocket();
+  // 폴링 상태 관리
+  const { isActive: isPollingActive } = usePollingStatus();
 
-  // 시스템 알림 활성화 (useWebSocket을 공유하여 중복 연결 방지)
-  useSystemNotifications();
-
-  const [deployments, setDeployments] = useState([]);
-  const [projects, setProjects] = useState([]);
+  const [initialDeployments, setInitialDeployments] = useState([]);
+  
+  // 폴링을 사용한 실시간 데이터 업데이트 (배포 데이터는 30초마다, 프로젝트는 1분마다)
+  const { deployments, isPolling: isDeploymentPolling, lastUpdate: deploymentsLastUpdate, refresh: refreshDeployments } = useDeploymentPolling(initialDeployments, 30000);
+  const { projects, isPolling: isProjectPolling, lastUpdate: projectsLastUpdate, refresh: refreshProjects } = useProjectPolling(60000);
   const [loading, setLoading] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
 
@@ -58,81 +59,51 @@ const Dashboard = () => {
   // 뷰 모드 상태 (deployments: 배포이력, projects: 프로젝트 계층)
   const [viewMode, setViewMode] = useState('projects');
 
+  // 초기 데이터 로드
   useEffect(() => {
-    fetchProjects();
+    fetchInitialData();
   }, []);
 
+  // 필터나 페이지네이션 변경 시 배포 데이터 새로고침
   useEffect(() => {
     fetchDeployments();
   }, [currentPage, itemsPerPage, searchTerm, filters, sortConfig]);
 
-  // WebSocket으로 실시간 배포 업데이트 수신
+  // 폴링으로 실시간 업데이트 수신 (배포 상태 변경 감지)
   useEffect(() => {
-    if (!isConnected) return;
-
     const handleDeploymentUpdate = (updatedDeployment) => {
-      if (updatedDeployment && updatedDeployment.id) {
-        setDeployments(prev => 
-          prev.map(deployment => 
-            deployment && deployment.id === updatedDeployment.id ? updatedDeployment : deployment
-          )
-        );
-      }
+      console.log('Deployment update detected:', updatedDeployment);
+      // 폴링 서비스가 자동으로 상태를 업데이트하므로 추가 처리 불필요
     };
 
-    // WebSocket 서비스에서 직접 이벤트 리스닝
-    websocketService.on('deployment_update', handleDeploymentUpdate);
+    const handleStatusChange = (data) => {
+      console.log('Deployment status change detected:', data);
+      // 상태 변경 감지 시 필요한 추가 처리
+    };
+
+    // 폴링 서비스 이벤트 리스닝
+    pollingService.on('deployment_update', handleDeploymentUpdate);
+    pollingService.on('deployment_status_change', handleStatusChange);
 
     return () => {
-      websocketService.off('deployment_update', handleDeploymentUpdate);
+      pollingService.off('deployment_update', handleDeploymentUpdate);
+      pollingService.off('deployment_status_change', handleStatusChange);
     };
-  }, [isConnected]);
-
-  const fetchProjects = useCallback(async () => {
-    try {
-      const response = await api.get('/projects');
-      
-      // API 응답 구조에 맞게 데이터 추출
-      const projectData = response.data?.data || response.data || [];
-      
-      // 프로젝트를 버전 번호 기준으로 내림차순 정렬 (3.0.0, 2.0.0, 1.2.0 순서)
-      const sortedProjects = projectData.sort((a, b) => {
-        // 더 유연한 버전 번호 추출 (1.2, 1.2.0 모두 지원)
-        const versionA = a.name.match(/(\d+)\.(\d+)\.?(\d*)/);
-        const versionB = b.name.match(/(\d+)\.(\d+)\.?(\d*)/);
-        
-        if (versionA && versionB) {
-          const parseVersion = (match) => {
-            return [
-              parseInt(match[1], 10) || 0, // 메이저
-              parseInt(match[2], 10) || 0, // 마이너  
-              parseInt(match[3], 10) || 0  // 패치
-            ];
-          };
-          
-          const vA = parseVersion(versionA);
-          const vB = parseVersion(versionB);
-          
-          // 메이저, 마이너, 패치 버전을 차례로 비교 (내림차순)
-          for (let i = 0; i < 3; i++) {
-            if (vA[i] !== vB[i]) {
-              return vB[i] - vA[i]; // 내림차순
-            }
-          }
-          return 0; // 동일한 버전
-        }
-        
-        // 버전이 없는 경우 이름으로 정렬
-        return b.name.localeCompare(a.name);
-      });
-      
-      setProjects(sortedProjects);
-    } catch (error) {
-      console.error('Failed to fetch projects:', error);
-      toast.error('프로젝트 목록을 불러오는데 실패했습니다.');
-      setProjects([]); // 에러 시 빈 배열로 설정
-    }
   }, []);
+
+  // 초기 데이터 로드 (폴링 시작 전)
+  const fetchInitialData = useCallback(async () => {
+    try {
+      // 초기 배포 데이터 로드
+      await fetchDeployments();
+      
+      // 프로젝트는 폴링이 자동으로 처리하므로 수동 호출
+      await refreshProjects();
+    } catch (error) {
+      console.error('Failed to fetch initial data:', error);
+      toast.error('초기 데이터를 불러오는데 실패했습니다.');
+    }
+  }, [refreshProjects]);
 
   const fetchDeployments = async () => {
     try {
@@ -225,7 +196,7 @@ const Dashboard = () => {
           subJobs: deployment.subJobs || []
         }));
 
-        setDeployments(transformedData);
+        setInitialDeployments(transformedData);
         
         // API 응답에서 페이지네이션 정보 추출
         const pagination = response.data?.pagination;
@@ -237,7 +208,7 @@ const Dashboard = () => {
           setTotalPages(Math.ceil(transformedData.length / itemsPerPage));
         }
       } else {
-        setDeployments([]);
+        setInitialDeployments([]);
         setTotalItems(0);
         setTotalPages(1);
       }
@@ -294,8 +265,8 @@ const Dashboard = () => {
   const handleUploadComplete = useCallback((data) => {
     toast.success(`파일 업로드 완료: ${data.filename}`);
     // 프로젝트 목록 새로고침 (업로드된 파일이 반영될 수 있도록)
-    fetchProjects();
-  }, [fetchProjects]);
+    refreshProjects();
+  }, [refreshProjects]);
 
   const handleOpenSharedFolder = async () => {
     try {
@@ -346,9 +317,22 @@ const Dashboard = () => {
           <h1 className="text-3xl font-bold text-primary-900 mb-2">
             안녕하세요, {user?.name || user?.username}님
           </h1>
-          <p className="text-primary-600">
-            Jenkins NAS 배포 현황을 확인하세요
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-primary-600">
+              Jenkins NAS 배포 현황을 확인하세요
+            </p>
+            <div className="flex items-center text-sm text-gray-500 space-x-4">
+              {isPollingActive && (
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span>실시간 업데이트 활성</span>
+                </div>
+              )}
+              {deploymentsLastUpdate && (
+                <span>마지막 업데이트: {deploymentsLastUpdate.toLocaleTimeString()}</span>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* 뷰 모드 탭 */}

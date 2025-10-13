@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Calendar, User, GitBranch, AlertCircle, CheckCircle, XCircle, Info } from 'lucide-react';
-import { useDeploymentUpdates } from '../hooks/useWebSocket';
+// useDeploymentUpdates 제거 - 폴링으로 대체
 import api from '../services/api';
 
 const DeploymentTimeline = ({ className = '' }) => {
@@ -9,8 +9,12 @@ const DeploymentTimeline = ({ className = '' }) => {
   const [error, setError] = useState(null);
   const [timeRange, setTimeRange] = useState('24h');
 
-  // 실시간 업데이트 적용된 배포 데이터
-  const deployments = useDeploymentUpdates(initialDeployments);
+  // 배포 데이터 (폴링으로 자동 업데이트됨)
+  const [deployments, setDeployments] = useState([]);
+  
+  useEffect(() => {
+    setDeployments(initialDeployments);
+  }, [initialDeployments]);
 
   useEffect(() => {
     fetchRecentDeployments();

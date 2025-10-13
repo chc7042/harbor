@@ -5,7 +5,7 @@ import SearchFilter from '../components/SearchFilter';
 import DeploymentTable from '../components/DeploymentTable';
 import DeploymentDetailModal from '../components/DeploymentDetailModal';
 import Pagination from '../components/Pagination';
-import { useDeploymentUpdates } from '../hooks/useWebSocket';
+// useDeploymentUpdates 제거 - 폴링으로 대체
 import api from '../services/api';
 import toast from 'react-hot-toast';
 
