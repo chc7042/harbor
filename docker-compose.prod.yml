@@ -39,8 +39,10 @@ services:
     container_name: harbor-backend-prod
     restart: unless-stopped
     networks:
-      - harbor-network
-      - nginx-proxy-manager_npm_network
+      harbor-network:
+        ipv4_address: 172.20.0.10
+      nginx-proxy-manager_npm_network:
+        ipv4_address: 172.21.0.10
     ports:
       - "3001:3001"
     environment:
@@ -158,8 +160,10 @@ services:
     container_name: harbor-frontend-prod
     restart: unless-stopped
     networks:
-      - harbor-network
-      - nginx-proxy-manager_npm_network
+      harbor-network:
+        ipv4_address: 172.20.0.11
+      nginx-proxy-manager_npm_network:
+        ipv4_address: 172.21.0.11
     ports:
       - "8080:8080"
     environment:
@@ -194,7 +198,10 @@ networks:
       config:
         - subnet: 172.20.0.0/16
   nginx-proxy-manager_npm_network:
-    external: true
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
 
 volumes:
   postgres_data:
