@@ -518,7 +518,7 @@ const DeploymentDetailModal = ({
                     <div className="flex-1 flex flex-col space-y-3 overflow-hidden">
                       <h4 className="text-sm font-medium text-gray-700 border-b pb-2 flex-shrink-0">배포 파일</h4>
                       <div className="flex-1 overflow-y-auto">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 h-full">
                           {/* 새로운 구조: deploymentInfo.artifacts 사용 (V, MR, FE, BE 타입별 카드) */}
                           {(deploymentInfo?.artifacts) ? 
                           /* deployment-info API에서 제공하는 artifacts 객체를 타입별 카드로 변환 */
@@ -573,9 +573,9 @@ const DeploymentDetailModal = ({
                               </div>
                             </div>
                           ) : (
-                            <div className="text-center py-8 text-gray-500">
-                              <HardDrive className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                              <p>배포 파일을 찾을 수 없습니다</p>
+                            <div className="col-span-full flex flex-col items-center justify-center h-full min-h-[300px] text-gray-500">
+                              <HardDrive className="w-12 h-12 text-gray-300 mb-4" />
+                              <p className="text-center font-noto-sans-kr">배포 파일을 찾을 수 없습니다</p>
                             </div>
                           )}
                         </div>

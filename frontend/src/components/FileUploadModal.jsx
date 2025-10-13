@@ -98,7 +98,7 @@ const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
               </button>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              파일이 업로드될 NAS 경로를 입력하세요. '폴더 열기' 버튼으로 브라우저에서 업로드 폴더를 확인할 수 있습니다.
+              '폴더 열기' 버튼으로 브라우저에서 업로드 폴더를 확인할 수 있습니다.
             </p>
           </div>
 
