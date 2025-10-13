@@ -99,7 +99,8 @@ router.use(authenticateToken);
 router.post('/scan', async (req, res, next) => {
   try {
     const scanner = getNASScanner();
-    const result = await scanner.performFullScan();
+    await scanner.triggerScan();
+    const result = scanner.getStatus();
 
     res.json({
       success: true,
@@ -231,7 +232,8 @@ router.get('/status', (req, res, next) => {
 router.post('/scheduler/start', async (req, res, next) => {
   try {
     const scanner = getNASScanner();
-    const started = scanner.startScheduler();
+    await scanner.start();
+    const started = true;
 
     if (started) {
       res.json({
@@ -279,14 +281,14 @@ router.post('/scheduler/start', async (req, res, next) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/scheduler/stop', (req, res, next) => {
+router.post('/scheduler/stop', async (req, res, next) => {
   try {
     const scanner = getNASScanner();
-    const stopped = scanner.stopScheduler();
+    await scanner.stop();
 
     res.json({
       success: true,
-      message: stopped ? 'NAS scan scheduler stopped' : 'Scheduler was not running',
+      message: 'NAS scan scheduler stopped',
     });
 
   } catch (error) {
@@ -326,14 +328,14 @@ router.post('/scheduler/stop', (req, res, next) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/watcher/start', (req, res, next) => {
+router.post('/watcher/start', async (req, res, next) => {
   try {
     const scanner = getNASScanner();
-    const started = scanner.startFileWatcher();
+    await scanner.start();
 
     res.json({
       success: true,
-      message: started ? 'File watcher started' : 'File watching is disabled or already running',
+      message: 'Polling started (simplified file monitoring)',
     });
 
   } catch (error) {
@@ -373,14 +375,14 @@ router.post('/watcher/start', (req, res, next) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/watcher/stop', (req, res, next) => {
+router.post('/watcher/stop', async (req, res, next) => {
   try {
     const scanner = getNASScanner();
-    scanner.stopFileWatcher();
+    await scanner.stop();
 
     res.json({
       success: true,
-      message: 'File watcher stopped',
+      message: 'Polling stopped (simplified file monitoring)',
     });
 
   } catch (error) {

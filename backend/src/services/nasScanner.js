@@ -1,30 +1,25 @@
 const fs = require('fs-extra');
 const path = require('path');
 const crypto = require('crypto');
-const chokidar = require('chokidar');
-const cron = require('node-cron');
 const { AppError } = require('../middleware/error');
 const logger = require('../config/logger');
 const { query } = require('../config/database');
 
 /**
- * NAS 파일 스캔 시스템
+ * NAS 파일 스캔 시스템 - 단순 폴링 방식
  */
 class NASScanner {
   constructor() {
-    // NAS 스캔 기본 경로 - release_version 경로 사용
+    // NAS 스캔 기본 경로
     const nasReleasePath = process.env.NAS_RELEASE_PATH || 'release_version';
     this.nasBasePath = process.env.NAS_BASE_PATH || `/nas/${nasReleasePath}`;
-    // 개발환경에서는 간단한 스케줄 사용 (실제로는 비활성화됨)
-    this.scanInterval = process.env.NODE_ENV === 'development'
-      ? '0 0 * * *'  // 매일 자정 (개발환경에서는 실행되지 않음)
-      : process.env.NAS_SCAN_INTERVAL || '*/15 * * * *'; // 15분마다
-    this.watchEnabled = process.env.NAS_WATCH_ENABLED !== 'false';
+    // 폴링 간격 (기본: 5분)
+    this.scanInterval = parseInt(process.env.NAS_SCAN_INTERVAL) || 5 * 60 * 1000; // 5분
     this.maxFileSize = parseInt(process.env.NAS_MAX_FILE_SIZE, 10) || 1024 * 1024 * 1024; // 1GB
     this.allowedExtensions = (process.env.NAS_ALLOWED_EXTENSIONS || '.tar.gz,.zip,.jar,.war,.tgz').split(',');
 
     this.isScanning = false;
-    this.watchers = new Map();
+    this.pollingTimer = null;
     this.scanStats = {
       lastScan: null,
       totalFiles: 0,
@@ -32,503 +27,258 @@ class NASScanner {
       errors: 0,
       duration: 0,
     };
-
-    // Mock 기능 비활성화 - 항상 실제 NAS 경로 사용
-    // if (process.env.NODE_ENV === 'development') {
-    //   this.nasBasePath = path.join(__dirname, '../../mock-nas');
-    //   this.ensureMockDirectory();
-    // }
   }
 
   /**
-   * Mock 기능 비활성화됨
+   * NAS 스캐너 시작 - 단순 폴링 시작
    */
-  async ensureMockDirectory() {
-    // Mock 기능 완전 비활성화
-    logger.info('Mock functionality disabled - using real NAS path only');
-  }
-
-  /**
-   * 파일 정보 수집
-   */
-  async collectFileInfo(filePath) {
+  async start() {
     try {
-      const stats = await fs.stat(filePath);
-      const relativePath = path.relative(this.nasBasePath, filePath);
-      const ext = path.extname(filePath);
+      logger.info('Starting NAS Scanner with simple polling', {
+        nasBasePath: this.nasBasePath,
+        scanInterval: `${this.scanInterval / 1000}s`,
+        maxFileSize: `${this.maxFileSize / (1024 * 1024)}MB`,
+        allowedExtensions: this.allowedExtensions,
+      });
 
-      // 허용된 확장자인지 확인
-      if (!this.allowedExtensions.includes(ext)) {
-        return null;
-      }
+      // 초기 스캔 실행
+      await this.performScan();
 
-      // 파일 크기 제한 확인
-      if (stats.size > this.maxFileSize) {
-        logger.warn(`File too large, skipping: ${filePath} (${stats.size} bytes)`);
-        return null;
-      }
+      // 폴링 시작
+      this.startPolling();
 
-      // 파일 해시 계산
-      const hash = await this.calculateFileHash(filePath);
-
-      // 프로젝트명과 빌드 정보 추출 (mr4.0.0 구조 지원)
-      const pathParts = relativePath.split(path.sep);
-      let projectName = 'unknown';
-      
-      // release/product/mr4.0.0/date/build 구조에서 mr4.0.0 추출
-      const mrVersionIndex = pathParts.findIndex(part => part.match(/^mr\d+\.\d+\.\d+$/));
-      if (mrVersionIndex !== -1) {
-        const mrVersion = pathParts[mrVersionIndex]; // mr4.0.0
-        const version = mrVersion.replace('mr', ''); // 4.0.0
-        projectName = `${version}/${mrVersion}_release`; // 4.0.0/mr4.0.0_release 형식
-      } else {
-        // 기존 로직 유지
-        projectName = pathParts[0] || 'unknown';
-      }
-      
-      const fileName = path.basename(filePath);
-
-      // 빌드 번호 추출 - 파일명과 경로에서 모두 시도
-      let buildNumber = null;
-      
-      // 1. 파일명에서 빌드 번호 추출
-      const fileNameBuildMatch = fileName.match(/(?:build|v|version)[-_]?(\d+)/i);
-      if (fileNameBuildMatch) {
-        buildNumber = parseInt(fileNameBuildMatch[1], 10);
-      }
-      
-      // 2. 경로에서 빌드 번호 추출 (mr4.0.0/251013/2 구조에서 마지막 숫자)
-      if (!buildNumber && mrVersionIndex !== -1) {
-        // mr 버전 다음의 경로들에서 숫자만 있는 부분을 빌드 번호로 인식
-        for (let i = mrVersionIndex + 1; i < pathParts.length; i++) {
-          const pathPart = pathParts[i];
-          if (/^\d+$/.test(pathPart)) {
-            buildNumber = parseInt(pathPart, 10);
-            break;
-          }
-        }
-      }
-
-      return {
-        file_path: relativePath,
-        absolute_path: filePath,
-        project_name: projectName,
-        file_name: fileName,
-        file_size: stats.size,
-        file_hash: hash,
-        build_number: buildNumber,
-        file_extension: ext,
-        created_at: stats.birthtime,
-        modified_at: stats.mtime,
-        scanned_at: new Date(),
-      };
-
+      logger.info('NAS Scanner started successfully');
     } catch (error) {
-      logger.error(`Failed to collect file info for ${filePath}:`, error.message);
-      throw error;
+      logger.error('Failed to start NAS Scanner:', error.message);
+      throw new AppError('Failed to start NAS Scanner', 500);
     }
   }
 
   /**
-   * 파일 해시 계산 (SHA-256)
+   * 폴링 시작
    */
-  async calculateFileHash(filePath) {
-    return new Promise((resolve, reject) => {
-      const hash = crypto.createHash('sha256');
-      const stream = fs.createReadStream(filePath);
+  startPolling() {
+    if (this.pollingTimer) {
+      clearInterval(this.pollingTimer);
+    }
 
-      stream.on('data', (data) => hash.update(data));
-      stream.on('end', () => resolve(`sha256:${hash.digest('hex')}`));
-      stream.on('error', reject);
-    });
-  }
-
-  /**
-   * 디렉토리 재귀 스캔
-   */
-  async scanDirectory(dirPath, results = []) {
-    try {
-      const entries = await fs.readdir(dirPath, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name);
-
-        if (entry.isDirectory()) {
-          // 숨김 디렉토리나 시스템 디렉토리 건너뛰기
-          if (entry.name.startsWith('.') || entry.name === 'lost+found') {
-            continue;
-          }
-
-          await this.scanDirectory(fullPath, results);
-        } else if (entry.isFile()) {
-          try {
-            const fileInfo = await this.collectFileInfo(fullPath);
-            if (fileInfo) {
-              results.push(fileInfo);
-            }
-          } catch (error) {
-            logger.error(`Error processing file ${fullPath}:`, error.message);
-            this.scanStats.errors++;
-          }
-        }
+    this.pollingTimer = setInterval(async () => {
+      if (!this.isScanning) {
+        await this.performScan();
       }
+    }, this.scanInterval);
 
-      return results;
-    } catch (error) {
-      logger.error(`Failed to scan directory ${dirPath}:`, error.message);
-      throw error;
-    }
+    logger.info(`Polling started with ${this.scanInterval / 1000}s interval`);
   }
 
   /**
-   * 데이터베이스와 동기화
+   * NAS 스캔 수행
    */
-  async syncToDatabase(fileInfoList) {
-    if (process.env.NODE_ENV === 'development') {
-      logger.info(`Would sync ${fileInfoList.length} files to database (dev mode)`);
-      return fileInfoList.length;
-    }
-
-    try {
-      let syncedCount = 0;
-
-      for (const fileInfo of fileInfoList) {
-        try {
-          // 기존 파일 정보 확인
-          const existingFile = await this.findExistingFile(fileInfo.file_path);
-
-          if (existingFile) {
-            // 파일이 변경된 경우에만 업데이트
-            if (existingFile.file_hash !== fileInfo.file_hash ||
-                existingFile.file_size !== fileInfo.file_size) {
-              await this.updateFileInfo(existingFile.id, fileInfo);
-              syncedCount++;
-            }
-          } else {
-            // 새 파일 정보 저장
-            await this.insertFileInfo(fileInfo);
-            syncedCount++;
-          }
-        } catch (error) {
-          logger.error(`Failed to sync file ${fileInfo.file_path}:`, error.message);
-          this.scanStats.errors++;
-        }
-      }
-
-      return syncedCount;
-    } catch (error) {
-      logger.error('Database sync failed:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * 기존 파일 정보 찾기
-   */
-  async findExistingFile(filePath) {
-    const selectQuery = `
-      SELECT * FROM nas_files
-      WHERE file_path = $1
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-
-    const result = await query(selectQuery, [filePath]);
-    return result.rows[0] || null;
-  }
-
-  /**
-   * 파일 정보 저장
-   */
-  async insertFileInfo(fileInfo) {
-    const insertQuery = `
-      INSERT INTO nas_files (
-        file_path, project_name, file_name, file_size, file_hash,
-        build_number, file_extension, created_at, modified_at, scanned_at
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-      ) RETURNING id
-    `;
-
-    const values = [
-      fileInfo.file_path,
-      fileInfo.project_name,
-      fileInfo.file_name,
-      fileInfo.file_size,
-      fileInfo.file_hash,
-      fileInfo.build_number,
-      fileInfo.file_extension,
-      fileInfo.created_at,
-      fileInfo.modified_at,
-      fileInfo.scanned_at,
-    ];
-
-    const result = await query(insertQuery, values);
-    return result.rows[0].id;
-  }
-
-  /**
-   * 파일 정보 업데이트
-   */
-  async updateFileInfo(fileId, fileInfo) {
-    const updateQuery = `
-      UPDATE nas_files SET
-        file_size = $1,
-        file_hash = $2,
-        modified_at = $3,
-        scanned_at = $4
-      WHERE id = $5
-    `;
-
-    await query(updateQuery, [
-      fileInfo.file_size,
-      fileInfo.file_hash,
-      fileInfo.modified_at,
-      fileInfo.scanned_at,
-      fileId,
-    ]);
-  }
-
-  /**
-   * 전체 스캔 실행
-   */
-  async performFullScan() {
+  async performScan() {
     if (this.isScanning) {
-      throw new AppError('Scan already in progress', 409);
+      logger.warn('Scan already in progress, skipping');
+      return;
     }
 
-    this.isScanning = true;
     const startTime = Date.now();
+    this.isScanning = true;
 
     try {
-      logger.info(`Starting NAS scan: ${this.nasBasePath}`);
+      logger.info('Starting NAS scan', { path: this.nasBasePath });
 
-      // NAS 디렉토리 존재 확인
+      // NAS 경로 존재 확인
       if (!await fs.pathExists(this.nasBasePath)) {
-        throw new AppError(`NAS directory not found: ${this.nasBasePath}`, 404);
+        logger.warn(`NAS path does not exist: ${this.nasBasePath}`);
+        return;
       }
 
-      // 스캔 통계 초기화
-      this.scanStats = {
-        lastScan: new Date(),
+      const stats = {
         totalFiles: 0,
         processedFiles: 0,
         errors: 0,
-        duration: 0,
       };
 
-      // 디렉토리 스캔
-      const fileInfoList = await this.scanDirectory(this.nasBasePath);
-      this.scanStats.totalFiles = fileInfoList.length;
+      await this.scanDirectory(this.nasBasePath, stats);
 
-      // 데이터베이스 동기화
-      const syncedCount = await this.syncToDatabase(fileInfoList);
-      this.scanStats.processedFiles = syncedCount;
-
-      // 통계 업데이트
-      this.scanStats.duration = Date.now() - startTime;
-
-      logger.info(`NAS scan completed: ${syncedCount}/${fileInfoList.length} files processed in ${this.scanStats.duration}ms`);
-
-      return {
-        success: true,
-        stats: this.scanStats,
-        files: fileInfoList.slice(0, 10), // 처음 10개 파일만 반환
+      const duration = Date.now() - startTime;
+      this.scanStats = {
+        lastScan: new Date(),
+        totalFiles: stats.totalFiles,
+        processedFiles: stats.processedFiles,
+        errors: stats.errors,
+        duration,
       };
+
+      logger.info('NAS scan completed', {
+        duration: `${duration}ms`,
+        totalFiles: stats.totalFiles,
+        processedFiles: stats.processedFiles,
+        errors: stats.errors,
+      });
 
     } catch (error) {
       logger.error('NAS scan failed:', error.message);
-      throw error;
+      this.scanStats.errors++;
     } finally {
       this.isScanning = false;
     }
   }
 
   /**
-   * 스케줄러 시작
+   * 디렉토리 스캔
    */
-  startScheduler() {
-    // 개발환경에서는 스케줄러 비활성화
-    if (process.env.NODE_ENV === 'development') {
-      logger.info('NAS scanner scheduler disabled in development mode');
-      return;
-    }
-
-    if (!cron.validate(this.scanInterval)) {
-      throw new AppError(`Invalid cron expression: ${this.scanInterval}`, 400);
-    }
-
-    logger.info(`Starting NAS scan scheduler: ${this.scanInterval}`);
-
-    this.schedulerTask = cron.schedule(this.scanInterval, async () => {
-      try {
-        logger.info('Scheduled NAS scan starting...');
-        await this.performFullScan();
-      } catch (error) {
-        logger.error('Scheduled scan failed:', error.message);
-      }
-    }, {
-      scheduled: false,
-    });
-
-    this.schedulerTask.start();
-    return true;
-  }
-
-  /**
-   * 스케줄러 중지
-   */
-  stopScheduler() {
-    if (this.schedulerTask) {
-      this.schedulerTask.stop();
-      logger.info('NAS scan scheduler stopped');
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * 실시간 파일 감시 시작
-   */
-  startFileWatcher() {
-    if (!this.watchEnabled) {
-      logger.info('File watching is disabled');
-      return false;
-    }
-
+  async scanDirectory(dirPath, stats) {
     try {
-      logger.info(`Starting file watcher: ${this.nasBasePath}`);
+      const items = await fs.readdir(dirPath);
 
-      const watcher = chokidar.watch(this.nasBasePath, {
-        ignored: /(^|[\/\\])\../, // 숨김 파일 무시
-        persistent: true,
-        ignoreInitial: true,
-        followSymlinks: false,
-        depth: 10,
-      });
+      for (const item of items) {
+        const fullPath = path.join(dirPath, item);
 
-      watcher
-        .on('add', (filePath) => this.handleFileAdd(filePath))
-        .on('change', (filePath) => this.handleFileChange(filePath))
-        .on('unlink', (filePath) => this.handleFileDelete(filePath))
-        .on('error', (error) => logger.error('File watcher error:', error));
+        try {
+          const stat = await fs.stat(fullPath);
 
-      this.watchers.set('main', watcher);
-      return true;
-
-    } catch (error) {
-      logger.error('Failed to start file watcher:', error.message);
-      return false;
-    }
-  }
-
-  /**
-   * 파일 추가 처리
-   */
-  async handleFileAdd(filePath) {
-    try {
-      logger.info(`File added: ${filePath}`);
-      const fileInfo = await this.collectFileInfo(filePath);
-
-      if (fileInfo) {
-        await this.syncToDatabase([fileInfo]);
-        logger.info(`File indexed: ${fileInfo.file_path}`);
+          if (stat.isDirectory()) {
+            await this.scanDirectory(fullPath, stats);
+          } else if (stat.isFile()) {
+            stats.totalFiles++;
+            await this.processFile(fullPath, stat, stats);
+          }
+        } catch (error) {
+          logger.warn(`Failed to process ${fullPath}:`, error.message);
+          stats.errors++;
+        }
       }
     } catch (error) {
-      logger.error(`Failed to handle file add ${filePath}:`, error.message);
+      logger.error(`Failed to scan directory ${dirPath}:`, error.message);
+      stats.errors++;
     }
   }
 
   /**
-   * 파일 변경 처리
+   * 파일 처리
    */
-  async handleFileChange(filePath) {
+  async processFile(filePath, stat, stats) {
     try {
-      logger.info(`File changed: ${filePath}`);
-      const fileInfo = await this.collectFileInfo(filePath);
-
-      if (fileInfo) {
-        await this.syncToDatabase([fileInfo]);
-        logger.info(`File updated: ${fileInfo.file_path}`);
+      // 파일 크기 체크
+      if (stat.size > this.maxFileSize) {
+        logger.debug(`File too large, skipping: ${filePath}`);
+        return;
       }
+
+      // 확장자 체크
+      if (!this.allowedExtensions.some(allowed => filePath.toLowerCase().endsWith(allowed.toLowerCase()))) {
+        return;
+      }
+
+      // 파일 해시 계산
+      const hash = await this.calculateFileHash(filePath);
+
+      // 데이터베이스에 저장 또는 업데이트
+      await this.saveFileInfo(filePath, stat, hash);
+
+      stats.processedFiles++;
+
+      logger.debug(`Processed file: ${filePath}`);
     } catch (error) {
-      logger.error(`Failed to handle file change ${filePath}:`, error.message);
+      logger.warn(`Failed to process file ${filePath}:`, error.message);
+      stats.errors++;
     }
   }
 
   /**
-   * 파일 삭제 처리
+   * 파일 해시 계산
    */
-  async handleFileDelete(filePath) {
-    if (process.env.NODE_ENV === 'development') {
-      logger.info(`File deleted (dev mode): ${filePath}`);
-      return;
-    }
+  async calculateFileHash(filePath) {
+    try {
+      const hash = crypto.createHash('sha256');
+      const stream = fs.createReadStream(filePath);
 
+      for await (const chunk of stream) {
+        hash.update(chunk);
+      }
+
+      return hash.digest('hex');
+    } catch (error) {
+      logger.warn(`Failed to calculate hash for ${filePath}:`, error.message);
+      return null;
+    }
+  }
+
+  /**
+   * 파일 정보를 데이터베이스에 저장
+   */
+  async saveFileInfo(filePath, stat, hash) {
     try {
       const relativePath = path.relative(this.nasBasePath, filePath);
 
-      const deleteQuery = `
-        UPDATE nas_files
-        SET deleted_at = CURRENT_TIMESTAMP
-        WHERE file_path = $1 AND deleted_at IS NULL
-      `;
+      await query(`
+        INSERT INTO nas_files (file_path, size, modified_time, hash, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, NOW(), NOW())
+        ON CONFLICT (file_path) 
+        DO UPDATE SET 
+          size = EXCLUDED.size,
+          modified_time = EXCLUDED.modified_time,
+          hash = EXCLUDED.hash,
+          updated_at = NOW()
+        WHERE nas_files.hash != EXCLUDED.hash OR nas_files.modified_time != EXCLUDED.modified_time
+      `, [relativePath, stat.size, stat.mtime, hash]);
 
-      await query(deleteQuery, [relativePath]);
-      logger.info(`File marked as deleted: ${relativePath}`);
     } catch (error) {
-      logger.error(`Failed to handle file delete ${filePath}:`, error.message);
+      logger.error(`Failed to save file info for ${filePath}:`, error.message);
+      throw error;
     }
   }
 
   /**
-   * 파일 감시 중지
+   * NAS 스캐너 중지
    */
-  stopFileWatcher() {
-    for (const [key, watcher] of this.watchers) {
-      watcher.close();
-      logger.info(`File watcher stopped: ${key}`);
+  async stop() {
+    try {
+      if (this.pollingTimer) {
+        clearInterval(this.pollingTimer);
+        this.pollingTimer = null;
+      }
+
+      logger.info('NAS Scanner stopped');
+    } catch (error) {
+      logger.error('Failed to stop NAS Scanner:', error.message);
     }
-    this.watchers.clear();
   }
 
   /**
-   * 스캔 상태 조회
+   * 스캐너 상태 조회
    */
   getStatus() {
     return {
+      isRunning: !!this.pollingTimer,
       isScanning: this.isScanning,
+      scanInterval: `${this.scanInterval / 1000}s`,
       nasBasePath: this.nasBasePath,
-      watchEnabled: this.watchEnabled,
-      schedulerRunning: this.schedulerTask && this.schedulerTask.running,
-      scanInterval: this.scanInterval,
-      stats: this.scanStats,
-      watchers: Array.from(this.watchers.keys()),
-      config: {
-        maxFileSize: this.maxFileSize,
-        allowedExtensions: this.allowedExtensions,
-      },
+      lastScan: this.scanStats.lastScan,
+      totalFiles: this.scanStats.totalFiles,
+      processedFiles: this.scanStats.processedFiles,
+      errors: this.scanStats.errors,
+      lastScanDuration: `${this.scanStats.duration}ms`,
     };
   }
 
   /**
-   * 서비스 정리
+   * 수동 스캔 트리거
    */
-  cleanup() {
-    this.stopScheduler();
-    this.stopFileWatcher();
-    logger.info('NAS Scanner cleanup completed');
+  async triggerScan() {
+    logger.info('Manual scan triggered');
+    await this.performScan();
   }
 }
 
 // 싱글톤 인스턴스
-let nasScanner = null;
+let nasScannerInstance = null;
 
 function getNASScanner() {
-  if (!nasScanner) {
-    nasScanner = new NASScanner();
+  if (!nasScannerInstance) {
+    nasScannerInstance = new NASScanner();
   }
-  return nasScanner;
+  return nasScannerInstance;
 }
 
 module.exports = {

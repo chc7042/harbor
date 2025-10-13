@@ -13,7 +13,7 @@ class MetricsService {
 
   recordRequest(success = true) {
     this.metrics.totalRequests++;
-    
+
     if (success) {
       this.metrics.successfulRequests++;
     } else {
@@ -30,7 +30,7 @@ class MetricsService {
 
   recordError(errorType = 'unknown') {
     this.metrics.failedRequests++;
-    
+
     logger.error('Metrics: Error recorded', {
       errorType,
       totalErrors: this.metrics.failedRequests,

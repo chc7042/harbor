@@ -68,7 +68,7 @@ class SimpleJWTUtils {
         iat: Math.floor(Date.now() / 1000),
       },
       secret,
-      { expiresIn }
+      { expiresIn },
     );
   }
 
@@ -82,7 +82,7 @@ class SimpleJWTUtils {
     try {
       const decoded = jwt.verify(token, secret);
       const verifyDuration = Date.now() - startTime;
-      
+
       logger.debug(`[AUTH-${requestId}] Token verification successful`, {
         userId: decoded.userId,
         username: decoded.username,
@@ -105,7 +105,7 @@ class SimpleJWTUtils {
 
       logger.error('JWT verification failed', {
         requestId, verifyDuration, errorType, errorName: error.name,
-        errorMessage: error.message, tokenLength: token?.length
+        errorMessage: error.message, tokenLength: token?.length,
       });
 
       throw new Error(`Invalid token [${errorType}]: ${error.message}`);
@@ -151,7 +151,7 @@ const authenticateToken = async (req, res, next) => {
       req.method,
       req.originalUrl,
       req.ip,
-      req.get('User-Agent')
+      req.get('User-Agent'),
     );
 
     // Try to extract token from Authorization header first
@@ -199,7 +199,7 @@ const authenticateToken = async (req, res, next) => {
     next();
   } catch (error) {
     const authDuration = Date.now() - startTime;
-    
+
     logger.error('Authentication failed', error.message);
     AuthLogger.logTokenValidation(requestId, false, null, error.message, authDuration);
     AuthLogger.logSecurityEvent(requestId, 'AUTH_FAILURE', { error: error.message });

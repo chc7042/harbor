@@ -115,7 +115,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
       return res.status(400).json(createErrorResponse(
         '입력값이 올바르지 않습니다.',
         'VALIDATION_ERROR',
-        { errors: errors.array() }
+        { errors: errors.array() },
       ));
     }
 
@@ -131,7 +131,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
 
     if (!authResult) {
       logger.warn(`[AUTH-${requestId}] LDAP authentication failed for ${username}`);
-      auditLog(req, 'LOGIN_FAILED', { 
+      auditLog(req, 'LOGIN_FAILED', {
         username,
         reason: 'INVALID_CREDENTIALS',
         ip: clientIP,
@@ -139,14 +139,14 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
 
       return res.status(401).json(createErrorResponse(
         '사용자명 또는 비밀번호가 올바르지 않습니다.',
-        'INVALID_CREDENTIALS'
+        'INVALID_CREDENTIALS',
       ));
     }
 
     const userData = authResult;
 
     // Check if user exists in database, create if not
-    let dbUser = await findOrCreateUser(userData);
+    const dbUser = await findOrCreateUser(userData);
 
     // Generate single JWT token
     const tokenPayload = {
@@ -162,11 +162,11 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
     const expiresIn = SimpleJWTUtils.getExpirationTime();
 
     const authDuration = Date.now() - startTime;
-    
+
     logger.info(`User ${username} authenticated successfully in ${authDuration}ms`);
     logger.info(`User ${username} logged in successfully`);
 
-    auditLog(req, 'LOGIN_SUCCESS', { 
+    auditLog(req, 'LOGIN_SUCCESS', {
       username,
       userId: dbUser.id,
       ip: clientIP,
@@ -190,8 +190,8 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
   } catch (error) {
     const authDuration = Date.now() - startTime;
     logger.error(`[AUTH-${requestId}] Login error:`, error);
-    
-    auditLog(req, 'LOGIN_ERROR', { 
+
+    auditLog(req, 'LOGIN_ERROR', {
       username: req.body?.username,
       error: error.message,
       duration: authDuration,
@@ -199,7 +199,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
 
     res.status(500).json(createErrorResponse(
       '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
-      'INTERNAL_SERVER_ERROR'
+      'INTERNAL_SERVER_ERROR',
     ));
   }
 });
@@ -222,7 +222,7 @@ router.post('/logout', authenticateToken, async (req, res) => {
   const requestId = Math.random().toString(36).substring(7);
 
   logger.info(`User ${req.user.username} logged out`);
-  auditLog(req, 'LOGOUT_SUCCESS', { 
+  auditLog(req, 'LOGOUT_SUCCESS', {
     userId: req.user.userId,
     username: req.user.username,
   });

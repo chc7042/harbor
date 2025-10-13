@@ -74,14 +74,14 @@ class JenkinsService {
           const filteredJobs = folderJobs.filter(job => {
             const jobName = job.name.toLowerCase();
             const folderName = folder.name.toLowerCase();
-            
+
             // 일반 버전 프로젝트 (1.2.0, 2.0.0, 3.0.0, 4.0.0 등)
             const versionPattern = /^\d+\.\d+\.\d+$/;
             if (versionPattern.test(folderName)) {
               // 일반 버전 프로젝트의 모든 작업 포함
               return true;
             }
-            
+
             // mr/fs 프로젝트의 release 작업들
             const releasePattern = /^(mr|fs)\d+\.\d+\.\d+_release$/;
             return releasePattern.test(jobName);

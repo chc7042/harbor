@@ -285,28 +285,11 @@ function initializeNASScanner(dbConnected) {
       logger.info('Starting NAS scanner initialization...');
       const nasScanner = getNASScanner();
 
-
-      // 파일 감시 시작 (개발환경에서도 활성화)
-      if (process.env.NAS_WATCH_ENABLED !== 'false') {
+      // 간소화된 폴링 방식으로 시작 (DB 연결이 필요)
+      if (dbConnected) {
         try {
-          const watcherStarted = nasScanner.startFileWatcher();
-          if (watcherStarted) {
-            logger.info('NAS file watcher started');
-          } else {
-            logger.warn('NAS file watcher failed to start');
-          }
-        } catch (watchError) {
-          logger.error('NAS file watcher initialization failed:', watchError.message);
-        }
-      }
-
-      // 스케줄러 시작 (개발환경에서는 비활성화, DB 연결 필요)
-      if (process.env.NAS_SCHEDULER_ENABLED !== 'false' &&
-          process.env.NODE_ENV !== 'development' &&
-          dbConnected) {
-        try {
-          nasScanner.startScheduler();
-          logger.info('NAS scan scheduler started');
+          await nasScanner.start();
+          logger.info('NAS scanner started with simple polling');
         } catch (schedulerError) {
           logger.error('NAS scheduler initialization failed:', schedulerError.message);
         }
@@ -328,16 +311,14 @@ function gracefulShutdown(signal) {
   // WebSocket 서버 정리 제거 - 폴링에서는 불필요
   logger.info('폴링 기반 서비스 종료...');
 
-  if (process.env.NODE_ENV !== 'development') {
-    try {
-      // NAS 스캐너 정리
-      const { getNASScanner } = require('./services/nasScanner');
-      const nasScanner = getNASScanner();
-      nasScanner.cleanup();
-      logger.info('NAS scanner cleanup completed');
-    } catch (error) {
-      logger.error('NAS scanner cleanup failed:', error.message);
-    }
+  try {
+    // NAS 스캐너 정리
+    const { getNASScanner } = require('./services/nasScanner');
+    const nasScanner = getNASScanner();
+    await nasScanner.stop();
+    logger.info('NAS scanner stopped');
+  } catch (error) {
+    logger.error('NAS scanner stop failed:', error.message);
   }
 
   process.exit(0);
