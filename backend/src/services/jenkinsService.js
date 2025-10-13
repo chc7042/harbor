@@ -512,7 +512,6 @@ class JenkinsService {
     const startTime = Date.now();
     const requestId = `${jobName}#${buildNumber}-${Date.now()}`;
     const metricsService = getMetricsService();
-    const requestData = metricsService.recordDeploymentExtractionStart(jobName, buildNumber);
 
     try {
       logger.info(`[${requestId}] Starting deployment info extraction for ${jobName}#${buildNumber}`, {
@@ -529,7 +528,7 @@ class JenkinsService {
       const cacheTime = Date.now() - cacheStartTime;
 
       if (cachedPath) {
-        metricsService.recordCacheHit(cacheTime);
+        // Cache hit
         logger.info(`[${requestId}] Cache hit - found cached deployment path`, {
           step: 'cache_hit',
           nasPath: cachedPath.nasPath,
@@ -538,7 +537,7 @@ class JenkinsService {
           totalTime: `${Date.now() - startTime}ms`,
         });
 
-        metricsService.recordDeploymentExtractionComplete(requestData, { success: true });
+        metricsService.recordRequest(true);
 
         // Record success for alerting
         const alertingService = getAlertingService();
@@ -547,7 +546,7 @@ class JenkinsService {
         return cachedPath;
       }
 
-      metricsService.recordCacheMiss(cacheTime);
+      // Cache miss
       logger.debug(`[${requestId}] Cache miss - proceeding to dynamic path detection`, {
         step: 'cache_miss',
         cacheResponseTime: `${cacheTime}ms`,
@@ -560,8 +559,7 @@ class JenkinsService {
       const apiTime = Date.now() - apiStartTime;
 
       if (!buildTimestamp) {
-        metricsService.recordApiCall(apiTime, false);
-        metricsService.recordLegacyFallback(Date.now() - startTime, 'jenkins_api_failed');
+        metricsService.recordError('api');
         logger.warn(`[${requestId}] Jenkins API failed - falling back to build log extraction`, {
           step: 'jenkins_api_failed',
           apiResponseTime: `${apiTime}ms`,
@@ -569,7 +567,7 @@ class JenkinsService {
         });
 
         const legacyResult = await this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
-        metricsService.recordDeploymentExtractionComplete(requestData, { success: !!legacyResult });
+        metricsService.recordRequest(!!legacyResult);
 
         // Record alerting data for Jenkins API failure fallback
         const alertingService = getAlertingService();
@@ -588,7 +586,7 @@ class JenkinsService {
         return legacyResult;
       }
 
-      metricsService.recordApiCall(apiTime, true);
+      // API call success
 
       logger.debug(`[${requestId}] Build timestamp extracted successfully`, {
         step: 'jenkins_api_success',
@@ -602,10 +600,10 @@ class JenkinsService {
       const pathCandidates = await this.generateNASPathCandidates(jobName, buildNumber, buildTimestamp);
       const pathGenTime = Date.now() - pathGenStartTime;
 
-      metricsService.recordPathGeneration(pathGenTime, pathCandidates.length);
+      // Path generation complete
 
       if (pathCandidates.length === 0) {
-        metricsService.recordLegacyFallback(Date.now() - startTime, 'no_path_candidates');
+        metricsService.recordError('path_generation');
         logger.warn(`[${requestId}] No path candidates generated - falling back to build log extraction`, {
           step: 'path_generation_failed',
           candidateCount: 0,
@@ -613,7 +611,7 @@ class JenkinsService {
         });
 
         const legacyResult = await this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
-        metricsService.recordDeploymentExtractionComplete(requestData, { success: !!legacyResult });
+        metricsService.recordRequest(!!legacyResult);
 
         // Record alerting data for path generation failure fallback
         const alertingService = getAlertingService();
@@ -646,8 +644,7 @@ class JenkinsService {
       const nasTime = Date.now() - nasStartTime;
 
       if (!verifiedPath) {
-        metricsService.recordNasVerification(nasTime, pathCandidates.length, 0);
-        metricsService.recordLegacyFallback(Date.now() - startTime, 'nas_verification_failed');
+        metricsService.recordError('nas_verification');
         logger.warn(`[${requestId}] NAS verification failed - falling back to build log extraction`, {
           step: 'nas_verification_failed',
           nasResponseTime: `${nasTime}ms`,
@@ -656,7 +653,7 @@ class JenkinsService {
         });
 
         const legacyResult = await this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
-        metricsService.recordDeploymentExtractionComplete(requestData, { success: !!legacyResult });
+        metricsService.recordRequest(!!legacyResult);
 
         // Record alerting data for NAS verification failure fallback
         const alertingService = getAlertingService();
@@ -675,7 +672,7 @@ class JenkinsService {
         return legacyResult;
       }
 
-      metricsService.recordNasVerification(nasTime, pathCandidates.length, 1);
+      // NAS verification success
       logger.debug(`[${requestId}] NAS path verified successfully`, {
         step: 'nas_verification_success',
         verifiedPath: verifiedPath.nasPath,
@@ -690,7 +687,7 @@ class JenkinsService {
       try {
         await this.saveDeploymentPathToCache(jobName, buildNumber, buildTimestamp, verifiedPath);
         const saveTime = Date.now() - saveStartTime;
-        metricsService.recordDbSave(saveTime, true);
+        // Database save success
 
         const totalTime = Date.now() - startTime;
         logger.info(`[${requestId}] Successfully extracted deployment info`, {
@@ -709,7 +706,7 @@ class JenkinsService {
           pathCandidatesGenerated: pathCandidates.length,
         });
 
-        metricsService.recordDeploymentExtractionComplete(requestData, { success: true });
+        metricsService.recordRequest(true);
 
         // Record success for alerting
         const alertingService = getAlertingService();
@@ -718,21 +715,20 @@ class JenkinsService {
         return verifiedPath;
       } catch (saveError) {
         const saveTime = Date.now() - saveStartTime;
-        metricsService.recordDbSave(saveTime, false);
+        metricsService.recordError('db');
         logger.warn(`[${requestId}] Failed to save to cache, but continuing with result`, {
           step: 'cache_save_failed',
           error: saveError.message,
           saveTime: `${saveTime}ms`,
         });
 
-        metricsService.recordDeploymentExtractionComplete(requestData, { success: true });
+        metricsService.recordRequest(true);
         return verifiedPath;
       }
 
     } catch (error) {
       const totalTime = Date.now() - startTime;
-      metricsService.recordError('unknown', totalTime);
-      metricsService.recordLegacyFallback(totalTime, 'exception_caught');
+      metricsService.recordError('unknown');
 
       logger.error(`[${requestId}] Error in deployment info extraction - falling back to legacy method`, {
         step: 'error_fallback',
@@ -744,7 +740,7 @@ class JenkinsService {
 
       // 새로운 방식 실패 시 기존 방식으로 폴백
       const legacyResult = await this.extractDeploymentInfoFromBuildLog(jobName, buildNumber);
-      metricsService.recordDeploymentExtractionComplete(requestData, { success: !!legacyResult });
+      metricsService.recordRequest(!!legacyResult);
 
       // Record alerting data for exception fallback
       const alertingService = getAlertingService();

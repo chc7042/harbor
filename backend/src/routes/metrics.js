@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const {
   getMetrics,
-  getDetailedMetrics,
   resetMetrics,
   getHealthWithMetrics,
 } = require('../controllers/metricsController');
@@ -14,8 +13,6 @@ router.use(authenticateToken);
 // GET /api/metrics - Get metrics summary
 router.get('/', getMetrics);
 
-// GET /api/metrics/detailed - Get detailed metrics
-router.get('/detailed', getDetailedMetrics);
 
 // GET /api/metrics/health - Get health status with metrics
 router.get('/health', getHealthWithMetrics);

@@ -1,5 +1,4 @@
 const logger = require('../config/logger');
-const { getMetricsService } = require('./metricsService');
 const { getDeploymentPathService } = require('./deploymentPathService');
 
 /**
