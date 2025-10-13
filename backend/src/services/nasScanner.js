@@ -31,42 +31,19 @@ class NASScanner {
       duration: 0,
     };
 
-    // 개발환경에서는 실제 NAS 경로 대신 mock 경로 사용
-    if (process.env.NODE_ENV === 'development') {
-      this.nasBasePath = path.join(__dirname, '../../mock-nas');
-      this.ensureMockDirectory();
-    }
+    // Mock 기능 비활성화 - 항상 실제 NAS 경로 사용
+    // if (process.env.NODE_ENV === 'development') {
+    //   this.nasBasePath = path.join(__dirname, '../../mock-nas');
+    //   this.ensureMockDirectory();
+    // }
   }
 
   /**
-   * 개발환경 mock 디렉토리 생성
+   * Mock 기능 비활성화됨
    */
   async ensureMockDirectory() {
-    try {
-      await fs.ensureDir(this.nasBasePath);
-
-      // 샘플 파일들 생성
-      const sampleProjects = ['harbor-frontend', 'harbor-backend', 'mobile-app'];
-      for (const project of sampleProjects) {
-        const projectDir = path.join(this.nasBasePath, project);
-        await fs.ensureDir(projectDir);
-
-        // 샘플 배포 파일들 생성
-        for (let i = 1; i <= 3; i++) {
-          const fileName = `build-${i}.tar.gz`;
-          const filePath = path.join(projectDir, fileName);
-
-          if (!await fs.pathExists(filePath)) {
-            const content = `Mock deployment file for ${project} build ${i}\nCreated: ${new Date().toISOString()}`;
-            await fs.writeFile(filePath, content);
-          }
-        }
-      }
-
-      logger.info(`Mock NAS directory initialized: ${this.nasBasePath}`);
-    } catch (error) {
-      logger.error('Failed to create mock NAS directory:', error.message);
-    }
+    // Mock 기능 완전 비활성화
+    logger.info('Mock functionality disabled - using real NAS path only');
   }
 
   /**

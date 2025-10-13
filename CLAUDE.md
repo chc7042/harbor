@@ -109,35 +109,86 @@ Key tables managed via migrations in `/database/migrations/`:
 
 **Backend (.env)**:
 ```bash
-# Database
+# 데이터베이스 설정 (프로덕션)
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=jenkins_nas_deployment
-DB_USER=postgres
-DB_PASSWORD=password
+DB_NAME=harbor_prod
+DB_USER=harbor_user
+DB_PASSWORD=harbor_production_password_2024
+DB_SSL=false
 
-# JWT Authentication
-JWT_SECRET=your-super-secret-jwt-key
-JWT_REFRESH_SECRET=your-refresh-secret
-JWT_EXPIRES_IN=1h
-JWT_REFRESH_EXPIRES_IN=8h
+# JWT 설정
+JWT_SECRET=dev-super-secret-jwt-key-for-development-only
+JWT_EXPIRES_IN=24h
+JWT_REFRESH_SECRET=dev-super-secret-refresh-token-key
+JWT_REFRESH_EXPIRES_IN=7d
 
-# LDAP Configuration
-LDAP_URL=ldap://your-ldap-server:389
-LDAP_BIND_DN=cn=admin,dc=company,dc=com
-LDAP_BIND_CREDENTIALS=ldap-password
-LDAP_SEARCH_BASE=ou=users,dc=company,dc=com
+# LDAP 설정 (실제 LDAP 서버)
+LDAP_URL=ldap://172.30.1.97:389
+LDAP_BIND_DN=cn=admin,dc=roboetech,dc=com
+LDAP_BIND_CREDENTIALS=admin
+LDAP_SEARCH_BASE=ou=users,dc=roboetech,dc=com
+LDAP_SEARCH_FILTER=(|(uid={{username}})(cn={{username}}))
+LDAP_TIMEOUT=30000
+LDAP_CONNECT_TIMEOUT=15000
+LDAP_ATTR_USERNAME=uid
+LDAP_ATTR_EMAIL=mail
+LDAP_ATTR_FULL_NAME=cn
+LDAP_ATTR_DEPARTMENT=ou
+# 기본 이메일 도메인 (LDAP에서 이메일을 찾지 못할 때 사용)
+LDAP_DEFAULT_EMAIL_DOMAIN=roboetech.com
 
-# Server Configuration
-BACKEND_PORT=3001            # Backend API port
+# LDAP Mock/Default 설정
+LDAP_DN_TEMPLATE=uid={{username}},ou=users,dc=roboetech,dc=com
+LDAP_DEFAULT_DEPARTMENT_FALLBACK=Development
+LDAP_DEFAULT_DEPARTMENT=Unknown
+LDAP_GROUP_BASE=ou=groups,dc=roboetech,dc=com
+
+# 서버 설정
+BACKEND_PORT=3001
 NODE_ENV=development
-FRONTEND_URL=http://localhost:5173
+CORS_ORIGIN=https://harbor.roboetech.com
+FRONTEND_URL=https://harbor.roboetech.com
+
+# NAS 설정
+NAS_HOST=nas.roboetech.com
+NAS_SHARE=version_release
+NAS_USERNAME=nasadmin
+NAS_PASSWORD=Cmtes123
+NAS_DOMAIN=
+NAS_RELEASE_PATH=
+NAS_SCAN_INTERVAL=300000
+
+# Synology API 설정
+SYNOLOGY_BASE_URL=https://nas.roboetech.com:5001
+SYNOLOGY_USERNAME=nasadmin
+SYNOLOGY_PASSWORD=Cmtes123
+SYNOLOGY_SESSION_NAME=FileStation
+SYNOLOGY_FORMAT=sid
+
+# Jenkins 설정
+JENKINS_URL=https://jenkins.roboetech.com
+JENKINS_USERNAME=jenkins
+JENKINS_PASSWORD=adminjenkins
+JENKINS_WEBHOOK_SECRET=dev-jenkins-webhook-secret
+JENKINS_WEBHOOK_PATH=/webhook/jenkins
+
+# 로그 설정
+LOG_LEVEL=info
+LOG_FILE=logs/app.log
+
+# WebSocket 설정
+WS_BACKEND_PORT=3001
+
+# 개발 환경 플래그
+ENABLE_MOCK_AUTH=false
+ENABLE_MOCK_DB=false
 ```
 
 **Frontend (.env)**:
 ```bash
-VITE_API_URL=http://localhost:3001
-VITE_WS_URL=ws://localhost:3001
+VITE_API_URL=/api
+VITE_WS_URL=wss://harbor.roboetech.com
 ```
 
 ## Key Development Patterns

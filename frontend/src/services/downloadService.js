@@ -329,7 +329,7 @@ class DownloadService {
    * 다운로드 URL 생성 (JWT 토큰 포함)
    */
   createDownloadUrl(filePath, token, options = {}) {
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
     // API_BASE_URL이 이미 /api를 포함하고 있으므로 중복 제거
     const baseUrl = API_BASE_URL.endsWith('/api') || API_BASE_URL.includes('/api') 
       ? `${API_BASE_URL}/files/download` 

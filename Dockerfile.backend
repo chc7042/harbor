@@ -25,12 +25,12 @@ COPY backend/scripts ./scripts
 
 # 스크립트 실행 권한 부여 (개발용)
 RUN chmod 755 /app/scripts/migrate.sh && \
-    chmod 755 /app/scripts/start-dev.sh && \
+    chmod 755 /app/scripts/start.sh && \
     chown -R root:root /app/scripts
 
 # 개발 서버 실행
 EXPOSE 3002
-CMD ["/app/scripts/start-dev.sh"]
+CMD ["npm", "run", "dev"]
 
 # Production base stage
 FROM node:18-alpine AS base

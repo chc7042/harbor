@@ -34,8 +34,8 @@ class WebSocketService {
         this.isConnecting = true;
         this.token = token;
 
-        // WebSocket URL 구성 - 환경변수 사용 (직접 백엔드 연결)
-        const wsBaseUrl = import.meta.env.VITE_WS_URL || 'wss://harbor.roboetech.com:3001';
+        // WebSocket URL 구성 - NPM 프록시를 통한 연결
+        const wsBaseUrl = import.meta.env.VITE_WS_URL || 'wss://harbor.roboetech.com';
         
         console.log('WebSocket configuration:', {
           wsBaseUrl,

@@ -27,7 +27,7 @@ const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
       setIsOpeningFolder(true);
 
       // upload 폴더에 대한 공유 링크 가져오기
-      const response = await fetch('/api/deployments/share/upload', {
+      const response = await fetch('/deployments/share/upload', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
         }
