@@ -6,7 +6,7 @@ const compression = require('compression');
 const morgan = require('morgan');
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
-const authRoutes = require('./routes/auth');
+const authRoutes = require('./routes/authSimple');
 const deploymentRoutes = require('./routes/deployments');
 const dashboardRoutes = require('./routes/dashboard');
 const webhookRoutes = require('./routes/webhooks');

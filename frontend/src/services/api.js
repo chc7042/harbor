@@ -14,7 +14,7 @@ const api = axios.create({
 // 요청 인터셉터 - 토큰 자동 추가
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('accessToken');
+    const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -25,50 +25,19 @@ api.interceptors.request.use(
   }
 );
 
-// 응답 인터셉터 - 토큰 갱신 처리
+// 응답 인터셉터 - 간단한 401 처리 (단일 JWT 토큰)
 api.interceptors.response.use(
   (response) => {
     return response;
   },
   async (error) => {
-    const original = error.config;
+    // 401 에러 시 로그아웃 처리 (토큰 갱신 없음)
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
 
-    // 401 에러이고 토큰 갱신을 시도하지 않은 경우
-    if (error.response?.status === 401 && !original._retry) {
-      original._retry = true;
-
-      try {
-        const refreshToken = localStorage.getItem('refreshToken');
-
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
-        }
-
-        // 토큰 갱신 요청 (인터셉터 무한루프 방지를 위해 직접 axios 사용)
-        const refreshResponse = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-          refreshToken,
-        });
-
-        const { accessToken } = refreshResponse.data.data;
-
-        // 새 토큰 저장
-        localStorage.setItem('accessToken', accessToken);
-
-        // 원래 요청에 새 토큰 적용 후 재시도
-        original.headers.Authorization = `Bearer ${accessToken}`;
-
-        return api(original);
-      } catch (refreshError) {
-        // 토큰 갱신 실패 시 로그인 페이지로 리다이렉트
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-
-        // 로그인 페이지가 아닌 경우에만 리다이렉트
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
-
-        return Promise.reject(refreshError);
+      // 로그인 페이지가 아닌 경우에만 리다이렉트
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
       }
     }
 
@@ -166,7 +135,7 @@ export const uploadFile = async (file, path, onProgress = null) => {
 
     console.log('🚀 API: FormData created, making POST request to /files/upload');
     console.log('🚀 API: Request headers will include multipart/form-data');
-    console.log('🚀 API: Authorization token:', localStorage.getItem('accessToken') ? 'Present' : 'Missing');
+    console.log('🚀 API: Authorization token:', localStorage.getItem('token') ? 'Present' : 'Missing');
 
     const response = await api.post('/files/upload', formData, {
       headers: {

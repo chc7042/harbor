@@ -66,6 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_user_sessions_user_expires ON user_sessions(user_
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_action ON audit_logs(user_id, action);
 
 -- 트리거 설정
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

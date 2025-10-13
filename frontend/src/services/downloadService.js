@@ -62,7 +62,7 @@ class DownloadService {
       });
 
       // JWT 토큰 가져오기
-      const token = localStorage.getItem('accessToken');
+      const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('인증 토큰이 없습니다. 다시 로그인해주세요.');
       }

@@ -7,8 +7,7 @@ const initialState = {
   user: null,
   isAuthenticated: false,
   isLoading: true,
-  accessToken: null,
-  refreshToken: null,
+  token: null,
 };
 
 const authReducer = (state, action) => {
@@ -19,8 +18,7 @@ const authReducer = (state, action) => {
         user: action.payload.user,
         isAuthenticated: true,
         isLoading: false,
-        accessToken: action.payload.tokens.accessToken,
-        refreshToken: action.payload.tokens.refreshToken,
+        token: action.payload.token,
       };
     case 'LOGOUT':
       return {
@@ -28,18 +26,12 @@ const authReducer = (state, action) => {
         user: null,
         isAuthenticated: false,
         isLoading: false,
-        accessToken: null,
-        refreshToken: null,
+        token: null,
       };
     case 'SET_LOADING':
       return {
         ...state,
         isLoading: action.payload,
-      };
-    case 'UPDATE_TOKENS':
-      return {
-        ...state,
-        accessToken: action.payload.accessToken,
       };
     case 'AUTH_ERROR':
       return {
@@ -47,8 +39,7 @@ const authReducer = (state, action) => {
         user: null,
         isAuthenticated: false,
         isLoading: false,
-        accessToken: null,
-        refreshToken: null,
+        token: null,
       };
     default:
       return state;
@@ -65,10 +56,9 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuthStatus = async () => {
     try {
-      const accessToken = localStorage.getItem('accessToken');
-      const refreshToken = localStorage.getItem('refreshToken');
+      const token = localStorage.getItem('token');
 
-      if (!accessToken || !refreshToken) {
+      if (!token) {
         dispatch({ type: 'SET_LOADING', payload: false });
         return;
       }
@@ -79,17 +69,13 @@ export const AuthProvider = ({ children }) => {
       dispatch({
         type: 'LOGIN_SUCCESS',
         payload: {
-          user: response.data.data.user,
-          tokens: {
-            accessToken,
-            refreshToken,
-          },
+          user: response.data.user,
+          token,
         },
       });
     } catch (error) {
       // 토큰이 유효하지 않으면 로컬 스토리지 정리
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('token');
       dispatch({ type: 'AUTH_ERROR' });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -105,18 +91,17 @@ export const AuthProvider = ({ children }) => {
         password,
       });
 
-      const { user, tokens } = response.data.data;
+      const { user, token } = response.data;
 
       // 토큰을 로컬 스토리지에 저장
-      localStorage.setItem('accessToken', tokens.accessToken);
-      localStorage.setItem('refreshToken', tokens.refreshToken);
+      localStorage.setItem('token', token);
 
       // API 기본 헤더 설정
-      api.defaults.headers.common['Authorization'] = `Bearer ${tokens.accessToken}`;
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
       dispatch({
         type: 'LOGIN_SUCCESS',
-        payload: { user, tokens },
+        payload: { user, token },
       });
 
       return { success: true };
@@ -166,59 +151,23 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       // 서버에 로그아웃 요청
-      await api.post('/auth/logout', {
-        refreshToken: state.refreshToken,
-      });
+      await api.post('/auth/logout');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
       // 로컬 상태 및 스토리지 정리
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('token');
       delete api.defaults.headers.common['Authorization'];
 
       dispatch({ type: 'LOGOUT' });
     }
   };
 
-  const refreshAccessToken = async () => {
-    try {
-      const refreshToken = localStorage.getItem('refreshToken');
-
-      if (!refreshToken) {
-        throw new Error('No refresh token available');
-      }
-
-      const response = await api.post('/auth/refresh', {
-        refreshToken,
-      });
-
-      const { accessToken } = response.data.data;
-
-      // 새 토큰 저장 및 설정
-      localStorage.setItem('accessToken', accessToken);
-      api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-
-      dispatch({
-        type: 'UPDATE_TOKENS',
-        payload: { accessToken },
-      });
-
-      return accessToken;
-    } catch (error) {
-      console.error('Token refresh failed:', error);
-
-      // 리프레시 실패 시 로그아웃
-      await logout();
-      throw error;
-    }
-  };
 
   const value = {
     ...state,
     login,
     logout,
-    refreshAccessToken,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
