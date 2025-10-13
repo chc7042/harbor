@@ -22,9 +22,9 @@ const Dashboard = () => {
 
   const [initialDeployments, setInitialDeployments] = useState([]);
   
-  // 폴링을 사용한 실시간 데이터 업데이트 (배포 데이터는 30초마다, 프로젝트는 1분마다)
-  const { deployments, isPolling: isDeploymentPolling, lastUpdate: deploymentsLastUpdate, refresh: refreshDeployments } = useDeploymentPolling(initialDeployments, 30000);
-  const { projects, isPolling: isProjectPolling, lastUpdate: projectsLastUpdate, refresh: refreshProjects } = useProjectPolling(60000);
+  // 폴링을 사용한 실시간 데이터 업데이트 (배포 데이터와 프로젝트 모두 5분마다)
+  const { deployments, isPolling: isDeploymentPolling, lastUpdate: deploymentsLastUpdate, refresh: refreshDeployments } = useDeploymentPolling(initialDeployments, 300000);
+  const { projects, isPolling: isProjectPolling, lastUpdate: projectsLastUpdate, refresh: refreshProjects } = useProjectPolling(300000);
   const [loading, setLoading] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
 

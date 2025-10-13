@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 /**
  * 배포 데이터 폴링 훅
  */
-export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 30000) => {
+export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 300000) => {
   const { user } = useAuth();
   const [deployments, setDeployments] = useState(initialDeployments);
   const [isPolling, setIsPolling] = useState(false);
@@ -202,7 +202,7 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
 /**
  * 프로젝트 데이터 폴링 훅
  */
-export const useProjectPolling = (pollingInterval = 60000) => {
+export const useProjectPolling = (pollingInterval = 300000) => {
   const { user } = useAuth();
   const [projects, setProjects] = useState([]);
   const [isPolling, setIsPolling] = useState(false);
