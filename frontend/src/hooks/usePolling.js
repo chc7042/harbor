@@ -14,6 +14,15 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
   const [lastUpdate, setLastUpdate] = useState(null);
   const [error, setError] = useState(null);
   const previousDeployments = useRef(initialDeployments);
+  const notifiedDeployments = useRef(new Set()); // 이미 알림을 보낸 배포 ID 추적
+  
+  // 초기 배포들을 알림 기록에 추가 (중복 알림 방지)
+  useEffect(() => {
+    initialDeployments.forEach(deployment => {
+      const notificationKey = `${deployment.id}-${deployment.status}`;
+      notifiedDeployments.current.add(notificationKey);
+    });
+  }, []);
 
   // 배포 데이터 조회 함수
   const fetchDeployments = useCallback(async () => {
@@ -50,29 +59,48 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
           return prev && prev.status !== deployment.status;
         });
 
-        // 새로운 배포 알림
+        // 새로운 배포 알림 (중복 방지)
         newDeployments.forEach(deployment => {
+          const notificationKey = `${deployment.id}-${deployment.status}`;
+          
+          // 이미 알림을 보낸 배포는 건너뛰기
+          if (notifiedDeployments.current.has(notificationKey)) {
+            return;
+          }
+          
           if (deployment.status === 'success') {
             toast.success(`새 배포 완료: ${deployment.project_name} #${deployment.build_number}`);
+            notifiedDeployments.current.add(notificationKey);
           } else if (deployment.status === 'failed') {
             toast.error(`배포 실패: ${deployment.project_name} #${deployment.build_number}`);
+            notifiedDeployments.current.add(notificationKey);
           } else if (deployment.status === 'in_progress') {
             toast(`배포 시작: ${deployment.project_name} #${deployment.build_number}`, {
               icon: '⚡',
             });
+            notifiedDeployments.current.add(notificationKey);
           }
           
           // 이벤트 발생
           pollingService.emit('deployment_update', deployment);
         });
 
-        // 상태 변경 알림
+        // 상태 변경 알림 (중복 방지)
         statusChanges.forEach(deployment => {
+          const notificationKey = `${deployment.id}-${deployment.status}`;
+          
+          // 이미 알림을 보낸 배포는 건너뛰기
+          if (notifiedDeployments.current.has(notificationKey)) {
+            return;
+          }
+          
           const prev = previous.find(p => p.id === deployment.id);
           if (prev.status !== 'success' && deployment.status === 'success') {
             toast.success(`배포 성공: ${deployment.project_name} #${deployment.build_number}`);
+            notifiedDeployments.current.add(notificationKey);
           } else if (prev.status !== 'failed' && deployment.status === 'failed') {
             toast.error(`배포 실패: ${deployment.project_name} #${deployment.build_number}`);
+            notifiedDeployments.current.add(notificationKey);
           }
           
           // 이벤트 발생
