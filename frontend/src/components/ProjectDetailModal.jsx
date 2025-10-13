@@ -290,6 +290,17 @@ const ProjectDetailModal = ({
     }
   };
 
+  const getStatusText = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'success': return '배포성공';
+      case 'failure': case 'failed': return '배포실패';
+      case 'building': case 'in_progress': return '빌드중';
+      case 'pending': return '대기중';
+      case 'aborted': return '중단됨';
+      default: return status || '알 수 없음';
+    }
+  };
+
   if (!isOpen || !deployment) return null;
 
   return (
@@ -341,7 +352,7 @@ const ProjectDetailModal = ({
 
           <div className="flex items-center space-x-4">
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(deployment.status)}`}>
-              {deployment.status}
+              {getStatusText(deployment.status)}
             </span>
             
             {deployment.jenkins_url && (
