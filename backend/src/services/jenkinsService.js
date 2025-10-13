@@ -70,10 +70,19 @@ class JenkinsService {
           const folderResponse = await this.client.get(folderUrl);
           const folderJobs = folderResponse.data.jobs || [];
 
-          // mr 또는 fs로 시작하고 버전 형식과 _release 접미사를 가진 작업들만 필터링 (예: mr1.0.0_release, fs1.1.0_release)
+          // 필터링 로직 개선: 일반 버전 프로젝트(x.x.x)와 mr/fs 프로젝트 모두 포함
           const filteredJobs = folderJobs.filter(job => {
             const jobName = job.name.toLowerCase();
-            // mr 또는 fs로 시작하고 숫자.숫자.숫자_release 형식의 job만 허용
+            const folderName = folder.name.toLowerCase();
+            
+            // 일반 버전 프로젝트 (1.2.0, 2.0.0, 3.0.0, 4.0.0 등)
+            const versionPattern = /^\d+\.\d+\.\d+$/;
+            if (versionPattern.test(folderName)) {
+              // 일반 버전 프로젝트의 모든 작업 포함
+              return true;
+            }
+            
+            // mr/fs 프로젝트의 release 작업들
             const releasePattern = /^(mr|fs)\d+\.\d+\.\d+_release$/;
             return releasePattern.test(jobName);
           });
