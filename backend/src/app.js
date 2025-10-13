@@ -305,11 +305,6 @@ function initializeNASScanner(dbConnected) {
       logger.info('Starting NAS scanner initialization...');
       const nasScanner = getNASScanner();
 
-      // 개발환경에서는 mock 디렉토리 생성
-      if (process.env.NODE_ENV === 'development') {
-        await nasScanner.ensureMockDirectory();
-        logger.info('NAS mock directory created');
-      }
 
       // 파일 감시 시작 (개발환경에서도 활성화)
       if (process.env.NAS_WATCH_ENABLED !== 'false') {

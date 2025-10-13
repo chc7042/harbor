@@ -139,7 +139,6 @@ public/uploads/
 storage/
 
 # Mock data directories
-backend/mock-nas/
 
 # SSL certificates
 ssl/

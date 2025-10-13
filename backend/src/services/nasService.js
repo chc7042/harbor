@@ -8,26 +8,14 @@ const { AppError } = require('../middleware/error');
  */
 class NASService {
   constructor() {
-    this.isDevelopment = process.env.NODE_ENV === 'development';
     this.synologyApiService = require('./synologyApiService');
     this.releaseBasePath = process.env.NAS_RELEASE_PATH || 'release_version';
-
-    // 개발환경에서는 mock 디렉토리 사용
-    if (this.isDevelopment) {
-      this.mockBasePath = process.env.NAS_MOUNT_PATH || path.join(__dirname, '../../mock-nas');
-    }
   }
 
   /**
    * NAS 서버에 연결 (Synology API 사용)
    */
   async connect() {
-    // 개발환경에서는 연결 건너뛰기
-    if (this.isDevelopment) {
-      logger.info('Development mode: Skipping Synology API connection, using local filesystem');
-      return true;
-    }
-
     try {
       await this.synologyApiService.login();
       logger.info('NAS connection established via Synology API');
@@ -42,13 +30,11 @@ class NASService {
    * NAS 연결 해제
    */
   async disconnect() {
-    if (!this.isDevelopment) {
-      try {
-        await this.synologyApiService.logout();
-        logger.info('NAS connection closed');
-      } catch (error) {
-        logger.error('Error closing NAS connection:', error.message);
-      }
+    try {
+      await this.synologyApiService.logout();
+      logger.info('NAS connection closed');
+    } catch (error) {
+      logger.error('Error closing NAS connection:', error.message);
     }
   }
 
@@ -56,23 +42,6 @@ class NASService {
    * 디렉토리 목록 조회
    */
   async listDirectory(dirPath = '') {
-    if (this.isDevelopment) {
-      // 개발환경에서는 로컬 파일시스템 사용
-      try {
-        const fullPath = path.join(this.mockBasePath, dirPath);
-        logger.info(`개발환경 디렉토리 목록 조회 - mockBasePath: ${this.mockBasePath}, dirPath: ${dirPath}, fullPath: ${fullPath}`);
-
-        const files = await fs.readdir(fullPath, { withFileTypes: true });
-        const fileNames = files.map(file => file.name);
-        logger.info(`찾은 파일들: ${fileNames.join(', ')}`);
-        return fileNames;
-      } catch (error) {
-        logger.error(`개발환경 디렉토리 조회 실패: ${dirPath}`, error.message);
-        throw new AppError(`Directory listing failed: ${error.message}`, 404);
-      }
-    }
-
-    // 프로덕션에서는 Synology API 사용
     try {
       const result = await this.synologyApiService.listDirectoryFiles(dirPath);
       if (result.success) {
@@ -97,27 +66,6 @@ class NASService {
    * 파일 정보 조회
    */
   async getFileInfo(filePath) {
-    if (this.isDevelopment) {
-      try {
-        const fullPath = path.join(this.mockBasePath, filePath);
-        const stats = await fs.stat(fullPath);
-        return {
-          name: path.basename(filePath),
-          path: filePath,
-          isDirectory: stats.isDirectory(),
-          isFile: stats.isFile(),
-          size: stats.size,
-          created: stats.birthtime,
-          modified: stats.mtime,
-          accessed: stats.atime,
-        };
-      } catch (error) {
-        logger.error(`Failed to get file info ${filePath}:`, error.message);
-        throw new AppError(`File info failed: ${error.message}`, 500);
-      }
-    }
-
-    // 프로덕션에서는 Synology API 사용
     try {
       const result = await this.synologyApiService.getFileInfo(filePath);
       if (result.success && result.data) {
@@ -207,21 +155,6 @@ class NASService {
   async downloadFile(filePath) {
     logger.info(`NAS downloadFile 요청 - 파일 경로: ${filePath}`);
 
-    if (this.isDevelopment) {
-      // 개발환경에서는 로컬 파일시스템 사용
-      try {
-        const fullPath = path.join(this.mockBasePath, filePath);
-        logger.info(`개발환경 파일 읽기 - 전체 경로: ${fullPath}`);
-        const data = await fs.readFile(fullPath);
-        logger.info(`File downloaded successfully: ${filePath}, size: ${data.length} bytes`);
-        return data;
-      } catch (error) {
-        logger.error(`Failed to download file ${filePath}:`, error.message);
-        throw new AppError(`File download failed: ${error.message}`, 404);
-      }
-    }
-
-    // 프로덕션에서는 Synology API 사용
     try {
       const result = await this.synologyApiService.downloadFile(filePath);
       if (result.success && result.data) {
@@ -240,41 +173,6 @@ class NASService {
    * 파일 목록 조회 (files API용)
    */
   async listFiles(dirPath = '') {
-    if (this.isDevelopment) {
-      // 개발환경에서는 로컬 파일시스템 사용
-      try {
-        const fullPath = path.join(this.mockBasePath, dirPath);
-        logger.info(`개발환경 파일 목록 조회 - mockBasePath: ${this.mockBasePath}, dirPath: ${dirPath}, fullPath: ${fullPath}`);
-
-        const files = await fs.readdir(fullPath, { withFileTypes: true });
-        const result = [];
-
-        for (const file of files) {
-          try {
-            const filePath = path.join(fullPath, file.name);
-            const stats = await fs.stat(filePath);
-
-            result.push({
-              name: file.name,
-              path: path.posix.join(dirPath, file.name),
-              isDirectory: file.isDirectory(),
-              isFile: file.isFile(),
-              size: stats.size,
-              modified: stats.mtime,
-            });
-          } catch (error) {
-            logger.warn(`Failed to get info for file ${file.name}:`, error.message);
-          }
-        }
-
-        return result;
-      } catch (error) {
-        logger.error(`Failed to list files in development mode - ${dirPath}:`, error.message);
-        throw new AppError(`Directory listing failed: ${error.message}`, 404);
-      }
-    }
-
-    // 프로덕션에서는 Synology API 사용
     const fullPath = this.releaseBasePath ? path.posix.join(this.releaseBasePath, dirPath) : dirPath;
 
     try {
@@ -301,9 +199,7 @@ class NASService {
    * 연결 상태 확인 및 재연결
    */
   async ensureConnection() {
-    if (!this.isDevelopment) {
-      await this.connect();
-    }
+    await this.connect();
   }
 
   /**

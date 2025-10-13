@@ -309,7 +309,6 @@ ORDER BY d.deployed_at DESC;
 
 -- 초기 시스템 설정 데이터
 INSERT INTO system_settings (key, value, description) VALUES
-('nas_mount_path', '/mnt/nas', 'NAS 마운트 경로'),
 ('scan_interval', '300', 'NAS 스캔 주기 (초)'),
 ('max_log_retention_days', '90', '로그 보관 기간 (일)'),
 ('webhook_secret', 'change-this-in-production', 'Jenkins Webhook 비밀키'),
