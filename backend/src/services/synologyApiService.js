@@ -758,8 +758,8 @@ class SynologyApiService {
 
     // mr 접두어가 있는 버전과 없는 버전 모두 지원
     const versionPatterns = [
-      `mr${version}`,  // mr2.0.0, mr1.2.0 등
-      version,         // 2.0.0, 1.2.0 등
+      `mr${version}`,  // mr2.0.0, mr1.2.0, mr4.0.0 등
+      version,         // 2.0.0, 1.2.0, 4.0.0 등
       `${version.replace('mr', '')}`, // mr1.1.0 -> 1.1.0
     ];
 
@@ -857,10 +857,12 @@ class SynologyApiService {
    */
   async getOrCreateFileDownloadLink(version, date, buildNumber, fileName) {
     // 가능한 경로들을 시도 (폴더 경로에 파일명 추가)
+    // mr4.0.0과 같은 패턴도 포함하여 검색
     const basePaths = [
       `/release_version/release/product/mr${version}/${date}/${buildNumber}`,
       `/volume1/release_version/release/product/mr${version}/${date}/${buildNumber}`,
       `/release/product/mr${version}/${date}/${buildNumber}`,
+      `/release_version/release/product/${version}/${date}/${buildNumber}`, // mr 없는 버전도 지원
     ];
 
     let workingPath = null;

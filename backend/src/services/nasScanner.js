@@ -12,7 +12,9 @@ const { query } = require('../config/database');
  */
 class NASScanner {
   constructor() {
-    this.nasBasePath = process.env.NAS_BASE_PATH || '/nas/deployments';
+    // NAS 스캔 기본 경로 - release_version 경로 사용
+    const nasReleasePath = process.env.NAS_RELEASE_PATH || 'release_version';
+    this.nasBasePath = process.env.NAS_BASE_PATH || `/nas/${nasReleasePath}`;
     // 개발환경에서는 간단한 스케줄 사용 (실제로는 비활성화됨)
     this.scanInterval = process.env.NODE_ENV === 'development'
       ? '0 0 * * *'  // 매일 자정 (개발환경에서는 실행되지 않음)
@@ -69,14 +71,43 @@ class NASScanner {
       // 파일 해시 계산
       const hash = await this.calculateFileHash(filePath);
 
-      // 프로젝트명과 빌드 정보 추출
+      // 프로젝트명과 빌드 정보 추출 (mr4.0.0 구조 지원)
       const pathParts = relativePath.split(path.sep);
-      const projectName = pathParts[0] || 'unknown';
+      let projectName = 'unknown';
+      
+      // release/product/mr4.0.0/date/build 구조에서 mr4.0.0 추출
+      const mrVersionIndex = pathParts.findIndex(part => part.match(/^mr\d+\.\d+\.\d+$/));
+      if (mrVersionIndex !== -1) {
+        const mrVersion = pathParts[mrVersionIndex]; // mr4.0.0
+        const version = mrVersion.replace('mr', ''); // 4.0.0
+        projectName = `${version}/${mrVersion}_release`; // 4.0.0/mr4.0.0_release 형식
+      } else {
+        // 기존 로직 유지
+        projectName = pathParts[0] || 'unknown';
+      }
+      
       const fileName = path.basename(filePath);
 
-      // 빌드 번호 추출 (파일명에서)
-      const buildMatch = fileName.match(/(?:build|v|version)[-_]?(\d+)/i);
-      const buildNumber = buildMatch ? parseInt(buildMatch[1], 10) : null;
+      // 빌드 번호 추출 - 파일명과 경로에서 모두 시도
+      let buildNumber = null;
+      
+      // 1. 파일명에서 빌드 번호 추출
+      const fileNameBuildMatch = fileName.match(/(?:build|v|version)[-_]?(\d+)/i);
+      if (fileNameBuildMatch) {
+        buildNumber = parseInt(fileNameBuildMatch[1], 10);
+      }
+      
+      // 2. 경로에서 빌드 번호 추출 (mr4.0.0/251013/2 구조에서 마지막 숫자)
+      if (!buildNumber && mrVersionIndex !== -1) {
+        // mr 버전 다음의 경로들에서 숫자만 있는 부분을 빌드 번호로 인식
+        for (let i = mrVersionIndex + 1; i < pathParts.length; i++) {
+          const pathPart = pathParts[i];
+          if (/^\d+$/.test(pathPart)) {
+            buildNumber = parseInt(pathPart, 10);
+            break;
+          }
+        }
+      }
 
       return {
         file_path: relativePath,

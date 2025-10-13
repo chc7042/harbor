@@ -223,10 +223,10 @@ class NASService {
     try {
       await this.ensureConnection();
 
-      // 실제 NAS 구조에 맞는 검색 경로
+      // 실제 NAS 구조에 맞는 검색 경로 (mr4.0.0 구조 포함)
       const searchPaths = [
-        `release/product/${version}`,
-        `release/product/mr${version}`,
+        `release/product/mr${version}`,  // mr4.0.0, mr3.0.0 등 우선
+        `release/product/${version}`,    // 4.0.0, 3.0.0 등
         `release/${version}`,
         `${version}`,
       ];
