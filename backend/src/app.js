@@ -10,7 +10,7 @@ const authRoutes = require('./routes/auth');
 const deploymentRoutes = require('./routes/deployments');
 const dashboardRoutes = require('./routes/dashboard');
 const webhookRoutes = require('./routes/webhooks');
-const websocketRoutes = require('./routes/websocket');
+// WebSocket routes removed - replaced with polling
 const healthRoutes = require('./routes/health');
 const nasRoutes = require('./routes/nas');
 const nasArchiveRoutes = require('./routes/nas-archive');
@@ -21,7 +21,7 @@ const { errorHandler } = require('./middleware/error');
 const { initializeDatabase } = require('./config/database');
 const logger = require('./config/logger');
 const { setupSwagger } = require('./config/swagger');
-const websocketManager = require('./services/websocketManager');
+// WebSocket manager removed - replaced with polling
 const { getNASScanner } = require('./services/nasScanner');
 
 const app = express();
@@ -36,7 +36,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      connectSrc: ["'self'", "ws://localhost:3001", "wss://localhost:3001", "ws://localhost:5173", "wss://localhost:5173"],
+      connectSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:", "https://www.gravatar.com"],
@@ -179,7 +179,7 @@ app.use('/api/deployments', deploymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/webhooks', webhookRoutes);
-app.use('/api/ws', websocketRoutes);
+// WebSocket routes removed - polling used instead
 app.use('/api/nas', nasRoutes);
 app.use('/api/nas-archive', nasArchiveRoutes);
 app.use('/api/files', fileRoutes);
@@ -239,14 +239,8 @@ async function startServer() {
       }, 10000);
     });
 
-    // WebSocket 서버 초기화 (서버 시작 직후, 재시도 로직 포함)
-    logger.info('WebSocket 서버 초기화 시작...');
-    try {
-      await initializeWebSocketWithRetry(server, 3);
-      logger.info('WebSocket 서버 초기화 성공');
-    } catch (wsError) {
-      logger.error('WebSocket 서버 초기화 실패, 서버는 HTTP만 지원합니다:', wsError.message);
-    }
+    // WebSocket 서버 초기화 제거 - 폴링으로 대체
+    logger.info('폴링 기반 실시간 업데이트 사용 중...');
     
     logger.info('서버 초기화 진행 중...');
 
@@ -272,31 +266,7 @@ async function startServer() {
   }
 }
 
-// WebSocket 초기화 재시도 로직
-async function initializeWebSocketWithRetry(server, maxRetries = 3) {
-  let attempt = 0;
-
-  while (attempt < maxRetries) {
-    try {
-      websocketManager.initialize(server);
-      logger.info('WebSocket server initialized successfully');
-      return;
-    } catch (error) {
-      attempt++;
-      logger.error(`WebSocket 초기화 실패 (시도 ${attempt}/${maxRetries}):`, error.message);
-
-      if (attempt >= maxRetries) {
-        logger.error('WebSocket 서버 초기화를 포기합니다. 서버는 HTTP만 지원합니다.');
-        throw new Error(`WebSocket initialization failed after ${maxRetries} attempts`);
-      }
-
-      // 재시도 전 대기 (지수 백오프)
-      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-      logger.info(`${delay}ms 후 WebSocket 초기화 재시도...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-}
+// WebSocket 초기화 로직 제거 - 폴링으로 대체됨
 
 // NAS 스캐너 초기화
 function initializeNASScanner(dbConnected) {
@@ -345,13 +315,8 @@ function initializeNASScanner(dbConnected) {
 function gracefulShutdown(signal) {
   logger.info(`${signal} 수신, 서버 종료 중...`);
 
-  // WebSocket 서버 정리
-  try {
-    websocketManager.shutdown();
-    logger.info('WebSocket server cleanup completed');
-  } catch (error) {
-    logger.error('WebSocket server cleanup failed:', error.message);
-  }
+  // WebSocket 서버 정리 제거 - 폴링에서는 불필요
+  logger.info('폴링 기반 서비스 종료...');
 
   if (process.env.NODE_ENV !== 'development') {
     try {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import ConnectionStatus from './ConnectionStatus';
+import PollingStatus from './PollingStatus';
 import NotificationSettings from './NotificationSettings';
 import UserAvatar from './UserAvatar';
 import toast from 'react-hot-toast';
@@ -84,7 +84,7 @@ const Header = () => {
           {/* 사용자 메뉴 */}
           <div className="flex items-center space-x-4">
             {/* 연결 상태 */}
-            <ConnectionStatus />
+            <PollingStatus />
             {/* 알림 버튼 */}
             <button
               onClick={() => setIsNotificationSettingsOpen(true)}
