@@ -1,6 +1,7 @@
 const { promisify } = require('util');
 const { getLDAPConfig } = require('../config/ldap');
 const { query } = require('../config/database');
+const logger = require('../config/logger');
 
 /**
  * LDAP 인증 서비스
@@ -31,15 +32,15 @@ class LDAPService {
     try {
       // 개발 환경에서 모의 인증 사용
       if (process.env.ENABLE_MOCK_AUTH === 'true') {
-        console.log(`Using mock authentication for development - user: ${username}`);
+        logger.info('Using mock authentication for development', { username });
 
         // 실제 LDAP에서 사용자 정보 조회 시도
         let ldapUserInfo = null;
         try {
           ldapUserInfo = await this.findUser(username);
-          console.log(`Found LDAP user info for ${username}:`, ldapUserInfo);
+          logger.debug('Found LDAP user info', { username, userInfo: ldapUserInfo });
         } catch (ldapError) {
-          console.log(`LDAP lookup failed for ${username}, using mock data:`, ldapError.message);
+          logger.warn('LDAP lookup failed, using mock data', { username, error: ldapError.message });
         }
 
         // LDAP에서 찾은 정보가 있으면 사용, 없으면 모의 정보 생성
@@ -61,12 +62,12 @@ class LDAPService {
         try {
           user = await this.syncUserToDatabase(mockUserInfo);
         } catch (dbError) {
-          console.error('데이터베이스 사용자 동기화 실패:', dbError.message);
+          logger.error('데이터베이스 사용자 동기화 실패', { error: dbError.message });
           throw new Error(`Database connection failed: ${dbError.message}`);
         }
 
         const authDuration = Date.now() - startTime;
-        console.log(`Mock user ${username} authenticated successfully in ${authDuration}ms`);
+        logger.info('Mock user authenticated successfully', { username, duration: authDuration });
 
         return {
           ...user,

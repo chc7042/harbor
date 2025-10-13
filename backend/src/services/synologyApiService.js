@@ -204,7 +204,7 @@ class SynologyApiService {
 
       for (let i = 0; i < pathParts.length; i++) {
         currentPath += '/' + pathParts[i];
-        
+
         // 각 레벨의 폴더가 존재하는지 확인
         const existsCheck = await this.checkPathExists(currentPath);
         if (existsCheck.exists) {
@@ -217,7 +217,7 @@ class SynologyApiService {
         const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/';
         const folderName = pathParts[i];
 
-        const response = await axios.post(`${this.baseUrl}/webapi/entry.cgi`, 
+        const response = await axios.post(`${this.baseUrl}/webapi/entry.cgi`,
           new URLSearchParams({
             api: 'SYNO.FileStation.CreateFolder',
             version: 2,
@@ -238,13 +238,13 @@ class SynologyApiService {
         if (!response.data || !response.data.success) {
           const errorCode = response.data?.error?.code;
           const errorMessage = response.data?.error?.message || 'Unknown error';
-          
+
           // 폴더가 이미 존재하는 경우는 성공으로 처리
           if (errorCode === 1006) { // Folder already exists
             logger.info(`Folder already exists (error 1006): ${currentPath}`);
             continue;
           }
-          
+
           logger.error(`Failed to create folder ${currentPath}: ${errorCode} - ${errorMessage}`);
           throw new Error(`Folder creation failed: ${errorCode} - ${errorMessage}`);
         }
@@ -255,7 +255,7 @@ class SynologyApiService {
       return {
         success: true,
         path: folderPath,
-        message: 'Folder created successfully'
+        message: 'Folder created successfully',
       };
 
     } catch (error) {
@@ -263,7 +263,7 @@ class SynologyApiService {
       return {
         success: false,
         error: error.message,
-        path: folderPath
+        path: folderPath,
       };
     }
   }
@@ -523,7 +523,7 @@ class SynologyApiService {
   /**
    * 세션 기반 다운로드 URL 생성
    */
-  async createSessionBasedUrl(filePath, requestId, options = {}) {
+  async createSessionBasedUrl(filePath, _requestId, options = {}) {
     if (!this.sessionId) {
       throw new Error('세션이 없습니다.');
     }
@@ -553,7 +553,7 @@ class SynologyApiService {
   /**
    * 공개 다운로드 URL 생성 (세션 없이)
    */
-  async createPublicUrl(filePath, requestId, _options) {
+  async createPublicUrl(filePath, _requestId, _options) {
     const normalizedPath = this.normalizePath(filePath);
 
     // 공개 접근 가능한 URL 패턴들 시도
@@ -586,7 +586,7 @@ class SynologyApiService {
   /**
    * 대안 API URL 생성
    */
-  async createAlternativeUrl(filePath, requestId, options) {
+  async createAlternativeUrl(filePath, _requestId, _options) {
     const normalizedPath = this.normalizePath(filePath);
 
     // Synology의 다른 API 엔드포인트들 시도
@@ -930,7 +930,7 @@ class SynologyApiService {
    * @param {string} dirPath - 디렉토리 경로
    */
   async listFiles(dirPath = '') {
-    return await this.listDirectoryFiles(dirPath);
+    return this.listDirectoryFiles(dirPath);
   }
 
   /**
@@ -1066,27 +1066,27 @@ class SynologyApiService {
 
       // Synology API 경로 정규화 (공유 폴더 기준)
       let dirPath = targetPath;
-      
+
       // 백슬래시를 슬래시로 변환
       dirPath = dirPath.replace(/\\/g, '/');
-      
+
       // /volume1/ 접두어 제거 (Synology API에서는 공유 폴더명으로 시작)
       if (dirPath.startsWith('/volume1/')) {
         dirPath = dirPath.replace('/volume1/', '/');
       }
-      
+
       // 연속된 슬래시 제거
       dirPath = dirPath.replace(/\/+/g, '/');
-      
+
       // 시작 슬래시 확인
       if (!dirPath.startsWith('/')) {
         dirPath = '/' + dirPath;
       }
-      
+
       if (!dirPath.endsWith('/')) {
         dirPath += '/';
       }
-      
+
       logger.info(`원본 경로: ${targetPath}`);
       logger.info(`정규화된 업로드 디렉토리: ${dirPath}`);
 
@@ -1101,28 +1101,28 @@ class SynologyApiService {
         method: 'upload',
         path: parentPath,
         overwrite: 'true',
-        _sid: this.sessionId
+        _sid: this.sessionId,
       };
 
       // FormData 생성
       const FormData = require('form-data');
       const form = new FormData();
-      
+
       // API 파라미터를 FormData에 추가
       Object.entries(apiParams).forEach(([key, value]) => {
         form.append(key, value);
       });
-      
+
       // 파일을 FormData에 추가
       form.append('file', fileBuffer, {
         filename: originalName,
-        contentType: 'application/octet-stream'
+        contentType: 'application/octet-stream',
       });
 
       // URL에도 파라미터 추가 (Error 119 해결)
       const urlParams = new URLSearchParams(apiParams);
       const uploadUrl = `${this.baseUrl}/webapi/entry.cgi?${urlParams}`;
-      
+
       logger.info(`업로드 URL: ${uploadUrl}`);
       logger.info(`업로드 디렉토리: ${parentPath}`);
       logger.info(`세션 ID: ${this.sessionId ? this.sessionId.substring(0, 10) + '...' : 'MISSING'}`);
@@ -1131,23 +1131,23 @@ class SynologyApiService {
 
       // 업로드 전 경로 존재 여부 확인 (공유 폴더 기반 경로)
       logger.info('업로드 경로 단계별 확인 중...');
-      
+
       // Synology FileStation API는 공유 폴더 경로를 사용 (/volume1 접두어 없음)
       const pathsToCheck = [
         '/release_version',
         '/release_version/release',
-        '/release_version/release/upload'
+        '/release_version/release/upload',
       ];
-      
+
       for (const checkPath of pathsToCheck) {
         const pathResult = await this.checkPathExists(checkPath);
         logger.info(`경로 ${checkPath}: ${JSON.stringify(pathResult)}`);
-        
+
         if (!pathResult.exists) {
           // 경로가 없으면 생성 시도
           logger.warn(`경로가 존재하지 않음, 생성 시도: ${checkPath}`);
           const createResult = await this.createFolder(checkPath);
-          
+
           if (!createResult.success) {
             logger.error(`경로 생성 실패: ${checkPath} - ${createResult.error}`);
             throw new Error(`Path does not exist and cannot be created: ${checkPath}. Upload target: ${parentPath}`);
@@ -1158,7 +1158,7 @@ class SynologyApiService {
       }
 
       logger.info('업로드 요청 시작...');
-      
+
       // 업로드 요청 (Content-Length 자동 처리)
       const response = await axios.post(uploadUrl, form, {
         headers: {
@@ -1173,9 +1173,9 @@ class SynologyApiService {
             const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
             logger.info(`업로드 진행률: ${percentCompleted}% (${progressEvent.loaded}/${progressEvent.total} bytes)`);
           }
-        }
+        },
       });
-      
+
       logger.info('업로드 요청 완료');
 
       logger.info(`Synology 업로드 응답 상태: ${response.status}`);

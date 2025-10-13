@@ -1,5 +1,4 @@
 const path = require('path');
-const fs = require('fs').promises;
 const logger = require('../config/logger');
 const { AppError } = require('../middleware/error');
 
@@ -338,7 +337,7 @@ class NASService {
 
     // 경로 정리
     normalizedPath = normalizedPath.replace(/\/+/g, '/'); // 연속된 슬래시 제거
-    
+
     // 허용되지 않는 경로 패턴 체크
     const forbiddenPatterns = [
       /\.\./,           // 상위 디렉토리 접근
@@ -395,7 +394,7 @@ class NASService {
       // 업로드 경로 검증 및 정규화
       const normalizedPath = this.validateAndNormalizeUploadPath(targetPath);
 
-      logger.info(`파일 업로드 경로 변환:`);
+      logger.info('파일 업로드 경로 변환:');
       logger.info(`- 원본 경로: ${targetPath}`);
       logger.info(`- 정규화된 경로: ${normalizedPath}`);
 
@@ -404,7 +403,7 @@ class NASService {
       const uploadResult = await this.synologyApiService.uploadFile(fileBuffer, normalizedPath, originalName);
 
       if (uploadResult.success) {
-        logger.info(`Synology API를 통한 파일 업로드 성공:`);
+        logger.info('Synology API를 통한 파일 업로드 성공:');
         logger.info(`- 파일명: ${uploadResult.filename}`);
         logger.info(`- 업로드 경로: ${uploadResult.path}`);
         logger.info(`- 파일 크기: ${uploadResult.size} bytes`);

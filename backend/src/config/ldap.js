@@ -381,7 +381,7 @@ class LDAPConfig {
 
     // 첫 번째 값 반환 (대부분의 속성이 단일 값)
     let value = attribute.values[0];
-    
+
     // UTF-8 Buffer인 경우 문자열로 변환
     if (Buffer.isBuffer(value)) {
       try {
@@ -390,7 +390,7 @@ class LDAPConfig {
         console.warn(`Failed to decode UTF-8 for attribute ${attributeName}:`, err.message);
       }
     }
-    
+
     // Base64로 인코딩된 UTF-8 문자열인 경우 디코딩 시도
     if (typeof value === 'string' && value.length > 0) {
       try {
@@ -408,7 +408,7 @@ class LDAPConfig {
         console.debug(`Base64 decode failed for ${attributeName}, using original value:`, err.message);
       }
     }
-    
+
     return value;
   }
 

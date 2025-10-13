@@ -1,51 +1,47 @@
 const jwt = require('jsonwebtoken');
 const { query } = require('../config/database');
 const crypto = require('crypto');
+const logger = require('../config/logger');
 
 /**
  * 인증 관련 로깅 유틸리티
  */
 class AuthLogger {
   static logAuthAttempt(requestId, method, url, ip, userAgent) {
-    console.log(`[AUTH-${requestId}] =================================`);
-    console.log(`[AUTH-${requestId}] NEW REQUEST: ${method} ${url}`);
-    console.log(`[AUTH-${requestId}] Client IP: ${ip || 'unknown'}`);
-    console.log(`[AUTH-${requestId}] User-Agent: ${userAgent || 'unknown'}`);
-    console.log(`[AUTH-${requestId}] Timestamp: ${new Date().toISOString()}`);
+    logger.debug(`[AUTH-${requestId}] Authentication attempt`, {
+      method, url, ip: ip || 'unknown', userAgent: userAgent || 'unknown',
+    });
   }
 
   static logTokenSource(requestId, hasHeader, hasQuery) {
-    console.log(`[AUTH-${requestId}] Token availability - Header: ${hasHeader ? 'YES' : 'NO'}, Query: ${hasQuery ? 'YES' : 'NO'}`);
+    logger.debug(`[AUTH-${requestId}] Token availability`, { hasHeader, hasQuery });
   }
 
   static logTokenExtraction(requestId, source, success, tokenLength, error = null) {
     if (success) {
-      console.log(`[AUTH-${requestId}] ✓ Token extracted from ${source}, length: ${tokenLength}`);
+      logger.debug(`[AUTH-${requestId}] Token extracted from ${source}`, { tokenLength });
     } else {
-      console.log(`[AUTH-${requestId}] ✗ Token extraction from ${source} failed: ${error}`);
+      logger.warn(`[AUTH-${requestId}] Token extraction failed from ${source}`, { error });
     }
   }
 
   static logTokenValidation(requestId, success, user = null, error = null, duration = null) {
     if (success) {
-      console.log(`[AUTH-${requestId}] ✓ Token validation SUCCESS in ${duration}ms`);
-      console.log(`[AUTH-${requestId}] User authenticated: ${user.username} (ID: ${user.userId})`);
-      console.log(`[AUTH-${requestId}] User details: ${user.email}, ${user.department}`);
+      logger.info(`[AUTH-${requestId}] Authentication successful`, {
+        username: user.username, userId: user.userId, duration,
+      });
     } else {
-      console.log(`[AUTH-${requestId}] ✗ Token validation FAILED: ${error}`);
+      logger.warn(`[AUTH-${requestId}] Authentication failed`, { error, duration });
     }
   }
 
   static logAuthResult(requestId, success, duration, username = null) {
     const status = success ? 'SUCCESS' : 'FAILURE';
-    const userInfo = username ? ` for user: ${username}` : '';
-    console.log(`[AUTH-${requestId}] =================================`);
-    console.log(`[AUTH-${requestId}] FINAL RESULT: ${status} in ${duration}ms${userInfo}`);
-    console.log(`[AUTH-${requestId}] =================================`);
+    logger.info(`[AUTH-${requestId}] Authentication ${status}`, { duration, username });
   }
 
   static logSecurityEvent(requestId, event, details) {
-    console.warn(`[SECURITY-${requestId}] ${event}: ${details}`);
+    logger.warn(`[SECURITY-${requestId}] ${event}`, { details });
   }
 }
 
@@ -114,18 +110,11 @@ class JWTUtils {
   static verifyAccessToken(token, requestId = null) {
     const verifyStartTime = Date.now();
     const { accessSecret } = this.getSecrets();
-    const logPrefix = requestId ? `[AUTH-${requestId}]` : '[JWT]';
 
     try {
-      console.log(`${logPrefix} Starting token verification...`);
-      console.log(`${logPrefix} Secret configured: ${accessSecret ? 'YES' : 'NO'}, length: ${accessSecret ? accessSecret.length : 'null'}`);
-      console.log(`${logPrefix} Token length: ${token ? token.length : 'null'}`);
-      console.log(`${logPrefix} Token preview: ${token ? token.substring(0, 20) + '...' : 'null'}`);
-
       const decoded = jwt.verify(token, accessSecret);
       const verifyDuration = Date.now() - verifyStartTime;
 
-      console.log(`${logPrefix} Token structure validation...`);
       if (decoded.type !== 'access') {
         throw new Error(`Invalid token type: ${decoded.type}, expected: access`);
       }
@@ -134,28 +123,27 @@ class JWTUtils {
       const tokenAge = now - decoded.iat;
       const expiresIn = decoded.exp - now;
 
-      console.log(`${logPrefix} ✓ Token verification completed in ${verifyDuration}ms`);
-      console.log(`${logPrefix} Token age: ${tokenAge}s, expires in: ${expiresIn}s`);
-      console.log(`${logPrefix} Token issued at: ${new Date(decoded.iat * 1000).toISOString()}`);
-      console.log(`${logPrefix} Token expires at: ${new Date(decoded.exp * 1000).toISOString()}`);
+      logger.debug('Token verification completed', {
+        requestId, verifyDuration, tokenAge, expiresIn,
+      });
 
       return decoded;
     } catch (error) {
       const verifyDuration = Date.now() - verifyStartTime;
-      console.error(`${logPrefix} JWT verification FAILED in ${verifyDuration}ms: ${error.message}`);
-      console.error(`${logPrefix} Error type: ${error.name}`);
-      console.error(`${logPrefix} Failed token preview: ${token ? token.substring(0, 50) + '...' : 'null'}`);
 
       // JWT 라이브러리 에러를 더 구체적으로 분류
       let errorType = 'UNKNOWN';
       if (error.name === 'TokenExpiredError') {
         errorType = 'EXPIRED';
-        console.error(`${logPrefix} Token expired at: ${error.expiredAt}`);
       } else if (error.name === 'JsonWebTokenError') {
         errorType = 'MALFORMED';
       } else if (error.name === 'NotBeforeError') {
         errorType = 'NOT_ACTIVE';
       }
+
+      logger.error('JWT verification failed', {
+        requestId, verifyDuration, errorType, errorName: error.name,
+      });
 
       throw new Error(`Invalid access token [${errorType}]: ${error.message}`);
     }
@@ -185,16 +173,13 @@ class JWTUtils {
       throw new Error('Authorization header missing');
     }
 
-    console.log('Full auth header:', JSON.stringify(authHeader));
     const parts = authHeader.split(' ');
-    console.log('Header parts:', parts.length, JSON.stringify(parts));
 
     if (parts.length !== 2 || parts[0] !== 'Bearer') {
-      console.error('Invalid header format. Expected "Bearer <token>", got:', authHeader);
+      logger.warn('Invalid authorization header format', { authHeader });
       throw new Error('Invalid authorization header format');
     }
 
-    console.log('Extracted token preview:', parts[1].substring(0, 20) + '...');
     return parts[1];
   }
 }
@@ -316,7 +301,7 @@ class SessionManager {
       'DELETE FROM user_sessions WHERE expires_at < CURRENT_TIMESTAMP',
     );
 
-    console.log(`Cleaned up ${result.rowCount} expired sessions`);
+    logger.info('Cleaned up expired sessions', { count: result.rowCount });
     return result.rowCount;
   }
 
@@ -396,8 +381,6 @@ function authenticateToken(req, res, next) {
       throw new Error('No token provided in header or query parameter');
     }
 
-    console.log(`[AUTH-${requestId}] Token source: ${tokenSource}, preview: ${token.substring(0, 20)}...`);
-
     // 토큰 검증 시작
     tokenValidationStart = Date.now();
     const decoded = JWTUtils.verifyAccessToken(token, requestId);
@@ -456,7 +439,7 @@ function authenticateToken(req, res, next) {
     // 성능 메트릭 기록
     AuthPerformanceMonitor.recordAuth(false, totalDuration, tokenSource, errorType);
 
-    console.error(`[AUTH-${requestId}] Authentication failed: ${error.message}`);
+    logger.error('Authentication failed', { requestId, error: error.message });
     return res.status(401).json({
       success: false,
       error: {
@@ -475,23 +458,21 @@ function optionalAuthentication(req, res, next) {
   const startTime = Date.now();
 
   try {
-    console.log(`[OPT-AUTH-${requestId}] Optional authentication started for ${req.method} ${req.originalUrl}`);
+    logger.debug('Optional authentication started', { requestId, method: req.method, url: req.originalUrl });
 
     const authHeader = req.headers.authorization;
     const queryToken = req.query.token;
 
     if (!authHeader && !queryToken) {
-      console.log(`[OPT-AUTH-${requestId}] No auth token provided, proceeding without authentication`);
+      logger.debug('No auth token provided, proceeding without authentication', { requestId });
       return next();
     }
 
     let token;
     if (authHeader) {
       token = JWTUtils.extractTokenFromHeader(authHeader);
-      console.log(`[OPT-AUTH-${requestId}] Token extracted from header`);
     } else if (queryToken) {
       token = queryToken;
-      console.log(`[OPT-AUTH-${requestId}] Token extracted from query parameter`);
     }
 
     const decoded = JWTUtils.verifyAccessToken(token, requestId);
@@ -505,13 +486,12 @@ function optionalAuthentication(req, res, next) {
     };
 
     const duration = Date.now() - startTime;
-    console.log(`[OPT-AUTH-${requestId}] ✓ Optional authentication successful in ${duration}ms for user: ${decoded.username}`);
+    logger.info('Optional authentication successful', { requestId, duration, username: decoded.username });
     next();
   } catch (error) {
     const duration = Date.now() - startTime;
     // 토큰이 유효하지 않아도 계속 진행
-    console.warn(`[OPT-AUTH-${requestId}] Optional authentication failed in ${duration}ms: ${error.message}`);
-    console.log(`[OPT-AUTH-${requestId}] Proceeding without authentication`);
+    logger.warn('Optional authentication failed, proceeding without auth', { requestId, duration, error: error.message });
     next();
   }
 }
@@ -565,14 +545,14 @@ class AuthPerformanceMonitor {
 
   static logMetrics() {
     const metrics = this.getMetrics();
-    console.log('=== AUTH PERFORMANCE METRICS ===');
-    console.log(`Total Requests: ${metrics.totalRequests}`);
-    console.log(`Success Rate: ${metrics.successRate.toFixed(2)}%`);
-    console.log(`Average Response Time: ${metrics.avgResponseTime.toFixed(2)}ms`);
-    console.log(`Slow Requests (>100ms): ${metrics.slowRequests}`);
-    console.log(`Token Sources - Header: ${metrics.tokenSources.header}, Query: ${metrics.tokenSources.query}`);
-    console.log('Error Types:', metrics.errorTypes);
-    console.log('================================');
+    logger.info('Auth performance metrics', {
+      totalRequests: metrics.totalRequests,
+      successRate: metrics.successRate.toFixed(2),
+      avgResponseTime: metrics.avgResponseTime.toFixed(2),
+      slowRequests: metrics.slowRequests,
+      tokenSources: metrics.tokenSources,
+      errorTypes: metrics.errorTypes,
+    });
   }
 }
 
@@ -615,7 +595,7 @@ function auditLog(action, resourceType = null) {
               ],
             );
           } catch (error) {
-            console.error('Failed to create audit log:', error.message);
+            logger.error('Failed to create audit log', { error: error.message });
           }
         });
       }

@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
+const logger = require('./logger');
 
 // 환경변수 검증 함수
 function validateDatabaseConfig() {
@@ -43,7 +44,7 @@ const dbConfig = {
     : false,
 
   // 로그 설정
-  log: process.env.NODE_ENV === 'development' ? console.log : undefined,
+  log: process.env.NODE_ENV === 'development' ? (msg) => logger.debug(msg) : undefined,
 
   // 에러 처리
   application_name: 'jenkins-nas-backend',
@@ -60,23 +61,25 @@ function createPool() {
 
       // 연결 풀 이벤트 리스너
       pool.on('connect', (client) => {
-        console.log('New database client connected');
+        logger.debug('New database client connected');
         // 세션별 설정
         client.query('SET timezone=\'UTC\'');
       });
 
       pool.on('remove', () => {
-        console.log('Database client removed from pool');
+        logger.debug('Database client removed from pool');
       });
 
       pool.on('error', (err) => {
-        console.error('Unexpected database pool error:', err);
+        logger.error('Unexpected database pool error', { error: err.message });
         process.exit(1);
       });
 
-      console.log(`Database pool created successfully (${dbConfig.host}:${dbConfig.port}/${dbConfig.database})`);
+      logger.info('Database pool created successfully', {
+        host: dbConfig.host, port: dbConfig.port, database: dbConfig.database,
+      });
     } catch (error) {
-      console.error('Failed to create database pool:', error.message);
+      logger.error('Failed to create database pool', { error: error.message });
       throw error;
     }
   }
@@ -94,7 +97,7 @@ async function testConnection() {
     });
     return true;
   } catch (error) {
-    console.error('Database connection test failed:', error.message);
+    logger.error('Database connection test failed', { error: error.message });
     throw error;
   } finally {
     client.release();
@@ -176,10 +179,10 @@ function getPoolStatus() {
 // 연결 풀 종료
 async function closePool() {
   if (pool) {
-    console.log('Closing database pool...');
+    logger.info('Closing database pool...');
     await pool.end();
     pool = null;
-    console.log('Database pool closed successfully');
+    logger.info('Database pool closed successfully');
   }
 }
 
@@ -188,7 +191,7 @@ async function runMigrations() {
   const migrationsDir = path.join(__dirname, '../../database/migrations');
 
   if (!fs.existsSync(migrationsDir)) {
-    console.log('No migrations directory found, skipping migrations');
+    logger.info('No migrations directory found, skipping migrations');
     return;
   }
 
@@ -197,11 +200,11 @@ async function runMigrations() {
     .sort();
 
   if (migrationFiles.length === 0) {
-    console.log('No migration files found');
+    logger.info('No migration files found');
     return;
   }
 
-  console.log(`Running ${migrationFiles.length} migration(s)...`);
+  logger.info(`Running ${migrationFiles.length} migration(s)...`);
 
   for (const file of migrationFiles) {
     try {
@@ -212,20 +215,20 @@ async function runMigrations() {
         await client.query(sql);
       });
 
-      console.log(`✓ Migration ${file} completed`);
+      logger.info('Migration completed', { file });
     } catch (error) {
       console.error(`✗ Migration ${file} failed:`, error.message);
       throw error;
     }
   }
 
-  console.log('All migrations completed successfully');
+  logger.info('All migrations completed successfully');
 }
 
 // 데이터베이스 초기화
 async function initializeDatabase() {
   try {
-    console.log('Initializing database connection...');
+    logger.info('Initializing database connection...');
 
     // 연결 풀 생성
     createPool();

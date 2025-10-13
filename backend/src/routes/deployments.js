@@ -8,48 +8,6 @@ const { getNASService } = require('../services/nasService');
 
 const router = express.Router();
 
-// DEBUG: 인증 없는 테스트 엔드포인트 (인증 미들웨어 이전에 배치)
-router.get('/test-deployment-info/:version/:projectName/:buildNumber',
-  async (req, res) => {
-    const { version, projectName, buildNumber } = req.params;
-    const fullProjectName = `${version}/${projectName}`;
-
-    console.log(`=== 테스트 deployment-info: ${fullProjectName}#${buildNumber} ===`);
-
-    try {
-      const { Pool } = require('pg');
-      const pool = new Pool({
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT,
-        database: process.env.DB_NAME,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-      });
-
-      const dbResult = await pool.query(
-        'SELECT * FROM deployment_paths WHERE project_name = $1 AND build_number = $2',
-        [fullProjectName, parseInt(buildNumber)],
-      );
-
-      await pool.end();
-
-      return res.json({
-        success: true,
-        debug: {
-          fullProjectName,
-          buildNumber: parseInt(buildNumber),
-          dbRows: dbResult.rows.length,
-          dbRecord: dbResult.rows[0] || null,
-        },
-      });
-    } catch (error) {
-      return res.json({
-        success: false,
-        error: error.message,
-      });
-    }
-  },
-);
 
 // 모든 배포 라우트는 인증 필요
 router.use(authenticateToken);
@@ -729,7 +687,6 @@ router.get('/logs/*',
       }
 
       // TEMP: TEST 용도로 인증 우회
-      console.log(`TEST: Logs request for ${projectName}#${buildNumber}`);
 
       const jenkinsService = getJenkinsService();
 
@@ -1844,7 +1801,7 @@ router.get('/share/upload',
         error: error.message,
       });
     }
-  }
+  },
 );
 
 module.exports = router;

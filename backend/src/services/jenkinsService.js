@@ -1535,19 +1535,15 @@ class JenkinsService {
   extractBranchInfo(actions) {
     if (!actions || !Array.isArray(actions)) return 'main';
 
-    console.log('Extracting branch info from actions:', JSON.stringify(actions, null, 2)); // 디버깅
 
     // Git 브랜치 정보 찾기
     for (const action of actions) {
-      console.log('Processing action:', action._class, action); // 디버깅
 
       // Git plugin의 lastBuiltRevision에서 브랜치 정보 추출
       if (action.lastBuiltRevision && action.lastBuiltRevision.branch) {
         const branches = action.lastBuiltRevision.branch;
-        console.log('Found branches in lastBuiltRevision:', branches); // 디버깅
         if (Array.isArray(branches) && branches.length > 0) {
           const branchName = branches[0].name;
-          console.log('Extracted branch name:', branchName); // 디버깅
           // origin/ 접두사 제거
           return branchName ? branchName.replace('origin/', '').replace('refs/heads/', '') : 'main';
         }
@@ -1557,7 +1553,6 @@ class JenkinsService {
       if (action._class === 'hudson.plugins.git.util.BuildData' && action.lastBuiltRevision) {
         if (action.lastBuiltRevision.branch && Array.isArray(action.lastBuiltRevision.branch)) {
           const branchName = action.lastBuiltRevision.branch[0]?.name;
-          console.log('Found branch in BuildData:', branchName); // 디버깅
           if (branchName) {
             return branchName.replace('origin/', '').replace('refs/heads/', '');
           }
@@ -1573,14 +1568,12 @@ class JenkinsService {
             param.name.toLowerCase() === 'branch_name'
           ),
         );
-        console.log('Found branch parameter:', branchParam); // 디버깅
         if (branchParam && branchParam.value) {
           return branchParam.value.replace('refs/heads/', '').replace('origin/', '');
         }
       }
     }
 
-    console.log('No branch info found, returning main'); // 디버깅
     return 'main'; // 기본값
   }
 
