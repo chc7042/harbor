@@ -14,15 +14,41 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
   const [lastUpdate, setLastUpdate] = useState(null);
   const [error, setError] = useState(null);
   const previousDeployments = useRef(initialDeployments);
-  const notifiedDeployments = useRef(new Set()); // 이미 알림을 보낸 배포 ID 추적
+  // localStorage에서 알림 기록 복원
+  const getNotificationCache = () => {
+    try {
+      const saved = localStorage.getItem('harbor_notified_deployments');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch (error) {
+      console.error('Failed to load notification cache:', error);
+      return new Set();
+    }
+  };
+
+  const saveNotificationCache = (cache) => {
+    try {
+      localStorage.setItem('harbor_notified_deployments', JSON.stringify([...cache]));
+    } catch (error) {
+      console.error('Failed to save notification cache:', error);
+    }
+  };
+
+  const notifiedDeployments = useRef(getNotificationCache()); // 이미 알림을 보낸 배포 ID 추적
   
   // 초기 배포들을 알림 기록에 추가 (중복 알림 방지)
   useEffect(() => {
+    let shouldSave = false;
     initialDeployments.forEach(deployment => {
       const notificationKey = `${deployment.id}-${deployment.status}`;
-      notifiedDeployments.current.add(notificationKey);
+      if (!notifiedDeployments.current.has(notificationKey)) {
+        notifiedDeployments.current.add(notificationKey);
+        shouldSave = true;
+      }
     });
-  }, []);
+    if (shouldSave) {
+      saveNotificationCache(notifiedDeployments.current);
+    }
+  }, [initialDeployments]);
 
   // 배포 데이터 조회 함수
   const fetchDeployments = useCallback(async () => {
@@ -71,14 +97,17 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
           if (deployment.status === 'success') {
             toast.success(`새 배포 완료: ${deployment.project_name} #${deployment.build_number}`);
             notifiedDeployments.current.add(notificationKey);
+            saveNotificationCache(notifiedDeployments.current);
           } else if (deployment.status === 'failed') {
             toast.error(`배포 실패: ${deployment.project_name} #${deployment.build_number}`);
             notifiedDeployments.current.add(notificationKey);
+            saveNotificationCache(notifiedDeployments.current);
           } else if (deployment.status === 'in_progress') {
             toast(`배포 시작: ${deployment.project_name} #${deployment.build_number}`, {
               icon: '⚡',
             });
             notifiedDeployments.current.add(notificationKey);
+            saveNotificationCache(notifiedDeployments.current);
           }
           
           // 이벤트 발생
@@ -98,9 +127,11 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
           if (prev.status !== 'success' && deployment.status === 'success') {
             toast.success(`배포 성공: ${deployment.project_name} #${deployment.build_number}`);
             notifiedDeployments.current.add(notificationKey);
+            saveNotificationCache(notifiedDeployments.current);
           } else if (prev.status !== 'failed' && deployment.status === 'failed') {
             toast.error(`배포 실패: ${deployment.project_name} #${deployment.build_number}`);
             notifiedDeployments.current.add(notificationKey);
+            saveNotificationCache(notifiedDeployments.current);
           }
           
           // 이벤트 발생
