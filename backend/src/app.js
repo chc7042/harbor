@@ -305,7 +305,7 @@ function initializeNASScanner(dbConnected) {
 }
 
 // Graceful shutdown
-function gracefulShutdown(signal) {
+async function gracefulShutdown(signal) {
   logger.info(`${signal} 수신, 서버 종료 중...`);
 
   // WebSocket 서버 정리 제거 - 폴링에서는 불필요
