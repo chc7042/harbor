@@ -5,6 +5,7 @@ const { AppError } = require('../middleware/error');
 const logger = require('../config/logger');
 const { getJenkinsService } = require('../services/jenkinsService');
 const { getNASService } = require('../services/nasService');
+const { getDeploymentPathService } = require('../services/deploymentPathService');
 
 const router = express.Router();
 
@@ -1144,6 +1145,27 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
               }
 
               logger.info(`NAS directory verified: ${unixPath} (${files.length} files found)`);
+
+              // NAS 스캔 성공 시 캐시에 저장
+              try {
+                const deploymentPathService = getDeploymentPathService();
+                const buildDate = new Date(); // 현재 날짜를 빌드 날짜로 사용
+
+                await deploymentPathService.saveDeploymentPath({
+                  projectName: fullProjectName,
+                  version: version || '1.0.0',
+                  buildNumber: parseInt(buildNumber) || 0,
+                  buildDate: buildDate,
+                  nasPath: deploymentInfo.nasPath || deploymentInfo.deploymentPath,
+                  downloadFile: deploymentInfo.downloadFile,
+                  allFiles: deploymentInfo.allFiles || [],
+                });
+
+                logger.info(`Cached deployment path: ${fullProjectName} v${version} #${buildNumber}`);
+              } catch (cacheError) {
+                // 캐시 저장 실패해도 메인 로직은 계속 진행
+                logger.warn(`Failed to cache deployment path: ${cacheError.message}`);
+              }
             } catch (error) {
               logger.warn(`Failed to get file list for ${unixPath}: ${error.message}`);
               deploymentInfo.directoryVerified = true;
@@ -1534,6 +1556,31 @@ router.get('/deployment-info/:projectName/:buildNumber',
               }
 
               logger.info(`NAS directory verified: ${unixPath} (${files.length} files found)`);
+
+              // NAS 스캔 성공 시 캐시에 저장 (2-segment route)
+              try {
+                const deploymentPathService = getDeploymentPathService();
+                const buildDate = new Date(); // 현재 날짜를 빌드 날짜로 사용
+
+                // 프로젝트명에서 버전 추출
+                const versionMatch = projectName.match(/(\d+\.\d+\.\d+)/);
+                const extractedVersion = versionMatch ? versionMatch[1] : '1.0.0';
+
+                await deploymentPathService.saveDeploymentPath({
+                  projectName: projectName,
+                  version: extractedVersion,
+                  buildNumber: parseInt(buildNumber) || 0,
+                  buildDate: buildDate,
+                  nasPath: deploymentInfo.nasPath || deploymentInfo.deploymentPath,
+                  downloadFile: deploymentInfo.downloadFile,
+                  allFiles: deploymentInfo.allFiles || [],
+                });
+
+                logger.info(`Cached deployment path (2-segment): ${projectName} v${extractedVersion} #${buildNumber}`);
+              } catch (cacheError) {
+                // 캐시 저장 실패해도 메인 로직은 계속 진행
+                logger.warn(`Failed to cache deployment path (2-segment): ${cacheError.message}`);
+              }
             } catch (error) {
               logger.warn(`Failed to get file list for ${unixPath}: ${error.message}`);
               deploymentInfo.directoryVerified = true;
@@ -1568,6 +1615,27 @@ router.get('/deployment-info/:projectName/:buildNumber',
                     deploymentInfo.alternativePathUsed = altPath;
 
                     logger.info(`Found alternative NAS path: ${altPath} (${files.length} files)`);
+
+                    // 대체 경로 찾은 경우에도 캐시에 저장
+                    try {
+                      const deploymentPathService = getDeploymentPathService();
+                      const buildDate = new Date(); // 현재 날짜를 빌드 날짜로 사용
+
+                      await deploymentPathService.saveDeploymentPath({
+                        projectName: projectName,
+                        version: version,
+                        buildNumber: parseInt(buildNumber) || 0,
+                        buildDate: buildDate,
+                        nasPath: deploymentInfo.nasPath,
+                        downloadFile: deploymentInfo.downloadFile,
+                        allFiles: files || [],
+                      });
+
+                      logger.info(`Cached alternative deployment path: ${projectName} v${version} #${buildNumber} -> ${altPath}`);
+                    } catch (cacheError) {
+                      // 캐시 저장 실패해도 메인 로직은 계속 진행
+                      logger.warn(`Failed to cache alternative deployment path: ${cacheError.message}`);
+                    }
                     break;
                   } catch (error) {
                     logger.warn(`Failed to get files from alternative path ${altPath}: ${error.message}`);
@@ -1802,6 +1870,172 @@ router.get('/share/upload',
         message: 'Upload 폴더 공유 링크 가져오기에 실패했습니다.',
         error: error.message,
       });
+    }
+  },
+);
+
+/**
+ * @swagger
+ * /api/deployments/cache/stats:
+ *   get:
+ *     tags:
+ *       - Deployments
+ *     summary: 배포 경로 캐시 통계 조회
+ *     description: 캐시된 배포 경로 통계 정보 조회
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 캐시 통계 조회 성공
+ */
+router.get('/cache/stats', async (req, res, next) => {
+  try {
+    const deploymentPathService = getDeploymentPathService();
+    const stats = await deploymentPathService.getCacheStats();
+
+    res.json({
+      success: true,
+      data: stats,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/deployments/cache/cleanup:
+ *   post:
+ *     tags:
+ *       - Deployments
+ *     summary: 오래된 캐시 데이터 정리
+ *     description: 지정된 일수보다 오래된 캐시 데이터 삭제
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               daysOld:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 365
+ *                 default: 90
+ *                 description: 삭제할 데이터의 기준 일수
+ *     responses:
+ *       200:
+ *         description: 캐시 정리 성공
+ */
+router.post('/cache/cleanup',
+  [
+    body('daysOld')
+      .optional()
+      .isInt({ min: 1, max: 365 })
+      .withMessage('daysOld must be between 1 and 365'),
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError('유효하지 않은 요청 파라미터입니다.', 400, errors.array());
+      }
+
+      const { daysOld = 90 } = req.body;
+      const deploymentPathService = getDeploymentPathService();
+
+      const deletedCount = await deploymentPathService.cleanupOldPaths(daysOld);
+
+      res.json({
+        success: true,
+        data: {
+          deletedCount,
+          daysOld,
+          message: `${deletedCount}개의 오래된 캐시 항목이 삭제되었습니다.`,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/**
+ * @swagger
+ * /api/deployments/cache/invalidate:
+ *   delete:
+ *     tags:
+ *       - Deployments
+ *     summary: 특정 배포 경로 캐시 무효화
+ *     description: 특정 프로젝트의 배포 경로 캐시를 삭제
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: projectName
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 프로젝트명
+ *       - in: query
+ *         name: version
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 버전
+ *       - in: query
+ *         name: buildNumber
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 빌드 번호
+ *     responses:
+ *       200:
+ *         description: 캐시 무효화 성공
+ */
+router.delete('/cache/invalidate',
+  [
+    query('projectName')
+      .notEmpty()
+      .withMessage('projectName is required'),
+    query('version')
+      .notEmpty()
+      .withMessage('version is required'),
+    query('buildNumber')
+      .isInt({ min: 0 })
+      .withMessage('buildNumber must be a non-negative integer'),
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError('유효하지 않은 요청 파라미터입니다.', 400, errors.array());
+      }
+
+      const { projectName, version, buildNumber } = req.query;
+      const deploymentPathService = getDeploymentPathService();
+
+      const deleted = await deploymentPathService.deleteDeploymentPath(
+        projectName,
+        version,
+        parseInt(buildNumber),
+      );
+
+      res.json({
+        success: true,
+        data: {
+          deleted,
+          projectName,
+          version,
+          buildNumber,
+          message: deleted ?
+            '캐시가 성공적으로 삭제되었습니다.' :
+            '삭제할 캐시를 찾을 수 없습니다.',
+        },
+      });
+    } catch (error) {
+      next(error);
     }
   },
 );
