@@ -1308,9 +1308,48 @@ router.get('/deployment-info/:projectName/:buildNumber',
           logger.error(`DB 연결 정보 (2-segment) - host: ${process.env.DB_HOST}, port: ${process.env.DB_PORT}, db: ${process.env.DB_NAME}, user: ${process.env.DB_USER}`);
         }
 
-        // 2. DB에 데이터가 있으면 Synology 공유 링크를 생성하고 반환
+        // 2. DB에 데이터가 있으면 즉시 반환 (성능 최적화)
         logger.info(`🔍 DB 조회 결과 확인 - deploymentInfo exists: ${!!deploymentInfo}`);
         if (deploymentInfo) {
+          logger.info('📋 캐시된 데이터 발견, 즉시 반환합니다');
+          
+          return res.json({
+            success: true,
+            data: {
+              projectName,
+              buildNumber: parseInt(buildNumber),
+              status: 'SUCCESS',
+              deploymentPath: deploymentInfo.deploymentPath,
+              nasPath: deploymentInfo.nasPath,
+              downloadFile: deploymentInfo.downloadFile,
+              allFiles: deploymentInfo.allFiles || [],
+              verifiedFiles: deploymentInfo.verifiedFiles || [],
+              directoryVerified: deploymentInfo.directoryVerified || false,
+              downloadFileVerified: deploymentInfo.downloadFileVerified || false,
+              buildDate: deploymentInfo.buildDate,
+              buildNumber: deploymentInfo.buildNumber,
+              cached: true, // 캐시된 데이터임을 표시
+            },
+            message: '캐시된 배포 정보를 조회했습니다.',
+          });
+        }
+
+        // 3. DB에 데이터가 없는 경우만 느린 작업 수행  
+        logger.info(`캐시된 데이터가 없어 실시간 조회를 시작합니다`);
+        // 성능상의 이유로 실시간 조회는 비활성화 (캐시된 데이터만 사용)
+        return res.json({
+          success: false,
+          message: '캐시된 배포 정보가 없습니다. 관리자에게 문의하세요.',
+          data: {
+            projectName,
+            buildNumber: parseInt(buildNumber),
+            status: 'NO_CACHE',
+            cached: false,
+          }
+        });
+        
+        // 아래는 원래의 느린 코드 (비활성화됨)
+        if (false) {
           logger.info('📋 deploymentInfo 내용:', JSON.stringify(deploymentInfo, null, 2));
           // 프로젝트명에서 버전과 날짜 추출 (예: mr3.0.0_250310_26)
           let version = '3.0.0';
