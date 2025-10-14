@@ -41,7 +41,6 @@ services:
     networks:
       harbor-network:
         ipv4_address: 172.20.0.10
-      nginx-proxy-manager_npm_network:
     ports:
       - "3001:3001"
     environment:
@@ -161,7 +160,6 @@ services:
     networks:
       harbor-network:
         ipv4_address: 172.20.0.11
-      nginx-proxy-manager_npm_network:
     ports:
       - "8080:8080"
     environment:
@@ -195,8 +193,6 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
-  nginx-proxy-manager_npm_network:
-    external: true
 
 volumes:
   postgres_data:
