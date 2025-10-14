@@ -14,6 +14,7 @@ import {
   Download
 } from 'lucide-react';
 import downloadService from '../services/downloadService';
+import { loadArtifacts } from '../services/api';
 
 const DeploymentTable = ({
   deployments = [],
@@ -21,9 +22,47 @@ const DeploymentTable = ({
   sortConfig,
   onSort,
   onRowClick,
+  onDeploymentUpdate, // 새 prop: 배포 정보 업데이트를 위한 콜백
   className = ''
 }) => {
   const [downloadingFiles, setDownloadingFiles] = useState(new Set());
+  const [loadingArtifacts, setLoadingArtifacts] = useState(new Set()); // 아티팩트 로딩 중인 배포들
+
+  // 아티팩트 지연 로딩 함수
+  const handleLoadArtifacts = async (deployment) => {
+    const deploymentKey = `${deployment.version}-${deployment.buildNumber}`;
+    
+    if (loadingArtifacts.has(deploymentKey)) {
+      return; // 이미 로딩 중인 경우
+    }
+
+    setLoadingArtifacts(prev => new Set(prev).add(deploymentKey));
+
+    try {
+      console.log(`[ARTIFACT-LOADING] 아티팩트 로딩 시작 - 버전: ${deployment.version}, 빌드: ${deployment.buildNumber}`);
+      
+      const response = await loadArtifacts(deployment.version, deployment.buildNumber);
+      
+      if (response.success && onDeploymentUpdate) {
+        // 부모 컴포넌트에 업데이트된 아티팩트 정보 전달
+        const updatedDeployment = {
+          ...deployment,
+          artifacts: response.data.artifacts || [],
+        };
+        onDeploymentUpdate(updatedDeployment);
+        
+        console.log(`[ARTIFACT-LOADING] ✅ 아티팩트 로딩 완료 - ${response.data.artifacts?.length || 0}개`);
+      }
+    } catch (error) {
+      console.error(`[ARTIFACT-LOADING] ❌ 아티팩트 로딩 실패:`, error);
+    } finally {
+      setLoadingArtifacts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(deploymentKey);
+        return newSet;
+      });
+    }
+  };
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -358,8 +397,28 @@ const DeploymentTable = ({
 
                   <td onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center space-x-1">
-                      {/* 다운로드 버튼 - 통합 다운로드 서비스 사용 */}
-                      {deployment.artifacts && deployment.artifacts.length > 0 && (
+                      {/* 아티팩트 관련 버튼 - 지연 로딩 지원 */}
+                      {deployment.hasArtifacts && deployment.artifacts && deployment.artifacts.length === 0 ? (
+                        // 아티팩트가 있지만 아직 로딩되지 않은 경우 - 로드 버튼 표시
+                        <div className="relative group">
+                          <button
+                            className={`p-1 transition-colors rounded text-xs px-2 py-1 ${
+                              loadingArtifacts.has(`${deployment.version}-${deployment.buildNumber}`)
+                                ? 'bg-blue-100 text-blue-600 animate-pulse'
+                                : 'bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-600'
+                            }`}
+                            title="아티팩트 정보 로드"
+                            disabled={loadingArtifacts.has(`${deployment.version}-${deployment.buildNumber}`)}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await handleLoadArtifacts(deployment);
+                            }}
+                          >
+                            {loadingArtifacts.has(`${deployment.version}-${deployment.buildNumber}`) ? 'Loading...' : 'Load'}
+                          </button>
+                        </div>
+                      ) : deployment.artifacts && deployment.artifacts.length > 0 ? (
+                        // 아티팩트가 이미 로딩된 경우 - 다운로드 버튼 표시
                         <div className="relative group">
                           <button
                             className={`p-1 transition-colors rounded ${
@@ -398,7 +457,7 @@ const DeploymentTable = ({
                             </span>
                           )}
                         </div>
-                      )}
+                      ) : null}
                       
                       {/* 상세 정보 버튼 */}
                       <button

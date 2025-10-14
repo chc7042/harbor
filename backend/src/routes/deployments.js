@@ -303,42 +303,8 @@ router.get('/',
         const endIndex = startIndex + parseInt(limit);
         const paginatedBuilds = allBuilds.slice(startIndex, endIndex);
 
-        // 아티팩트 정보 추가하여 응답 데이터 변환
-        const deployments = await Promise.all(paginatedBuilds.map(async (build) => {
-          let artifacts = [];
-
-          // 성공한 배포에 대해서만 최종 아티팩트 (V1.2.0_XXX.tar) 검색
-          if (build.status === 'success' || build.status === 'SUCCESS') {
-            try {
-              const nasService = getNASService();
-
-              // 버전 그룹인 경우 최종 아티팩트 검색
-              if (build.subJobs && build.subJobs.length > 0) {
-                // V1.2.0_XXX.tar 형태의 최종 아티팩트 검색
-                const version = build.version || build.projectName;
-                artifacts = await nasService.searchFinalArtifactsByVersion(version);
-                logger.info(`Found ${artifacts.length} final artifacts for version ${version}`);
-              } else {
-                // 개별 잡인 경우 기존 로직 유지
-                const versionMatch = build.projectName.match(/(\d+\.\d+\.\d+)/);
-                if (versionMatch) {
-                  const version = versionMatch[1];
-                  const prefixMatch = build.projectName.match(/\/([a-z]+)\d+\.\d+\.\d+/);
-                  const prefix = prefixMatch ? prefixMatch[1] : null;
-
-                  artifacts = await nasService.searchArtifactsByVersion(version, prefix);
-                  logger.info(`Found ${artifacts.length} artifacts for ${build.projectName} version ${version} with prefix ${prefix}`);
-                } else {
-                  artifacts = await nasService.searchArtifactsFromBuildLog(build.projectName, build.buildNumber);
-                  logger.info(`Found ${artifacts.length} artifacts from build log for ${build.projectName}#${build.buildNumber}`);
-                }
-              }
-            } catch (error) {
-              logger.warn(`Failed to fetch artifacts for ${build.projectName}:`, error.message);
-              artifacts = [];
-            }
-          }
-
+        // 아티팩트 정보를 지연 로딩으로 변경 - N+1 쿼리 문제 해결
+        const deployments = paginatedBuilds.map((build) => {
           return {
             id: build.id,
             projectName: build.projectName,
@@ -356,14 +322,11 @@ router.get('/',
             commitHash: build.changes?.length > 0 ? build.changes[0].commitId : null,
             commitMessage: build.changes?.length > 0 ? build.changes[0].message : null,
             subJobs: build.subJobs || [],
-            artifacts: artifacts.filter(artifact => artifact.verified).map(artifact => ({
-              name: artifact.filename,
-              size: artifact.fileSize,
-              downloadUrl: `/api/files/download?path=${encodeURIComponent('/nas/release_version/' + artifact.nasPath)}`,
-              lastModified: artifact.lastModified,
-            })),
+            // 아티팩트 정보는 지연 로딩으로 처리 - 별도 API 엔드포인트에서 제공
+            artifacts: [], // 기본값으로 빈 배열
+            hasArtifacts: (build.status === 'success' || build.status === 'SUCCESS'), // 아티팩트 존재 여부만 표시
           };
-        }));
+        });
 
         logger.info(`배포 목록 조회 - 사용자: ${req.user.username}, 페이지: ${page}, Jenkins 데이터: ${deployments.length}개`);
 
@@ -2035,6 +1998,89 @@ router.delete('/cache/invalidate',
         },
       });
     } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/**
+ * @swagger
+ * /api/deployments/{version}/{buildNumber}/artifacts:
+ *   get:
+ *     tags:
+ *       - Deployments
+ *     summary: 특정 배포의 아티팩트 정보 조회
+ *     description: 지연 로딩을 위한 개별 배포의 아티팩트 정보를 조회합니다.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: version
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 배포 버전
+ *       - name: buildNumber
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 빌드 번호
+ *     responses:
+ *       200:
+ *         description: 아티팩트 정보 조회 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     artifacts:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     buildNumber:
+ *                       type: integer
+ *                     version:
+ *                       type: string
+ *                     cached:
+ *                       type: boolean
+ *       404:
+ *         description: 배포를 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
+router.get(
+  '/:version/:buildNumber/artifacts',
+  async (req, res, next) => {
+    try {
+      const { version, buildNumber } = req.params;
+      const nasService = getNASService();
+
+      logger.info(`아티팩트 조회 요청 - 사용자: ${req.user.username}, 버전: ${version}, 빌드: ${buildNumber}`);
+
+      // NAS에서 해당 버전의 아티팩트 검색
+      const artifacts = await nasService.searchFinalArtifactsByVersion(version);
+
+      res.json({
+        success: true,
+        data: {
+          artifacts: artifacts || [],
+          buildNumber: parseInt(buildNumber),
+          version: version,
+          cached: false, // 실시간 조회이므로 캐시되지 않음
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      logger.info(`아티팩트 조회 완료 - 버전: ${version}, 빌드: ${buildNumber}, 아티팩트 수: ${artifacts?.length || 0}`);
+
+    } catch (error) {
+      logger.error(`아티팩트 조회 실패 - 버전: ${req.params.version}, 빌드: ${req.params.buildNumber}, 오류: ${error.message}`);
       next(error);
     }
   },

@@ -303,6 +303,17 @@ const Deployments = () => {
     setIsModalOpen(true);
   };
 
+  // 배포 정보 업데이트 처리 (아티팩트 지연 로딩용)
+  const handleDeploymentUpdate = (updatedDeployment) => {
+    setDeployments(prev => 
+      prev.map(deployment => 
+        deployment.id === updatedDeployment.id 
+          ? { ...deployment, artifacts: updatedDeployment.artifacts }
+          : deployment
+      )
+    );
+  };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedDeployment(null);
@@ -340,6 +351,7 @@ const Deployments = () => {
           sortConfig={sortConfig}
           onSort={handleSort}
           onRowClick={handleRowClick}
+          onDeploymentUpdate={handleDeploymentUpdate}
           className="mb-6"
         />
 

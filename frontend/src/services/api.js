@@ -276,4 +276,15 @@ export const uploadFileStream = async (file, path, onProgress = null) => {
   }
 };
 
+// 지연 로딩을 위한 아티팩트 조회 함수
+export const loadArtifacts = async (version, buildNumber) => {
+  try {
+    const response = await api.get(`/deployments/${version}/${buildNumber}/artifacts`);
+    return response.data;
+  } catch (error) {
+    console.error(`Failed to load artifacts for version ${version}, build ${buildNumber}:`, error);
+    throw error;
+  }
+};
+
 export default api;
