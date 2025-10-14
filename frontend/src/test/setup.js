@@ -36,7 +36,7 @@ global.URL = class MockURL {
     this.search = '';
     this.hash = '';
   }
-  
+
   static createObjectURL = vi.fn(() => 'blob:mock-url');
   static revokeObjectURL = vi.fn();
 };

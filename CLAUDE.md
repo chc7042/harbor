@@ -293,7 +293,7 @@ The system includes comprehensive error handling for missing dependencies, allow
 ### Commit Message Convention
 Uses conventional commits with CommitLint enforcement:
 - `feat:` - New features
-- `fix:` - Bug fixes  
+- `fix:` - Bug fixes
 - `docs:` - Documentation changes
 - `style:` - Code style changes (formatting, etc.)
 - `refactor:` - Code refactoring
@@ -305,7 +305,7 @@ Uses conventional commits with CommitLint enforcement:
 
 ### Important Files and Directories
 - `database/migrations/` - PostgreSQL schema migrations
-- `monitoring/` - Prometheus, Grafana, and logging configurations  
+- `monitoring/` - Prometheus, Grafana, and logging configurations
 - `scripts/` - Development and deployment automation scripts
 - `docs/` - Project documentation and specifications
 - `.env.example` - Environment variable templates for development

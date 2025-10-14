@@ -21,7 +21,7 @@ const generateMD5Hash = (email) => {
  */
 export const getGravatarUrl = (email, size = 32) => {
   if (!email) return null;
-  
+
   const hash = generateMD5Hash(email);
   return `https://www.gravatar.com/avatar/${hash}?s=${size}&d=404`;
 };

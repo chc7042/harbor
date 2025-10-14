@@ -15,7 +15,7 @@ const UserAvatar = ({ user, size = 32, className = "" }) => {
     // Gravatar 이미지 존재 확인 (캐시 우회를 위해 타임스탬프 추가)
     const baseGravatarUrl = getGravatarUrl(user.email, size);
     const gravatarUrl = `${baseGravatarUrl}&_=${Date.now()}`;
-    
+
     // 이미지 로드 테스트
     const img = new Image();
     img.onload = () => {
@@ -27,7 +27,7 @@ const UserAvatar = ({ user, size = 32, className = "" }) => {
       setUseGravatar(false);
       setIsLoading(false);
     };
-    
+
     // 타임아웃 설정 (3초 후 fallback 사용)
     const timeout = setTimeout(() => {
       if (isLoading) {
@@ -43,7 +43,7 @@ const UserAvatar = ({ user, size = 32, className = "" }) => {
 
   if (isLoading) {
     return (
-      <div 
+      <div
         className={`rounded-full bg-gray-200 animate-pulse flex items-center justify-center ${className}`}
         style={{ width: size, height: size }}
       >

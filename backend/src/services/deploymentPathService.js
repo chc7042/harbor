@@ -184,7 +184,7 @@ class DeploymentPathService {
 
     try {
       const result = await this.executeWithRetry(
-        `SELECT * FROM ${this.tableName} 
+        `SELECT * FROM ${this.tableName}
          WHERE project_name = $1 AND version = $2 AND build_number = $3`,
         [projectName, version, buildNumber],
         'findByProjectVersionBuild',
@@ -258,7 +258,7 @@ class DeploymentPathService {
 
       // UPSERT 쿼리 (INSERT ... ON CONFLICT UPDATE)
       const result = await this.executeWithRetry(
-        `INSERT INTO ${this.tableName} 
+        `INSERT INTO ${this.tableName}
          (project_name, version, build_number, build_date, nas_path, download_file, all_files, verified_at, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (project_name, version, build_number)
@@ -302,9 +302,9 @@ class DeploymentPathService {
 
     try {
       const result = await this.executeWithRetry(
-        `SELECT * FROM ${this.tableName} 
-         WHERE project_name = $1 
-         ORDER BY build_date DESC, verified_at DESC 
+        `SELECT * FROM ${this.tableName}
+         WHERE project_name = $1
+         ORDER BY build_date DESC, verified_at DESC
          LIMIT $2`,
         [projectName, limit],
         'getRecentPathsByProject',
@@ -350,8 +350,8 @@ class DeploymentPathService {
 
     try {
       const result = await this.executeWithRetry(
-        `SELECT * FROM ${this.tableName} 
-         WHERE build_date BETWEEN $1 AND $2 
+        `SELECT * FROM ${this.tableName}
+         WHERE build_date BETWEEN $1 AND $2
          ORDER BY build_date DESC, project_name, build_number DESC`,
         [start, end],
         'getPathsByDateRange',
@@ -381,7 +381,7 @@ class DeploymentPathService {
 
     try {
       const result = await this.executeWithRetry(
-        `DELETE FROM ${this.tableName} 
+        `DELETE FROM ${this.tableName}
          WHERE project_name = $1 AND version = $2 AND build_number = $3`,
         [projectName, version, buildNumber],
         'deleteDeploymentPath',
@@ -417,7 +417,7 @@ class DeploymentPathService {
     try {
       // SQL 인젝션 방지를 위해 파라미터화된 쿼리 사용
       const result = await this.executeWithRetry(
-        `DELETE FROM ${this.tableName} 
+        `DELETE FROM ${this.tableName}
          WHERE verified_at < CURRENT_TIMESTAMP - ($1 || ' days')::INTERVAL`,
         [daysOld.toString()],
         'cleanupOldPaths',
@@ -442,7 +442,7 @@ class DeploymentPathService {
   async getCacheStats() {
     try {
       const statsQuery = `
-        SELECT 
+        SELECT
           COUNT(*) as total_cached_paths,
           COUNT(DISTINCT project_name) as unique_projects,
           COUNT(DISTINCT version) as unique_versions,
@@ -489,8 +489,8 @@ class DeploymentPathService {
 
     try {
       const result = await this.executeWithRetry(
-        `SELECT * FROM ${this.tableName} 
-         ORDER BY verified_at DESC 
+        `SELECT * FROM ${this.tableName}
+         ORDER BY verified_at DESC
          LIMIT $1`,
         [limit],
         'getRecentPaths',

@@ -34,7 +34,7 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
   };
 
   const notifiedDeployments = useRef(getNotificationCache()); // 이미 알림을 보낸 배포 ID 추적
-  
+
   // 초기 배포들을 알림 기록에 추가 (중복 알림 방지)
   useEffect(() => {
     let shouldSave = false;
@@ -56,7 +56,7 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
       setError(null);
       const response = await api.get('/deployments/recent?limit=20&hours=168'); // 최근 7일
       const deploymentData = response.data?.data || response.data || [];
-      
+
       if (Array.isArray(deploymentData)) {
         const transformedData = deploymentData.map(deployment => ({
           id: deployment.id,
@@ -76,10 +76,10 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
 
         // 새로운 배포나 상태 변경 감지
         const previous = previousDeployments.current;
-        const newDeployments = transformedData.filter(deployment => 
+        const newDeployments = transformedData.filter(deployment =>
           !previous.find(prev => prev.id === deployment.id)
         );
-        
+
         const statusChanges = transformedData.filter(deployment => {
           const prev = previous.find(p => p.id === deployment.id);
           return prev && prev.status !== deployment.status;
@@ -88,12 +88,12 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
         // 새로운 배포 알림 (중복 방지)
         newDeployments.forEach(deployment => {
           const notificationKey = `${deployment.id}-${deployment.status}`;
-          
+
           // 이미 알림을 보낸 배포는 건너뛰기
           if (notifiedDeployments.current.has(notificationKey)) {
             return;
           }
-          
+
           if (deployment.status === 'success') {
             toast.success(`새 배포 완료: ${deployment.project_name} #${deployment.build_number}`);
             notifiedDeployments.current.add(notificationKey);
@@ -109,7 +109,7 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
             notifiedDeployments.current.add(notificationKey);
             saveNotificationCache(notifiedDeployments.current);
           }
-          
+
           // 이벤트 발생
           pollingService.emit('deployment_update', deployment);
         });
@@ -117,12 +117,12 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
         // 상태 변경 알림 (중복 방지)
         statusChanges.forEach(deployment => {
           const notificationKey = `${deployment.id}-${deployment.status}`;
-          
+
           // 이미 알림을 보낸 배포는 건너뛰기
           if (notifiedDeployments.current.has(notificationKey)) {
             return;
           }
-          
+
           const prev = previous.find(p => p.id === deployment.id);
           if (prev.status !== 'success' && deployment.status === 'success') {
             toast.success(`배포 성공: ${deployment.project_name} #${deployment.build_number}`);
@@ -133,7 +133,7 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
             notifiedDeployments.current.add(notificationKey);
             saveNotificationCache(notifiedDeployments.current);
           }
-          
+
           // 이벤트 발생
           pollingService.emit('deployment_status_change', {
             deployment,
@@ -166,7 +166,7 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
     }
 
     const pollingKey = 'deployment_updates';
-    
+
     // 폴링 시작
     pollingService.start(pollingKey, fetchDeployments, pollingInterval);
     setIsPolling(true);
@@ -214,24 +214,24 @@ export const useProjectPolling = (pollingInterval = 5000) => {
       setError(null);
       const response = await api.get('/projects');
       const projectData = response.data?.data || response.data || [];
-      
+
       // 프로젝트를 버전 번호 기준으로 내림차순 정렬
       const sortedProjects = projectData.sort((a, b) => {
         const versionA = a.name.match(/(\d+)\.(\d+)\.?(\d*)/);
         const versionB = b.name.match(/(\d+)\.(\d+)\.?(\d*)/);
-        
+
         if (versionA && versionB) {
           const parseVersion = (match) => {
             return [
               parseInt(match[1], 10) || 0,
-              parseInt(match[2], 10) || 0, 
+              parseInt(match[2], 10) || 0,
               parseInt(match[3], 10) || 0
             ];
           };
-          
+
           const vA = parseVersion(versionA);
           const vB = parseVersion(versionB);
-          
+
           for (let i = 0; i < 3; i++) {
             if (vA[i] !== vB[i]) {
               return vB[i] - vA[i];
@@ -239,10 +239,10 @@ export const useProjectPolling = (pollingInterval = 5000) => {
           }
           return 0;
         }
-        
+
         return b.name.localeCompare(a.name);
       });
-      
+
       setProjects(sortedProjects);
       setLastUpdate(new Date());
     } catch (error) {
@@ -259,7 +259,7 @@ export const useProjectPolling = (pollingInterval = 5000) => {
     }
 
     const pollingKey = 'project_updates';
-    
+
     // 폴링 시작 (프로젝트는 덜 자주 업데이트됨)
     pollingService.start(pollingKey, fetchProjects, pollingInterval);
     setIsPolling(true);

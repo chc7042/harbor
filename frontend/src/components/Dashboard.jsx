@@ -21,7 +21,7 @@ const Dashboard = () => {
   const { isActive: isPollingActive } = usePollingStatus();
 
   const [initialDeployments, setInitialDeployments] = useState([]);
-  
+
   // 폴링을 사용한 실시간 데이터 업데이트 (배포 데이터와 프로젝트 모두 5분마다)
   const { deployments, isPolling: isDeploymentPolling, lastUpdate: deploymentsLastUpdate, refresh: refreshDeployments } = useDeploymentPolling(initialDeployments, 300000);
   const { projects, isPolling: isProjectPolling, lastUpdate: projectsLastUpdate, refresh: refreshProjects } = useProjectPolling(300000);
@@ -96,7 +96,7 @@ const Dashboard = () => {
     try {
       // 초기 배포 데이터 로드
       await fetchDeployments();
-      
+
       // 프로젝트는 폴링이 자동으로 처리하므로 수동 호출
       await refreshProjects();
     } catch (error) {
@@ -135,7 +135,7 @@ const Dashboard = () => {
 
       // 날짜 범위에 따른 시간 제한 설정
       let hoursLimit = '720'; // 기본값 30일 (30 * 24 = 720시간)
-      
+
       if (filters.dateRange !== 'all') {
         if (filters.dateRange === 'custom') {
           if (filters.startDate) params.append('startDate', filters.startDate);
@@ -171,13 +171,13 @@ const Dashboard = () => {
       if (hoursLimit) {
         params.append('hours', hoursLimit);
       }
-      
+
       const apiUrl = `/deployments/recent?${params}`;
       const response = await api.get(apiUrl);
-      
+
       // response.data가 있고 success가 true이거나, data 배열이 직접 있는 경우 처리
       const deploymentData = response.data?.data || response.data || [];
-      
+
       if (Array.isArray(deploymentData)) {
         // 프론트엔드 형식에 맞게 데이터 변환
         const transformedData = deploymentData.map(deployment => ({
@@ -197,7 +197,7 @@ const Dashboard = () => {
         }));
 
         setInitialDeployments(transformedData);
-        
+
         // API 응답에서 페이지네이션 정보 추출
         const pagination = response.data?.pagination;
         if (pagination) {
@@ -361,7 +361,7 @@ const Dashboard = () => {
                   배포 이력
                 </button>
               </nav>
-              
+
               <div className="flex flex-col items-end">
                 <div className="flex gap-2">
                   <button

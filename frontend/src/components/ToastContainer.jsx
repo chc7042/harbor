@@ -31,14 +31,14 @@ export const ToastProvider = ({ children }) => {
     setToasts(prev => {
       // 같은 타입의 다운로드 진행률 토스트가 이미 있다면 업데이트
       if (toast.type === 'download-progress' && toast.downloadId) {
-        const existing = prev.find(t => 
-          t.type === 'download-progress' && 
+        const existing = prev.find(t =>
+          t.type === 'download-progress' &&
           t.downloadId === toast.downloadId
         );
-        
+
         if (existing) {
-          return prev.map(t => 
-            t.id === existing.id 
+          return prev.map(t =>
+            t.id === existing.id
               ? { ...t, ...toast, id: existing.id }
               : t
           );
@@ -165,9 +165,9 @@ const ToastContainer = ({ toasts, onRemove }) => {
   return (
     <div className="fixed top-4 right-4 z-50 space-y-2">
       {toasts.map(toast => (
-        <Toast 
-          key={toast.id} 
-          toast={toast} 
+        <Toast
+          key={toast.id}
+          toast={toast}
           onClose={onRemove}
         />
       ))}

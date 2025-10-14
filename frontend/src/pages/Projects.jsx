@@ -22,16 +22,16 @@ import toast from 'react-hot-toast';
 // 프로젝트/폴더의 전체 상태를 계산하는 함수
 const calculateProjectStatus = (project) => {
   console.log('Calculating status for project:', project.name, project); // 디버깅
-  
+
   const collectAllJobs = (item) => {
     let jobs = [];
-    
+
     // 직접적인 jobs
     if (item.jobs && Array.isArray(item.jobs) && item.jobs.length > 0) {
       console.log('Found direct jobs in', item.name, ':', item.jobs.length); // 디버깅
       jobs.push(...item.jobs);
     }
-    
+
     // 하위 폴더들의 jobs (재귀적으로)
     if (item.folders && Array.isArray(item.folders) && item.folders.length > 0) {
       console.log('Found folders in', item.name, ':', item.folders.length); // 디버깅
@@ -39,13 +39,13 @@ const calculateProjectStatus = (project) => {
         jobs.push(...collectAllJobs(folder));
       });
     }
-    
+
     return jobs;
   };
 
   const allJobs = collectAllJobs(project);
   console.log('All jobs collected for', project.name, ':', allJobs.length, allJobs); // 디버깅
-  
+
   if (allJobs.length === 0) {
     console.log('No jobs found for', project.name, '- returning unknown'); // 디버깅
     return 'ABORTED'; // unknown 대신 더 중립적인 상태 사용
@@ -80,33 +80,33 @@ const calculateProjectStatus = (project) => {
     console.log('Found SUCCESS in', project.name); // 디버깅
     return 'SUCCESS';
   }
-  
+
   console.log('No valid status found for', project.name, '- returning ABORTED'); // 디버깅
   return 'ABORTED';
 };
 
 // Jenkins 프로젝트/폴더 트리 컴포넌트 (재귀적으로 중첩된 폴더 처리)
-const JenkinsProjectTree = ({ 
-  project, 
-  expandedProjects, 
-  toggleProject, 
-  getStatusIcon, 
+const JenkinsProjectTree = ({
+  project,
+  expandedProjects,
+  toggleProject,
+  getStatusIcon,
   getStatusBadge,
   formatTimestamp,
   formatDuration,
   handleSort,
   getSortIcon,
-  depth = 0 
+  depth = 0
 }) => {
   // 중첩된 폴더를 위한 고유 키 생성
   const projectKey = project.fullName || project.name;
   const isExpanded = expandedProjects.has(projectKey);
   const hasSubItems = (project.jobs && project.jobs.length > 0) || (project.folders && project.folders.length > 0);
   const isFolder = project._class === 'com.cloudbees.hudson.plugins.folder.Folder' || project.folders || hasSubItems;
-  
+
   console.log('Project:', project.name, 'hasSubItems:', hasSubItems, 'isFolder:', isFolder, 'jobs:', project.jobs?.length, 'folders:', project.folders?.length);
   const indentLevel = depth * 20; // 들여쓰기 레벨
-  
+
   // 프로젝트의 전체 상태를 계산
   const projectStatus = calculateProjectStatus(project);
 
@@ -129,7 +129,7 @@ const JenkinsProjectTree = ({
               <div className="w-5 h-5"></div>
             )}
           </button>
-          
+
           {isFolder ? (
             isExpanded ? (
               <FolderOpen className="w-6 h-6 text-blue-500" />
@@ -139,7 +139,7 @@ const JenkinsProjectTree = ({
           ) : (
             <File className="w-6 h-6 text-green-600" />
           )}
-          
+
           <div>
             <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
             <p className="text-sm text-gray-500">
@@ -158,7 +158,7 @@ const JenkinsProjectTree = ({
                 };
                 const totalJobs = collectAllJobs(project).length;
                 const folderCount = project.folders?.length || 0;
-                
+
                 if (totalJobs > 0 && folderCount > 0) {
                   return `${totalJobs}개 작업, ${folderCount}개 폴더`;
                 } else if (totalJobs > 0) {
@@ -172,7 +172,7 @@ const JenkinsProjectTree = ({
             </p>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-2">
           {getStatusBadge(projectStatus)}
         </div>
@@ -197,7 +197,7 @@ const JenkinsProjectTree = ({
               depth={depth + 1}
             />
           ))}
-          
+
           {/* 작업 목록 테이블 */}
           {project.jobs && project.jobs.length > 0 && (
             <div className="overflow-x-auto">
@@ -301,7 +301,7 @@ const Projects = () => {
 
   useEffect(() => {
     fetchProjects();
-    
+
     // 1분마다 자동 업데이트
     const interval = setInterval(() => {
       fetchProjects(true); // true = 자동 새로고침 (토스트 표시 안함)
@@ -320,12 +320,12 @@ const Projects = () => {
       }
       // 전체 Jenkins 작업 조회 (all=true 파라미터로 모든 job 포함)
       const response = await api.get('/projects?all=true');
-      
+
       const projectsData = response.data?.data || response.data || [];
-      
+
       // 특별 처리: projects 폴더의 하위 항목들을 실제 프로젝트로 변환
       const processedProjects = [];
-      
+
       for (const project of projectsData) {
         if (project.name === 'projects' && project.jobs && project.jobs.length > 0) {
           // projects 폴더의 하위 항목들(1.2.0, 2.0.0, 3.0.0 등)을 각각 개별 프로젝트로 처리
@@ -334,7 +334,7 @@ const Projects = () => {
               // 각 하위 프로젝트의 상세 정보를 가져오기
               const detailResponse = await api.get(`/projects/${subProject.name}?all=true`);
               const detailData = detailResponse.data?.data;
-              
+
               if (detailData) {
                 processedProjects.push({
                   ...detailData,
@@ -377,29 +377,29 @@ const Projects = () => {
       console.log('Original projects:', projectsData.map(p => p.name)); // 디버깅용
       console.log('Processed projects:', processedProjects.map(p => p.name)); // 디버깅용
       console.log('Full processed project data structure:', JSON.stringify(processedProjects, null, 2)); // 전체 구조 확인
-      
+
       // 프로젝트를 버전 번호 기준으로 내림차순 정렬 (3.0.0, 2.0.0, 1.2.0 순서)
       const sortedProjects = processedProjects.sort((a, b) => {
         console.log('Comparing:', a.name, 'vs', b.name); // 디버깅용
-        
+
         // 더 유연한 버전 번호 추출 (1.2, 1.2.0 모두 지원)
         const versionA = a.name.match(/(\d+)\.(\d+)\.?(\d*)/);
         const versionB = b.name.match(/(\d+)\.(\d+)\.?(\d*)/);
-        
+
         if (versionA && versionB) {
           const parseVersion = (match) => {
             return [
               parseInt(match[1], 10) || 0, // 메이저
-              parseInt(match[2], 10) || 0, // 마이너  
+              parseInt(match[2], 10) || 0, // 마이너
               parseInt(match[3], 10) || 0  // 패치
             ];
           };
-          
+
           const vA = parseVersion(versionA);
           const vB = parseVersion(versionB);
-          
+
           console.log('Parsed versions:', a.name, vA, 'vs', b.name, vB); // 디버깅용
-          
+
           // 메이저, 마이너, 패치 버전을 차례로 비교 (내림차순)
           for (let i = 0; i < 3; i++) {
             if (vA[i] !== vB[i]) {
@@ -410,16 +410,16 @@ const Projects = () => {
           }
           return 0; // 동일한 버전
         }
-        
+
         // 버전이 없는 경우 이름으로 정렬
         return b.name.localeCompare(a.name);
       });
-      
+
       console.log('Sorted projects:', sortedProjects.map(p => p.name)); // 디버깅용
 
       setProjects(sortedProjects);
       setAllJobs(jobs);
-      
+
       // 모든 프로젝트와 하위 폴더들을 기본적으로 펼쳐진 상태로 설정
       const getAllProjectKeys = (projects) => {
         const keys = [];
@@ -432,7 +432,7 @@ const Projects = () => {
         return keys;
       };
       setExpandedProjects(new Set(getAllProjectKeys(sortedProjects)));
-      
+
     } catch (error) {
       console.error('Failed to fetch projects:', error);
       if (!isAutoRefresh) {
@@ -454,7 +454,7 @@ const Projects = () => {
   const toggleProject = (projectName) => {
     console.log('Toggle project called for:', projectName); // 디버깅
     console.log('Current expanded projects:', Array.from(expandedProjects)); // 디버깅
-    
+
     const newExpanded = new Set(expandedProjects);
     if (newExpanded.has(projectName)) {
       console.log('Collapsing:', projectName); // 디버깅
@@ -463,7 +463,7 @@ const Projects = () => {
       console.log('Expanding:', projectName); // 디버깅
       newExpanded.add(projectName);
     }
-    
+
     console.log('New expanded projects:', Array.from(newExpanded)); // 디버깅
     setExpandedProjects(newExpanded);
   };
@@ -491,7 +491,7 @@ const Projects = () => {
       UNSTABLE: 'bg-yellow-100 text-yellow-800 border-yellow-200',
       ABORTED: 'bg-gray-100 text-gray-800 border-gray-200'
     };
-    
+
     const labels = {
       SUCCESS: '성공',
       FAILURE: '실패',
@@ -524,7 +524,7 @@ const Projects = () => {
     const seconds = Math.floor(milliseconds / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
-    
+
     if (hours > 0) {
       return `${hours}시간 ${minutes % 60}분 ${seconds % 60}초`;
     } else if (minutes > 0) {
@@ -559,10 +559,10 @@ const Projects = () => {
 
   const getSortedJobs = () => {
     if (!sortConfig.field) return allJobs;
-    
+
     return [...allJobs].sort((a, b) => {
       let aValue, bValue;
-      
+
       if (sortConfig.field === 'lastBuild.timestamp') {
         aValue = a.lastBuild?.timestamp || 0;
         bValue = b.lastBuild?.timestamp || 0;
@@ -633,7 +633,7 @@ const Projects = () => {
               </p>
             )}
           </div>
-          
+
           {/* 새로고침 버튼 */}
           <button
             onClick={handleManualRefresh}
@@ -658,20 +658,20 @@ const Projects = () => {
             <h3 className="text-base font-semibold text-gray-900 mb-3">
               프로젝트 목록 ({projects.length}개 프로젝트)
             </h3>
-            
+
             <div className="space-y-1">
               {projects.map((project) => {
             const projectKey = project.fullName || project.name;
             const isExpanded = expandedProjects.has(projectKey);
-            
+
             // Jenkins 폴더/프로젝트 판별 로직 개선
             const hasJobs = project.jobs && Array.isArray(project.jobs) && project.jobs.length > 0;
             const hasFolders = project.folders && Array.isArray(project.folders) && project.folders.length > 0;
             const isJenkinsFolder = project._class === 'com.cloudbees.hudson.plugins.folder.Folder';
             const hasSubItems = hasJobs || hasFolders || isJenkinsFolder;
-            
+
             console.log(`Project: ${project.name}, _class: ${project._class}, hasJobs: ${hasJobs}, hasFolders: ${hasFolders}, isJenkinsFolder: ${isJenkinsFolder}, hasSubItems: ${hasSubItems}, isExpanded: ${isExpanded}, data:`, project);
-            
+
             return (
               <div key={project.name} className="border border-gray-200 rounded-md">
                 {/* 프로젝트 헤더 */}
@@ -694,7 +694,7 @@ const Projects = () => {
                         <div className="w-5 h-5"></div>
                       )}
                     </button>
-                    
+
                     {(hasSubItems || isJenkinsFolder) ? (
                       isExpanded ? (
                         <FolderOpen className="w-6 h-6 text-blue-500" />
@@ -704,7 +704,7 @@ const Projects = () => {
                     ) : (
                       <File className="w-6 h-6 text-green-600" />
                     )}
-                    
+
                     <div>
                       <h4 className="text-sm font-medium text-gray-900">{project.name}</h4>
                       <p className="text-xs text-gray-500">
@@ -715,7 +715,7 @@ const Projects = () => {
                       </p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     {getStatusBadge(project.status || 'ABORTED')}
                   </div>
@@ -730,7 +730,7 @@ const Projects = () => {
                         <div className="text-sm text-gray-600">📁 {folder.name}</div>
                       </div>
                     ))}
-                    
+
                     {/* 작업 목록 테이블 */}
                     {project.jobs && project.jobs.length > 0 && (
                       <div className="overflow-x-auto">

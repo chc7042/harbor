@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ChevronRight, 
-  ChevronDown, 
-  Folder, 
+import {
+  ChevronRight,
+  ChevronDown,
+  Folder,
   FolderOpen,
   ExternalLink,
   Clock,
@@ -23,12 +23,12 @@ import {
 import ProjectDetailModal from './ProjectDetailModal';
 import { useAuth } from '../contexts/AuthContext';
 
-const ProjectHierarchy = ({ 
-  projects = [], 
-  deployments = [], 
+const ProjectHierarchy = ({
+  projects = [],
+  deployments = [],
   onJobClick,
   onDeploymentClick,
-  className = '' 
+  className = ''
 }) => {
   const { user } = useAuth();
   const [expandedProjects, setExpandedProjects] = useState(new Set());
@@ -37,7 +37,7 @@ const ProjectHierarchy = ({
   const [memos, setMemos] = useState({});
   const [editingMemo, setEditingMemo] = useState(null);
   const [memoText, setMemoText] = useState('');
-  
+
 
   const toggleProject = (projectName) => {
     const newExpanded = new Set(expandedProjects);
@@ -51,8 +51,8 @@ const ProjectHierarchy = ({
 
   const getJobStatus = (job) => {
     if (!job.lastBuild) return 'no_builds';
-    return job.lastBuild.result === 'SUCCESS' ? 'success' : 
-           job.lastBuild.result === 'FAILURE' ? 'failed' : 
+    return job.lastBuild.result === 'SUCCESS' ? 'success' :
+           job.lastBuild.result === 'FAILURE' ? 'failed' :
            job.lastBuild.result === null ? 'in_progress' : 'unknown';
   };
 
@@ -79,7 +79,7 @@ const ProjectHierarchy = ({
       no_builds: 'bg-gray-100 text-gray-600 border-gray-200',
       unknown: 'bg-gray-100 text-gray-600 border-gray-200'
     };
-    
+
     const labels = {
       success: '성공',
       failed: '실패',
@@ -100,7 +100,7 @@ const ProjectHierarchy = ({
     const seconds = Math.floor(milliseconds / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
-    
+
     if (hours > 0) {
       return `${hours}h ${minutes % 60}m`;
     } else if (minutes > 0) {
@@ -125,13 +125,13 @@ const ProjectHierarchy = ({
   // 프로젝트의 작업들을 기반으로 배포 버전 카드 생성
   const createDeploymentCards = (project) => {
     if (!project.jobs || project.jobs.length === 0) return [];
-    
+
     const deploymentCards = [];
-    
+
     // 버전 정보 추출 (예: "3.0.0" 또는 "2.0.0")
     const versionMatch = project.name.match(/(\d+\.\d+\.\d+)/);
     const version = versionMatch ? versionMatch[1] : project.name;
-    
+
     // 1. V 파일 카드 생성 (메인 버전 파일 - 최우선)
     const mrJob = project.jobs.find(job => job.name.includes('mr') && job.name.includes('_release'));
     if (mrJob && mrJob.lastBuild && mrJob.lastBuild.number) {
@@ -139,8 +139,8 @@ const ProjectHierarchy = ({
         id: `${project.name}-V${version}-${mrJob.lastBuild.number}`,
         project_name: `${project.name}/mr${version}_release`,
         build_number: mrJob.lastBuild.number,
-        status: mrJob.lastBuild.result === 'SUCCESS' ? 'success' : 
-                mrJob.lastBuild.result === 'FAILURE' ? 'failed' : 
+        status: mrJob.lastBuild.result === 'SUCCESS' ? 'success' :
+                mrJob.lastBuild.result === 'FAILURE' ? 'failed' :
                 mrJob.lastBuild.result === null ? 'in_progress' : 'unknown',
         created_at: mrJob.lastBuild.timestamp,
         duration: Math.floor((mrJob.lastBuild.duration || 0) / 1000),
@@ -151,7 +151,7 @@ const ProjectHierarchy = ({
         cardType: 'main',
         version: version
       };
-      
+
       deploymentCards.push({
         title: `V${version} 메인 버전`,
         subtitle: `빌드 #${mrJob.lastBuild.number}`,
@@ -161,9 +161,9 @@ const ProjectHierarchy = ({
         cardType: 'main'
       });
     }
-    
+
     // MR, FS 컴포넌트 카드는 제거됨 - 메인 버전만 표시
-    
+
     // 메인 버전 카드들을 타임스탬프 순으로 정렬
     return deploymentCards.sort((a, b) => {
       return new Date(b.timestamp) - new Date(a.timestamp);
@@ -177,7 +177,7 @@ const ProjectHierarchy = ({
       console.warn('User not loaded yet from AuthContext');
       return 'Loading...';
     }
-    
+
     // 실제 사용자 정보 반환 (name 우선, 없으면 username)
     const currentUser = user.name || user.username || user.email || 'Unknown User';
     console.log('Current user:', currentUser, 'from user object:', user);
@@ -204,7 +204,7 @@ const ProjectHierarchy = ({
 
   const handleSaveMemo = (deploymentId) => {
     const currentUser = getCurrentUser();
-    
+
     // 사용자가 아직 로딩 중이면 저장하지 않음
     if (currentUser === 'Loading...' || !user) {
       console.warn('Cannot save memo: user not loaded yet');
@@ -221,7 +221,7 @@ const ProjectHierarchy = ({
         updatedAt: new Date().toISOString()
       }
     };
-    
+
     console.log('Saving memo with author:', currentUser);
     saveMemos(newMemos);
     setEditingMemo(null);
@@ -236,7 +236,7 @@ const ProjectHierarchy = ({
   const handleDeploymentCardClick = (deployment) => {
     setSelectedDeployment(deployment);
     setIsModalOpen(true);
-    
+
     // 기존 onDeploymentClick도 호출 (호환성)
     if (onDeploymentClick) {
       onDeploymentClick(deployment);
@@ -250,7 +250,7 @@ const ProjectHierarchy = ({
   // 임시: 'admin' 메모들을 현재 사용자로 업데이트하는 함수
   const updateAdminMemos = () => {
     if (!user) return;
-    
+
     const currentUser = getCurrentUser();
     if (currentUser === 'Loading...' || currentUser === 'Unknown User') return;
 
@@ -291,12 +291,12 @@ const ProjectHierarchy = ({
         <h3 className="text-base font-semibold text-gray-900 mb-3">
           프로젝트 계층 구조 ({projects.length}개 프로젝트)
         </h3>
-        
+
         <div className="space-y-1">
           {projects.map((project) => {
             const isExpanded = expandedProjects.has(project.name);
             const hasJobs = project.jobs && project.jobs.length > 0;
-            
+
             return (
               <div key={project.name} className="border border-gray-200 rounded-md">
                 {/* 프로젝트 헤더 */}
@@ -315,14 +315,14 @@ const ProjectHierarchy = ({
                           )}
                         </button>
                       )}
-                      
+
                       {isExpanded ? (
                         <FolderOpen className="w-5 h-5 text-blue-500" />
                       ) : (
                         <Folder className="w-5 h-5 text-blue-600" />
                       )}
                     </div>
-                    
+
                     <div>
                       <h4 className="text-sm font-medium text-gray-900">{project.name}</h4>
                       <p className="text-xs text-gray-500">
@@ -330,7 +330,7 @@ const ProjectHierarchy = ({
                       </p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     {hasJobs && (
                       <span className="text-sm text-gray-500">
@@ -371,10 +371,10 @@ const ProjectHierarchy = ({
                           {project.jobs.map((job) => {
                             const status = getJobStatus(job);
                             const lastBuild = job.lastBuild;
-                            
+
                             return (
-                              <tr 
-                                key={job.fullName} 
+                              <tr
+                                key={job.fullName}
                                 className="hover:bg-gray-50 cursor-pointer"
                                 onClick={() => onJobClick && onJobClick(job)}
                               >
@@ -431,7 +431,7 @@ const ProjectHierarchy = ({
                       <div className="space-y-4">
                         {createDeploymentCards(project).map((card, index) => {
                           const isMainCard = card.cardType === 'main';
-                          const cardStyle = isMainCard 
+                          const cardStyle = isMainCard
                             ? 'bg-blue-50 border-blue-200 hover:border-blue-400 hover:bg-blue-100'
                             : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm';
                           const iconColor = isMainCard ? 'text-blue-600' : 'text-blue-500';
@@ -439,7 +439,7 @@ const ProjectHierarchy = ({
                           const deploymentId = card.deployment.id;
                           const currentMemo = memos[deploymentId];
                           const isEditing = editingMemo === deploymentId;
-                          
+
                           return (
                             <div key={index} className="space-y-3">
                               {/* 배포 카드 */}
@@ -549,7 +549,7 @@ const ProjectHierarchy = ({
             );
           })}
         </div>
-        
+
         {projects.length === 0 && (
           <div className="text-center py-6 text-gray-500">
             <Folder className="w-6 h-6 mx-auto mb-2 text-gray-300" />

@@ -20,7 +20,7 @@ class StreamingDownloadVerifier {
    */
   startMemoryMonitoring() {
     const startMemory = performance.memory ? performance.memory.usedJSHeapSize : 0;
-    
+
     // 개발 환경에서만 메모리 모니터링 활성화
     if (import.meta.env.MODE === 'development' && import.meta.env.VITE_ENABLE_MEMORY_MONITORING === 'true') {
       this.memoryInterval = setInterval(() => {
@@ -52,7 +52,7 @@ class StreamingDownloadVerifier {
    */
   async testLargeFileStreaming() {
     console.log('🚀 대용량 파일 스트리밍 다운로드 검증 시작');
-    
+
     const testCases = [
       {
         name: '600MB 테스트 파일',
@@ -101,14 +101,14 @@ class StreamingDownloadVerifier {
             progressEvents.push({
               ...progress,
               timestamp: Date.now(),
-              memoryUsed: performance.memory ? 
+              memoryUsed: performance.memory ?
                 Math.round(performance.memory.usedJSHeapSize / 1024 / 1024) : 'N/A'
             });
 
             if (progress.type === 'start') {
               downloadStarted = true;
             }
-            
+
             if (progress.type === 'redirect' && !timeToFirstByte) {
               timeToFirstByte = Date.now() - startTime;
               console.log(`⚡ 첫 바이트 시간: ${timeToFirstByte}ms`);
@@ -120,7 +120,7 @@ class StreamingDownloadVerifier {
       );
 
       downloadCompleted = result.success;
-      
+
     } catch (error) {
       errorOccurred = true;
       console.error(`❌ 다운로드 에러:`, error.message);
@@ -132,7 +132,7 @@ class StreamingDownloadVerifier {
     // 결과 분석
     const maxMemoryUsage = Math.max(...this.memoryUsage.map(m => m.usedJSHeapSizeMB), 0);
     const memoryIncrease = maxMemoryUsage - Math.round(startMemory / 1024 / 1024);
-    
+
     const testResult = {
       testName: testCase.name,
       filePath: testCase.filePath,
@@ -150,7 +150,7 @@ class StreamingDownloadVerifier {
     };
 
     this.testResults.push(testResult);
-    
+
     // 결과 출력
     console.log(`\n📊 테스트 결과: ${testCase.name}`);
     console.log(`✅ 다운로드 시작: ${downloadStarted ? 'Yes' : 'No'}`);
@@ -159,7 +159,7 @@ class StreamingDownloadVerifier {
     console.log(`🧠 최대 메모리 사용: ${maxMemoryUsage}MB`);
     console.log(`📈 메모리 증가량: ${memoryIncrease}MB`);
     console.log(`🎯 테스트 통과: ${testResult.passed ? '✅ PASS' : '❌ FAIL'}`);
-    
+
     // 메모리 사용량 상세 로그 (처음 5개, 마지막 5개)
     if (this.memoryUsage.length > 0) {
       console.log(`\n💾 메모리 사용량 샘플:`);
@@ -184,7 +184,7 @@ class StreamingDownloadVerifier {
     const passedTests = this.testResults.filter(t => t.passed).length;
     const avgTimeToFirstByte = this.testResults
       .filter(t => t.timeToFirstByte)
-      .reduce((sum, t) => sum + t.timeToFirstByte, 0) / 
+      .reduce((sum, t) => sum + t.timeToFirstByte, 0) /
       this.testResults.filter(t => t.timeToFirstByte).length;
 
     const report = {
@@ -203,7 +203,7 @@ class StreamingDownloadVerifier {
         noErrors: '에러 없이 완료',
       },
       detailedResults: this.testResults,
-      conclusion: passedTests === totalTests ? 
+      conclusion: passedTests === totalTests ?
         '✅ 모든 테스트 통과: 대용량 파일 스트리밍 다운로드가 정상적으로 작동합니다.' :
         '⚠️ 일부 테스트 실패: 스트리밍 다운로드에 개선이 필요합니다.',
     };
@@ -215,7 +215,7 @@ class StreamingDownloadVerifier {
     console.log(`📊 테스트 결과: ${report.summary.passedTests}/${report.summary.totalTests} 통과 (${report.summary.successRate})`);
     console.log(`⚡ 평균 첫 바이트 시간: ${report.summary.avgTimeToFirstByte}ms`);
     console.log(`🎯 결론: ${report.conclusion}`);
-    
+
     console.log('\n📏 통과 기준:');
     Object.entries(report.criteria).forEach(([key, value]) => {
       console.log(`  • ${key}: ${value}`);
@@ -235,20 +235,20 @@ class StreamingDownloadVerifier {
    */
   async verifyStreamingCapabilities() {
     console.log('🔍 스트리밍 다운로드 기능 검증');
-    
+
     // 전략 선택 테스트
     const strategy = downloadService.selectDownloadStrategy('/test/path', {
       fileSize: 600 * 1024 * 1024 // 600MB
     });
-    
+
     console.log(`📋 선택된 전략: ${strategy}`);
     console.log(`✅ 기대값: redirect (스트리밍 지원)`);
-    
+
     if (strategy !== 'redirect') {
       console.warn('⚠️ 경고: 대용량 파일에 대해 redirect 전략이 선택되지 않았습니다.');
       return false;
     }
-    
+
     return true;
   }
 }
@@ -256,14 +256,14 @@ class StreamingDownloadVerifier {
 // 브라우저 환경에서 실행할 수 있도록 전역 함수로 노출
 if (typeof window !== 'undefined') {
   window.StreamingDownloadVerifier = StreamingDownloadVerifier;
-  
+
   // 즉시 실행 함수
   window.runStreamingVerification = async function() {
     const verifier = new StreamingDownloadVerifier();
-    
+
     console.log('🔧 기능 검증 실행');
     const capabilitiesOk = await verifier.verifyStreamingCapabilities();
-    
+
     if (capabilitiesOk) {
       console.log('🚀 대용량 파일 테스트 실행');
       return await verifier.testLargeFileStreaming();

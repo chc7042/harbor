@@ -277,7 +277,7 @@ async function checkDeploymentPathDetectionHealth() {
     try {
       const result = await query(`
         SELECT AVG(EXTRACT(EPOCH FROM (verified_at - created_at))) * 1000 as avg_response_time_ms
-        FROM deployment_paths 
+        FROM deployment_paths
         WHERE created_at > NOW() - INTERVAL '1 hour'
         AND verified_at IS NOT NULL
       `);

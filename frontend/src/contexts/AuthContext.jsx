@@ -111,9 +111,9 @@ export const AuthProvider = ({ children }) => {
       // 에러 코드별 메시지 매핑
       const errorCode = error.response?.data?.error?.code;
       const serverMessage = error.response?.data?.error?.message;
-      
+
       let errorMessage = '로그인 중 오류가 발생했습니다.';
-      
+
       switch (errorCode) {
         case 'USER_NOT_FOUND':
           errorMessage = '사용자를 찾을 수 없습니다.';

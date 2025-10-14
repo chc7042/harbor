@@ -59,8 +59,8 @@ export const downloadFile = async (downloadUrl, fileName, onProgress = null) => 
       onDownloadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          onProgress({ 
-            type: 'progress', 
+          onProgress({
+            type: 'progress',
             progress: percentCompleted,
             loaded: progressEvent.loaded,
             total: progressEvent.total,
@@ -78,36 +78,36 @@ export const downloadFile = async (downloadUrl, fileName, onProgress = null) => 
     // Blob을 사용하여 파일 다운로드
     const blob = new Blob([response.data]);
     const url = window.URL.createObjectURL(blob);
-    
+
     // 다운로드 링크 생성 및 클릭
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName || 'download';
     document.body.appendChild(link);
     link.click();
-    
+
     // 정리
     window.URL.revokeObjectURL(url);
     document.body.removeChild(link);
-    
+
     if (onProgress) {
       onProgress({ type: 'complete', message: '다운로드가 완료되었습니다.' });
     }
-    
+
     return { success: true };
   } catch (error) {
     console.error('File download error:', error);
-    
-    const errorMessage = error.code === 'ECONNABORTED' || error.message.includes('timeout') 
+
+    const errorMessage = error.code === 'ECONNABORTED' || error.message.includes('timeout')
       ? '다운로드 시간이 초과되었습니다. 파일이 클 수 있으니 잠시 후 다시 시도해주세요.'
       : error.response?.data?.error?.message || '다운로드에 실패했습니다.';
-    
+
     if (onProgress) {
       onProgress({ type: 'error', message: errorMessage });
     }
-    
-    return { 
-      success: false, 
+
+    return {
+      success: false,
       error: errorMessage
     };
   }
@@ -148,11 +148,11 @@ export const uploadFile = async (file, path, onProgress = null) => {
           total: progressEvent.total,
           percentage: progressEvent.total ? Math.round((progressEvent.loaded * 100) / progressEvent.total) : 0
         });
-        
+
         if (onProgress && progressEvent.total) {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          onProgress({ 
-            type: 'progress', 
+          onProgress({
+            type: 'progress',
             progress: percentCompleted,
             loaded: progressEvent.loaded,
             total: progressEvent.total,
@@ -172,9 +172,9 @@ export const uploadFile = async (file, path, onProgress = null) => {
       onProgress({ type: 'complete', message: '업로드가 완료되었습니다.' });
     }
 
-    return { 
-      success: true, 
-      data: response.data.data 
+    return {
+      success: true,
+      data: response.data.data
     };
   } catch (error) {
     console.error('🚀 API: File upload error:', error);
@@ -190,9 +190,9 @@ export const uploadFile = async (file, path, onProgress = null) => {
         headers: error.response.headers
       } : 'No response object'
     });
-    
+
     let errorMessage = '업로드에 실패했습니다.';
-    
+
     if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
       errorMessage = '업로드 시간이 초과되었습니다. 파일이 클 수 있으니 잠시 후 다시 시도해주세요.';
     } else if (error.response?.data?.error?.code === 'FILE_TOO_LARGE') {
@@ -200,15 +200,15 @@ export const uploadFile = async (file, path, onProgress = null) => {
     } else if (error.response?.data?.error?.message) {
       errorMessage = error.response.data.error.message;
     }
-    
+
     console.error('🚀 API: Final error message:', errorMessage);
-    
+
     if (onProgress) {
       onProgress({ type: 'error', message: errorMessage });
     }
-    
-    return { 
-      success: false, 
+
+    return {
+      success: false,
       error: errorMessage
     };
   }
@@ -235,8 +235,8 @@ export const uploadFileStream = async (file, path, onProgress = null) => {
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          onProgress({ 
-            type: 'progress', 
+          onProgress({
+            type: 'progress',
             progress: percentCompleted,
             loaded: progressEvent.loaded,
             total: progressEvent.total,
@@ -250,27 +250,27 @@ export const uploadFileStream = async (file, path, onProgress = null) => {
       onProgress({ type: 'complete', message: '스트리밍 업로드가 완료되었습니다.' });
     }
 
-    return { 
-      success: true, 
-      data: response.data.data 
+    return {
+      success: true,
+      data: response.data.data
     };
   } catch (error) {
     console.error('Stream upload error:', error);
-    
+
     let errorMessage = '스트리밍 업로드에 실패했습니다.';
-    
+
     if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
       errorMessage = '업로드 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요.';
     } else if (error.response?.data?.error?.message) {
       errorMessage = error.response.data.error.message;
     }
-    
+
     if (onProgress) {
       onProgress({ type: 'error', message: errorMessage });
     }
-    
-    return { 
-      success: false, 
+
+    return {
+      success: false,
       error: errorMessage
     };
   }

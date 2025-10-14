@@ -271,7 +271,7 @@ async function findOrCreateUser(userData) {
     if (findResult.rows.length > 0) {
       // Update existing user
       const updateQuery = `
-        UPDATE users 
+        UPDATE users
         SET email = $2, full_name = $3, department = $4, last_login = NOW(), updated_at = NOW()
         WHERE username = $1
         RETURNING *

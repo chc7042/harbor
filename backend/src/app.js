@@ -62,7 +62,7 @@ if (!isRateLimitingDisabled) {
 }
 
 // 로그인 특별 제한 (환경변수 우선)
-const loginRateLimit = parseInt(process.env.RATE_LIMIT_LOGIN) || 
+const loginRateLimit = parseInt(process.env.RATE_LIMIT_LOGIN) ||
   (process.env.NODE_ENV === 'development' ? 100 : 5);
 
 const authLimiter = rateLimit({
@@ -92,8 +92,8 @@ app.use((req, res, next) => {
   if (req.headers['content-type'] && req.headers['content-type'].startsWith('multipart/form-data')) {
     return next();
   }
-  
-  express.json({ 
+
+  express.json({
     limit: '10mb',
     verify: (req, res, buf, encoding) => {
       try {
@@ -251,7 +251,7 @@ async function startServer() {
 
     // WebSocket 서버 초기화 제거 - 폴링으로 대체
     logger.info('폴링 기반 실시간 업데이트 사용 중...');
-    
+
     logger.info('서버 초기화 진행 중...');
 
     // NAS 스캐너 초기화 (비동기적으로 백그라운드에서 진행)
@@ -262,7 +262,7 @@ async function startServer() {
 
   } catch (error) {
     logger.error('서버 시작 실패:', error);
-    
+
     // 서버가 생성되었다면 정리
     if (server) {
       try {

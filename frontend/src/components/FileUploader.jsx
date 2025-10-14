@@ -29,7 +29,7 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
     // 파일 타입 체크
     const allowedTypes = [
       'application/gzip',
-      'application/x-gzip', 
+      'application/x-gzip',
       'application/zip',
       'application/x-zip-compressed',
       'application/json',
@@ -38,7 +38,7 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
     ];
 
     const allowedExtensions = ['.tar.gz', '.zip', '.json', '.txt'];
-    const hasValidExtension = allowedExtensions.some(ext => 
+    const hasValidExtension = allowedExtensions.some(ext =>
       file.name.toLowerCase().endsWith(ext)
     );
 
@@ -64,16 +64,16 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
       setUploadStatus('업로드 준비 중...');
 
       const uploadPath = currentPath || '\\\\nas.roboetech.com\\release_version\\release\\upload';
-      
+
       console.log('📤 FileUploader: Upload path set to:', uploadPath);
-      
+
       // 파일 크기에 따라 업로드 방식 선택 (일시적으로 스트리밍 비활성화)
       const useStreaming = false; // file.size > STREAM_THRESHOLD;
       const uploadFunction = useStreaming ? uploadFileStream : uploadFile;
-      
+
       console.log('📤 FileUploader: Using upload function:', useStreaming ? 'uploadFileStream' : 'uploadFile');
       console.log('📤 FileUploader: Calling upload function...');
-      
+
       const result = await uploadFunction(file, uploadPath, (progressInfo) => {
         console.log('📤 FileUploader: Progress update:', progressInfo);
         setProgress(progressInfo.progress || 0);
@@ -86,7 +86,7 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
         console.log('📤 FileUploader: Upload successful!');
         setUploadStatus('업로드가 완료되었습니다!');
         onUploadComplete && onUploadComplete(result.data);
-        
+
         // 성공 후 초기화
         setTimeout(() => {
           setIsUploading(false);
@@ -109,10 +109,10 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
         code: error.code,
         response: error.response
       });
-      
+
       setUploadStatus(error.message || '업로드에 실패했습니다.');
       onUploadError && onUploadError(error.message);
-      
+
       setTimeout(() => {
         setIsUploading(false);
         setProgress(0);
@@ -131,7 +131,7 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
   const handleDrop = (event) => {
     event.preventDefault();
     setDragActive(false);
-    
+
     const files = event.dataTransfer.files;
     if (files && files.length > 0) {
       handleUpload(files[0]);
@@ -160,8 +160,8 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
       <div
         className={`
           border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
-          ${dragActive 
-            ? 'border-blue-400 bg-blue-50' 
+          ${dragActive
+            ? 'border-blue-400 bg-blue-50'
             : 'border-gray-300 hover:border-gray-400'
           }
           ${isUploading ? 'pointer-events-none opacity-60' : ''}
@@ -179,7 +179,7 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
           accept=".tar.gz,.zip,.json,.txt"
           disabled={isUploading}
         />
-        
+
         {!isUploading ? (
           <>
             <div className="text-4xl mb-2">📤</div>
@@ -200,7 +200,7 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
               업로드 중...
             </p>
             <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-              <div 
+              <div
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${progress}%` }}
               ></div>

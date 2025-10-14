@@ -52,9 +52,9 @@ const DeploymentDetailModal = ({
   // 실제 Jenkins 로그를 가져오는 함수
   const fetchLogs = async () => {
     if (!deployment) return;
-    
+
     setLoadingLogs(true);
-    
+
     try {
       // Jenkins 로그 API 호출 - 프로젝트 이름과 빌드 번호를 사용
       const response = await fetch(`/api/deployments/logs/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}`, {
@@ -62,7 +62,7 @@ const DeploymentDetailModal = ({
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data) {
@@ -88,20 +88,20 @@ const DeploymentDetailModal = ({
       console.log('No deployment, returning early');
       return;
     }
-    
+
     console.log('Setting loadingDeploymentInfo to true');
     setLoadingDeploymentInfo(true);
-    
+
     try {
       const url = `/api/deployments/deployment-info/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}`;
       console.log('Making fetch request to:', url);
-      
+
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       console.log('Response status:', response.status);
       if (response.ok) {
         const data = await response.json();
@@ -253,7 +253,7 @@ const DeploymentDetailModal = ({
   const deploymentDate = formatDate(deployment.created_at);
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
       onClick={(e) => {
         // 백드롭 클릭 시에만 모달 닫기
@@ -262,7 +262,7 @@ const DeploymentDetailModal = ({
         }
       }}
     >
-      <div 
+      <div
         className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden"
         onClick={(e) => {
           // 모달 내부 클릭 시 이벤트 전파 중단
@@ -276,8 +276,8 @@ const DeploymentDetailModal = ({
             <div>
               <div className="flex items-center space-x-3">
                 <h2 className="text-xl font-semibold text-primary-900">
-                  {deployment.cardType === 'main' ? `V${deployment.version} 메인 버전` : 
-                   deployment.cardType === 'component' ? `${deployment.jobType}${deployment.version} 컴포넌트` : 
+                  {deployment.cardType === 'main' ? `V${deployment.version} 메인 버전` :
+                   deployment.cardType === 'component' ? `${deployment.jobType}${deployment.version} 컴포넌트` :
                    deployment.project_name}
                 </h2>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(deployment.status)}`}>
@@ -349,7 +349,7 @@ const DeploymentDetailModal = ({
             <div className="flex-1 flex flex-col space-y-4 h-full">
               <div className="flex items-center justify-between flex-shrink-0">
                 <h3 className="text-lg font-medium text-primary-900 font-noto-sans-kr">배포 로그</h3>
-                <button 
+                <button
                   onClick={() => {
                     console.log('새로고침 버튼 클릭됨');
                     fetchLogs();
@@ -369,7 +369,7 @@ const DeploymentDetailModal = ({
                       <div className="h-full flex items-center justify-center">
                         <div className="text-center">
                           <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-400" />
-                          <span className="text-gray-400 font-noto-sans-kr">로그를 불러오는 중...</span> 
+                          <span className="text-gray-400 font-noto-sans-kr">로그를 불러오는 중...</span>
                         </div>
                       </div>
                     ) : logs.length > 0 ? (
@@ -411,21 +411,21 @@ const DeploymentDetailModal = ({
                   {/* NAS 디렉토리 검증 상태 표시 */}
                   {deploymentInfo && (
                     <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm ${
-                      deploymentInfo?.directoryVerified 
+                      deploymentInfo?.directoryVerified
                         ? 'bg-green-100 text-green-800'
                         : deploymentInfo?.verificationError
                           ? 'bg-red-100 text-red-800'
                           : 'bg-yellow-100 text-yellow-800'
                     }`}>
                       <div className={`w-2 h-2 rounded-full ${
-                        deploymentInfo?.directoryVerified 
+                        deploymentInfo?.directoryVerified
                           ? 'bg-green-600'
                           : deploymentInfo?.verificationError
                             ? 'bg-red-600'
                             : 'bg-yellow-600'
                       }`}></div>
                       <span>
-                        {deploymentInfo?.directoryVerified 
+                        {deploymentInfo?.directoryVerified
                           ? 'NAS 디렉토리 확인됨'
                           : deploymentInfo?.verificationError
                             ? 'NAS 디렉토리 없음'
@@ -437,10 +437,10 @@ const DeploymentDetailModal = ({
                     </div>
                   )}
                   {/* 공유 폴더 열기 버튼 */}
-                  <button 
+                  <button
                     className={`text-sm flex items-center whitespace-nowrap ${
-                      loadingDeploymentInfo || 
-                      (!deploymentInfo?.downloadFile && 
+                      loadingDeploymentInfo ||
+                      (!deploymentInfo?.downloadFile &&
                        (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0)) ||
                       (!deploymentInfo?.directoryVerified)
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed border border-gray-300 opacity-60 hover:bg-gray-300 hover:text-gray-500 px-4 py-2 rounded-md'
@@ -451,56 +451,56 @@ const DeploymentDetailModal = ({
                       e.stopPropagation();
                       // 실제 배포 경로 사용, 없으면 fallback
                       let nasPath = deploymentInfo?.nasPath || deploymentInfo?.deploymentPath;
-                      
+
                       if (!nasPath) {
                         return;
                       }
-                      
+
                       // 시놀로지 NAS 디렉토리 브라우징을 위한 File Station 접근
                       // File Station URL 형식: https://nas.roboetech.com:5001/webman/index.cgi?launchApp=SYNO.SDS.App.FileStation3.Instance
-                      
+
                       // NAS 경로에서 실제 파일 경로 추출
                       const pathPart = nasPath
                         .replace(/\\\\/g, '')           // \\ 제거
                         .replace('nas.roboetech.com', '') // 호스트명 제거
                         .replace(/\\/g, '/')            // \ -> /
                         .replace(/^\/+/, '/');          // 앞의 중복 슬래시 정리
-                      
+
                       // 디렉토리 경로 정리됨
-                      
+
                       // 시놀로지 File Station URL 생성 (디렉토리 브라우징용)
                       const fileStationUrl = `https://nas.roboetech.com:5001/webman/index.cgi?launchApp=SYNO.SDS.App.FileStation3.Instance`;
-                      
+
                       // 공유 링크가 있을 때만 열기
                       let finalUrl = deploymentInfo.synologyShareUrl;
-                      
+
                       if (!finalUrl) {
                         return;
                       }
-                      
-                      
-                      
+
+
+
                       // 공유 링크로 접속
                       window.open(finalUrl, '_blank');
                     }}
                     disabled={
-                      loadingDeploymentInfo || 
-                      (!deploymentInfo?.downloadFile && 
+                      loadingDeploymentInfo ||
+                      (!deploymentInfo?.downloadFile &&
                        (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0)) ||
                       (!deploymentInfo?.directoryVerified)
                     }
                   >
                     <HardDrive className={`w-4 h-4 mr-2 ${
-                      loadingDeploymentInfo || 
-                      (!deploymentInfo?.downloadFile && 
+                      loadingDeploymentInfo ||
+                      (!deploymentInfo?.downloadFile &&
                        (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0)) ||
                       (!deploymentInfo?.directoryVerified)
                         ? 'text-gray-400'
                         : ''
                     }`} />
-                    {loadingDeploymentInfo 
-                      ? '경로 확인중...' 
-                      : (!deploymentInfo?.downloadFile && 
+                    {loadingDeploymentInfo
+                      ? '경로 확인중...'
+                      : (!deploymentInfo?.downloadFile &&
                          (!deploymentInfo?.allFiles || deploymentInfo.allFiles.length === 0))
                         ? '파일 없음'
                         : !deploymentInfo?.directoryVerified
@@ -524,7 +524,7 @@ const DeploymentDetailModal = ({
                       <div className="flex-1 overflow-y-auto">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 h-full">
                           {/* 새로운 구조: deploymentInfo.artifacts 사용 (V, MR, FE, BE 타입별 카드) */}
-                          {(deploymentInfo?.artifacts) ? 
+                          {(deploymentInfo?.artifacts) ?
                           /* deployment-info API에서 제공하는 artifacts 객체를 타입별 카드로 변환 */
                           Object.entries(deploymentInfo.artifacts)
                             .filter(([type, files]) => files && files.length > 0)
@@ -541,11 +541,11 @@ const DeploymentDetailModal = ({
                               'FE': { name: '프론트엔드', colors: { bg: 'bg-purple-50', border: 'border-purple-200', icon: 'text-purple-600', title: 'text-purple-900', subtitle: 'text-purple-700' } },
                               'BE': { name: '백엔드', colors: { bg: 'bg-orange-50', border: 'border-orange-200', icon: 'text-orange-600', title: 'text-orange-900', subtitle: 'text-orange-700' } }
                             };
-                            
+
                             const typeInfo = typeInfoMap[type] || { name: type, colors: { bg: 'bg-gray-50', border: 'border-gray-200', icon: 'text-gray-600', title: 'text-gray-900', subtitle: 'text-gray-700' } };
                             const representativeFile = files[0];
                             const fileCount = files.length;
-                            
+
                             return (
                               <div key={`${type}-${index}`} className={`border rounded-lg p-4 ${typeInfo.colors.bg} ${typeInfo.colors.border}`}>
                                 <div className="flex items-center justify-between">

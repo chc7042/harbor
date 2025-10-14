@@ -11,7 +11,7 @@ const DeploymentTimeline = ({ className = '' }) => {
 
   // 배포 데이터 (폴링으로 자동 업데이트됨)
   const [deployments, setDeployments] = useState([]);
-  
+
   useEffect(() => {
     setDeployments(initialDeployments);
   }, [initialDeployments]);

@@ -109,14 +109,14 @@ const Deployments = () => {
       } else {
         console.log('No hours limit (unlimited)');
       }
-      
+
       console.log('Final API URL:', `/deployments/recent?${params}`);
       const response = await api.get(`/deployments/recent?${params}`);
       console.log('API response received:', response.data);
       if (response.data.success) {
         const deploymentData = response.data.data || [];
         console.log('API data length:', deploymentData.length);
-        
+
         // 프론트엔드 형식에 맞게 데이터 변환
         const transformedData = deploymentData.map(deployment => ({
           id: deployment.id,
@@ -309,9 +309,9 @@ const Deployments = () => {
 
   // 배포 정보 업데이트 처리 (아티팩트 지연 로딩용)
   const handleDeploymentUpdate = (updatedDeployment) => {
-    setDeployments(prev => 
-      prev.map(deployment => 
-        deployment.id === updatedDeployment.id 
+    setDeployments(prev =>
+      prev.map(deployment =>
+        deployment.id === updatedDeployment.id
           ? { ...deployment, artifacts: updatedDeployment.artifacts }
           : deployment
       )

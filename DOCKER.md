@@ -13,7 +13,7 @@ Harbor 프로젝트는 단일 통합 Dockerfile을 사용하여 프론트엔드�
 - `frontend-build`: 프론트엔드 빌드 스테이지
 - `frontend-production`: 프로덕션용 프론트엔드 (정적 파일 서빙)
 
-#### Backend Targets  
+#### Backend Targets
 - `backend-development`: 개발용 백엔드 (nodemon)
 - `backend-base`: 백엔드 프로덕션 베이스
 - `backend-production`: 프로덕션용 백엔드

@@ -9,7 +9,7 @@ lerna-debug.log*
 # Environment variables
 # Allow development .env files to be tracked for easier setup
 #.env (개발용 - 추적됨)
-#.env.example (템플릿 - 추적됨) 
+#.env.example (템플릿 - 추적됨)
 #.env.prod
 #.env.prod.example (템플릿 - 추적됨)
 
@@ -172,4 +172,4 @@ dev-debug.log
 # Test files and temporary data
 *.tmp
 test_large_files/
-*_LARGE.tar.gz 
+*_LARGE.tar.gz

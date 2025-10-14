@@ -31,7 +31,7 @@ const DeploymentTable = ({
   // 아티팩트 지연 로딩 함수
   const handleLoadArtifacts = async (deployment) => {
     const deploymentKey = `${deployment.version}-${deployment.buildNumber}`;
-    
+
     if (loadingArtifacts.has(deploymentKey)) {
       return; // 이미 로딩 중인 경우
     }
@@ -40,9 +40,9 @@ const DeploymentTable = ({
 
     try {
       console.log(`[ARTIFACT-LOADING] 아티팩트 로딩 시작 - 버전: ${deployment.version}, 빌드: ${deployment.buildNumber}`);
-      
+
       const response = await loadArtifacts(deployment.version, deployment.buildNumber);
-      
+
       if (response.success && onDeploymentUpdate) {
         // 부모 컴포넌트에 업데이트된 아티팩트 정보 전달
         const updatedDeployment = {
@@ -50,7 +50,7 @@ const DeploymentTable = ({
           artifacts: response.data.artifacts || [],
         };
         onDeploymentUpdate(updatedDeployment);
-        
+
         console.log(`[ARTIFACT-LOADING] ✅ 아티팩트 로딩 완료 - ${response.data.artifacts?.length || 0}개`);
       }
     } catch (error) {
@@ -147,7 +147,7 @@ const DeploymentTable = ({
   // 통합 다운로드 처리 함수
   const handleDownload = async (artifact, deploymentId) => {
     const downloadKey = `${deploymentId}-${artifact.fileName}`;
-    
+
     if (downloadingFiles.has(downloadKey)) {
       console.log('다운로드가 이미 진행 중입니다.');
       return;
@@ -155,11 +155,11 @@ const DeploymentTable = ({
 
     try {
       setDownloadingFiles(prev => new Set([...prev, downloadKey]));
-      
+
       console.log(`[DEPLOYMENT-TABLE] 통합 다운로드 시작`);
       console.log(`[DEPLOYMENT-TABLE] 파일 경로: ${artifact.filePath}`);
       console.log(`[DEPLOYMENT-TABLE] 파일명: ${artifact.fileName}`);
-      
+
       const result = await downloadService.downloadFile(
         artifact.filePath,
         artifact.fileName,
@@ -171,7 +171,7 @@ const DeploymentTable = ({
           strategy: 'redirect' // 기본적으로 리다이렉트 사용 (가장 빠름)
         }
       );
-      
+
       if (result.success) {
         console.log(`[DEPLOYMENT-TABLE] ✅ 다운로드 완료: ${artifact.fileName}`);
       } else {
@@ -318,8 +318,8 @@ const DeploymentTable = ({
                               {deployment.subJobs.map((subJob, index) => (
                                 <span key={index}>
                                   <span className={`inline-block px-1 py-0.5 rounded text-xs font-medium ${
-                                    subJob.status === 'success' 
-                                      ? 'bg-green-100 text-green-700' 
+                                    subJob.status === 'success'
+                                      ? 'bg-green-100 text-green-700'
                                       : subJob.status === 'failed'
                                         ? 'bg-red-100 text-red-700'
                                         : 'bg-yellow-100 text-yellow-700'
@@ -432,7 +432,7 @@ const DeploymentTable = ({
                               e.stopPropagation();
                               console.log('통합 다운로드 버튼 클릭 - version:', deployment.version);
                               console.log('Artifacts:', deployment.artifacts);
-                              
+
                               if (deployment.artifacts.length === 1) {
                                 // 단일 아티팩트 - 통합 다운로드 서비스 사용
                                 const artifact = deployment.artifacts[0];
@@ -458,7 +458,7 @@ const DeploymentTable = ({
                           )}
                         </div>
                       ) : null}
-                      
+
                       {/* 상세 정보 버튼 */}
                       <button
                         className="p-1 text-gray-400 hover:text-primary-600 transition-colors rounded"

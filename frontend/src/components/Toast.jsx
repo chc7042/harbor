@@ -21,10 +21,10 @@ const Toast = ({ toast, onClose }) => {
   useEffect(() => {
     // 자동 닫기 (에러 메시지는 더 오래 표시)
     if (toast.autoClose !== false) {
-      const duration = toast.type === 'error' ? 8000 : 
+      const duration = toast.type === 'error' ? 8000 :
                       toast.type === 'download-progress' ? 0 : // 진행률 토스트는 자동 닫기 안함
                       5000;
-      
+
       if (duration > 0) {
         const timer = setTimeout(() => {
           handleClose();
@@ -79,7 +79,7 @@ const Toast = ({ toast, onClose }) => {
   };
 
   return (
-    <div 
+    <div
       className={`
         relative w-full max-w-sm mx-auto mb-4 p-4 rounded-lg border shadow-lg
         transition-all duration-300 ease-in-out transform
@@ -91,18 +91,18 @@ const Toast = ({ toast, onClose }) => {
         <div className="flex-shrink-0">
           {getIcon()}
         </div>
-        
+
         <div className="flex-1 min-w-0">
           {toast.title && (
             <h4 className="text-sm font-medium text-gray-900 mb-1">
               {toast.title}
             </h4>
           )}
-          
+
           <p className="text-sm text-gray-700">
             {toast.message}
           </p>
-          
+
           {/* 다운로드 진행률 표시 */}
           {toast.type === 'download-progress' && typeof progress === 'number' && (
             <div className="mt-2">
@@ -111,7 +111,7 @@ const Toast = ({ toast, onClose }) => {
                 <span>{progress}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
+                <div
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${Math.min(progress, 100)}%` }}
                 />
@@ -125,8 +125,8 @@ const Toast = ({ toast, onClose }) => {
             </div>
           )}
         </div>
-        
-        <button 
+
+        <button
           onClick={handleClose}
           className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
         >

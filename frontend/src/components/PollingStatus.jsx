@@ -74,7 +74,7 @@ const PollingStatus = ({ className = '' }) => {
       {showDetails && (
         <div className="absolute top-full left-0 mt-2 p-4 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-80 text-xs">
           <div className="font-medium text-gray-900 mb-2">자동 업데이트 상태</div>
-          
+
           <div className="space-y-2 text-gray-600">
             <div><strong>상태:</strong> {isActive ? '활성' : '비활성'}</div>
             <div><strong>활성 폴링:</strong> {activePolling.length}개</div>
@@ -89,7 +89,7 @@ const PollingStatus = ({ className = '' }) => {
               </div>
             )}
           </div>
-          
+
           <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-blue-800">
             <div className="font-medium mb-1">자동 업데이트 정보</div>
             <div className="text-xs">
@@ -98,7 +98,7 @@ const PollingStatus = ({ className = '' }) => {
               • 새로운 배포나 상태 변경 시 알림 표시
             </div>
           </div>
-          
+
           <div className="mt-3 pt-2 border-t border-gray-200">
             <button
               onClick={() => setShowDetails(false)}

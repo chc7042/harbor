@@ -88,7 +88,7 @@ CREATE TABLE deployment_paths (
   UNIQUE(project_name, version, build_number)
 );
 
-CREATE INDEX idx_deployment_paths_lookup 
+CREATE INDEX idx_deployment_paths_lookup
 ON deployment_paths(project_name, version, build_number);
 ```
 

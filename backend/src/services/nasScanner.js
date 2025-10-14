@@ -214,8 +214,8 @@ class NASScanner {
       await query(`
         INSERT INTO nas_files (file_path, size, modified_time, hash, created_at, updated_at)
         VALUES ($1, $2, $3, $4, NOW(), NOW())
-        ON CONFLICT (file_path) 
-        DO UPDATE SET 
+        ON CONFLICT (file_path)
+        DO UPDATE SET
           size = EXCLUDED.size,
           modified_time = EXCLUDED.modified_time,
           hash = EXCLUDED.hash,

@@ -39,7 +39,7 @@ const ProjectDetailModal = ({
   onClose,
   className = ''
 }) => {
-  
+
   const { showError, showWarning } = useToast();
   const [activeTab, setActiveTab] = useState('logs');
   const [copySuccess, setCopySuccess] = useState('');
@@ -55,11 +55,11 @@ const ProjectDetailModal = ({
 
   const fetchDeploymentInfo = async () => {
     if (!deployment) return;
-    
+
     console.log('ProjectDetailModal deployment object:', deployment);
     console.log('project_name:', deployment.project_name);
     console.log('build_number:', deployment.build_number);
-    
+
     setLoadingDeploymentInfo(true);
     try {
       const response = await fetch(`/api/deployments/deployment-info/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}`, {
@@ -67,7 +67,7 @@ const ProjectDetailModal = ({
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setDeploymentInfo(data.data);
@@ -83,13 +83,13 @@ const ProjectDetailModal = ({
 
   const fetchLogs = async (jobType = selectedJobType) => {
     if (!deployment) return;
-    
+
     // 이미 해당 job의 로그가 캐시되어 있다면 사용
     if (jobLogs[jobType]) {
       setLogs(jobLogs[jobType]);
       return;
     }
-    
+
     setLoadingLogs(true);
     try {
       // Debug logging for development
@@ -98,9 +98,9 @@ const ProjectDetailModal = ({
         console.log('jobType:', jobType);
         console.log('deployment.project_name:', deployment.project_name);
       }
-      
+
       let jobProjectName;
-      
+
       if (jobType === 'mr') {
         // 모로우는 실제 데이터 사용 - 기존 deployment.project_name 사용
         jobProjectName = deployment.project_name;
@@ -112,7 +112,7 @@ const ProjectDetailModal = ({
         }
         jobProjectName = jobProjectName_fixed;
       } else if (jobType === 'fs') {
-        // 프런트엔드 job name 구성: 3.0.0/mr3.0.0_release -> 3.0.0/fe3.0.0_release  
+        // 프런트엔드 job name 구성: 3.0.0/mr3.0.0_release -> 3.0.0/fe3.0.0_release
         const jobProjectName_fixed = deployment.project_name.replace('/mr', '/fe');
         if (process.env.NODE_ENV === 'development') {
           console.log('FS job - final jobProjectName:', jobProjectName_fixed);
@@ -123,29 +123,29 @@ const ProjectDetailModal = ({
         setLoadingLogs(false);
         return;
       }
-      
+
       if (!jobProjectName) {
         console.error('jobProjectName is undefined for jobType:', jobType);
         setLoadingLogs(false);
         return;
       }
-      
+
       const response = await fetch(`/api/deployments/logs/${jobProjectName}/${deployment.build_number}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         const fetchedLogs = data.data || [];
-        
+
         // 로그 캐시에 저장
         setJobLogs(prev => ({
           ...prev,
           [jobType]: fetchedLogs
         }));
-        
+
         setLogs(fetchedLogs);
       } else {
         console.error('Failed to fetch logs for job:', jobType, 'Status:', response.status);
@@ -248,7 +248,7 @@ const ProjectDetailModal = ({
       fetchLogs(selectedJobType);
     }
   }, [activeTab, isOpen, deployment, currentDeploymentId, selectedJobType]);
-  
+
   // Job 타입 변경 시 해당 로그 가져오기
   useEffect(() => {
     if (activeTab === 'logs' && isOpen && deployment) {
@@ -304,7 +304,7 @@ const ProjectDetailModal = ({
   if (!isOpen || !deployment) return null;
 
   return (
-    <div 
+    <div
       className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 ${className}`}
       onClick={(e) => {
         // 백드롭 클릭 시에만 모달 닫기
@@ -313,7 +313,7 @@ const ProjectDetailModal = ({
         }
       }}
     >
-      <div 
+      <div
         className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden"
         onClick={(e) => {
           // 모달 내부 클릭 시 이벤트 전파 중단
@@ -354,11 +354,11 @@ const ProjectDetailModal = ({
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(deployment.status)}`}>
               {getStatusText(deployment.status)}
             </span>
-            
+
             {deployment.jenkins_url && (
-              <a 
-                href={deployment.jenkins_url} 
-                target="_blank" 
+              <a
+                href={deployment.jenkins_url}
+                target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-600 hover:text-blue-800 flex items-center space-x-1"
                 title="Jenkins에서 보기"
@@ -368,7 +368,7 @@ const ProjectDetailModal = ({
               </a>
             )}
 
-            <button 
+            <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
             >
@@ -407,7 +407,7 @@ const ProjectDetailModal = ({
               <div className="flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center space-x-4">
                   <h3 className="text-lg font-medium text-gray-900">빌드 로그</h3>
-                  
+
                   {/* Job 타입 선택 드롭다운 */}
                   <div className="relative">
                     <select
@@ -425,7 +425,7 @@ const ProjectDetailModal = ({
                     <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                   </div>
                 </div>
-                
+
                 <button
                   onClick={() => fetchLogs(selectedJobType)}
                   disabled={loadingLogs}
@@ -438,7 +438,7 @@ const ProjectDetailModal = ({
 
               <div className="flex-1 flex flex-col space-y-3 min-h-0">
                 <div className="text-sm text-gray-600 flex-shrink-0">
-                  {selectedJobType === 'mr' ? '모로우 (MR)' : 
+                  {selectedJobType === 'mr' ? '모로우 (MR)' :
                    selectedJobType === 'fs' ? '프런트엔드 (FS)' : '백엔드 (BE)'} 빌드 로그
                 </div>
                 <div className="flex-1 flex flex-col min-h-0">
@@ -446,7 +446,7 @@ const ProjectDetailModal = ({
                   {loadingLogs ? (
                     <div className="h-full flex items-center justify-center">
                       <div className="text-gray-400">
-                        {selectedJobType === 'mr' ? '모로우' : 
+                        {selectedJobType === 'mr' ? '모로우' :
                          selectedJobType === 'fs' ? '프런트엔드' : '백엔드'} 로그 로딩 중...
                       </div>
                     </div>
@@ -454,16 +454,16 @@ const ProjectDetailModal = ({
                     logs.map((log, index) => {
                       // 로그 레벨 파싱 - 로그 메시지에서 레벨 추출
                       const logMessage = log.message || log;
-                      const hasLevel = typeof logMessage === 'string' && 
-                                      (logMessage.includes('[SUCCESS]') || 
-                                       logMessage.includes('[ERROR]') || 
+                      const hasLevel = typeof logMessage === 'string' &&
+                                      (logMessage.includes('[SUCCESS]') ||
+                                       logMessage.includes('[ERROR]') ||
                                        logMessage.includes('[WARN]'));
-                      
+
                       let logLevel = 'INFO';
                       if (logMessage.includes('[SUCCESS]')) logLevel = 'SUCCESS';
                       else if (logMessage.includes('[ERROR]')) logLevel = 'ERROR';
                       else if (logMessage.includes('[WARN]')) logLevel = 'WARN';
-                      
+
                       return (
                         <div key={index} className={`whitespace-pre-wrap break-words mb-1 ${
                           logLevel === 'SUCCESS' ? 'text-green-400' :
@@ -479,7 +479,7 @@ const ProjectDetailModal = ({
                     <div className="h-full flex items-center justify-center">
                       <div className="text-center text-gray-400">
                         <div>
-                          {selectedJobType === 'mr' ? '모로우' : 
+                          {selectedJobType === 'mr' ? '모로우' :
                            selectedJobType === 'fs' ? '프런트엔드' : '백엔드'} 로그가 없습니다.
                         </div>
                         <div className="text-sm mt-1">
@@ -503,21 +503,21 @@ const ProjectDetailModal = ({
                   {/* NAS 디렉토리 검증 상태 표시 */}
                   {deploymentInfo && (
                     <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm ${
-                      deploymentInfo?.directoryVerified 
+                      deploymentInfo?.directoryVerified
                         ? 'bg-green-100 text-green-800'
                         : deploymentInfo?.verificationError
                           ? 'bg-red-100 text-red-800'
                           : 'bg-yellow-100 text-yellow-800'
                     }`}>
                       <div className={`w-2 h-2 rounded-full ${
-                        deploymentInfo?.directoryVerified 
+                        deploymentInfo?.directoryVerified
                           ? 'bg-green-600'
                           : deploymentInfo?.verificationError
                             ? 'bg-red-600'
                             : 'bg-yellow-600'
                       }`}></div>
                       <span>
-                        {deploymentInfo?.directoryVerified 
+                        {deploymentInfo?.directoryVerified
                           ? 'NAS 디렉토리 확인됨'
                           : deploymentInfo?.verificationError
                             ? 'NAS 디렉토리 없음'
@@ -538,11 +538,11 @@ const ProjectDetailModal = ({
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      
-                      
+
+
                       // 실제 배포 경로가 있을 때만 열기
                       const shareUrl = deploymentInfo?.synologyShareUrl;
-                      
+
                       if (shareUrl) {
                         window.open(shareUrl, '_blank');
                       } else {
@@ -558,8 +558,8 @@ const ProjectDetailModal = ({
                         ? 'text-gray-400'
                         : ''
                     }`} />
-                    {loadingDeploymentInfo 
-                      ? '경로 확인중...' 
+                    {loadingDeploymentInfo
+                      ? '경로 확인중...'
                       : '공유 폴더 열기'
                     }
                   </button>
@@ -585,7 +585,7 @@ const ProjectDetailModal = ({
                               const isEncrypted = file.includes('.enc.');
                               const fileExists = deploymentInfo.verifiedFiles ? deploymentInfo.verifiedFiles.includes(file) : true;
                               const fileTypeColor = 'bg-blue-100 text-blue-800';
-                              
+
                               return (
                                 <div
                                   key={index}
@@ -625,7 +625,7 @@ const ProjectDetailModal = ({
                                         </div>
                                       )}
                                     </div>
-                                    
+
                                     <div className="flex items-center space-x-2 ml-2">
                                       {fileExists ? (
                                         <button
@@ -634,14 +634,14 @@ const ProjectDetailModal = ({
                                           onClick={async (e) => {
                                             e.preventDefault();
                                             e.stopPropagation();
-                                            
+
                                             const downloadKey = `main-${file}`;
                                             setDownloadingFiles(prev => new Set(prev).add(downloadKey));
-                                            
+
                                             try {
                                               console.log(`[PROJECT-MODAL] 통합 다운로드 시작`);
                                               console.log(`[PROJECT-MODAL] 파일: ${file}`);
-                                              
+
                                               // 파일 경로 구성
                                               let filePath;
                                               if (deploymentInfo && deploymentInfo.nasPath) {
@@ -665,7 +665,7 @@ const ProjectDetailModal = ({
                                                 }
                                               } else {
                                                 // 폴백: 버전 기반 경로 구성
-                                                const versionMatch = deployment.project_name?.match(/^(\d+\.\d+\.\d+)/) || 
+                                                const versionMatch = deployment.project_name?.match(/^(\d+\.\d+\.\d+)/) ||
                                                                    deployment.version?.match(/(\d+\.\d+\.\d+)/) ||
                                                                    ['', '3.0.0'];
                                                 const version = versionMatch[1];
@@ -676,7 +676,7 @@ const ProjectDetailModal = ({
                                                 const fallbackDate = versionFallbacks[version] || '250310';
                                                 filePath = `/nas/release_version/release/product/mr${version}/${fallbackDate}/${deployment.build_number}/${file}`;
                                               }
-                                              
+
                                               const result = await downloadService.downloadFile(filePath, file, {
                                                 onProgress: (progress) => {
                                                   console.log(`[PROJECT-MODAL] 다운로드 진행:`, progress);
@@ -684,7 +684,7 @@ const ProjectDetailModal = ({
                                                 },
                                                 strategy: 'redirect'
                                               });
-                                              
+
                                               if (!result.success) {
                                                 console.error(`[PROJECT-MODAL] ❌ 다운로드 실패: ${result.error}`);
                                                 // 에러는 downloadService에서 토스트로 표시됨
@@ -736,14 +736,14 @@ const ProjectDetailModal = ({
                                     실제 배포 파일은 NAS에서 확인하세요
                                   </p>
                                 </div>
-                                
+
                                 <div className="flex items-center space-x-2 ml-2">
                                   <button
                                     className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200"
                                     onClick={(e) => {
                                       e.preventDefault();
                                       e.stopPropagation();
-                                      
+
                                       // 공유 폴더 열기
                                       if (deploymentInfo?.synologyShareUrl) {
                                         window.open(deploymentInfo.synologyShareUrl, '_blank');
@@ -769,14 +769,14 @@ const ProjectDetailModal = ({
                       <div className="flex-1 overflow-y-auto">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {/* 실제 파일만 표시 (V 파일 제외) - 목 데이터 사용 안함 */}
-                          {(deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) ? 
+                          {(deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) ?
                             deploymentInfo.allFiles
                               .filter(file => !file.startsWith('V')) // V 파일 제외
                               .sort((a, b) => {
                                 // 모로우, 백엔드, 프런트엔드 순서로 정렬
                                 const getOrder = (file) => {
                                   if (file.startsWith('mr')) return 1; // Morrow
-                                  if (file.startsWith('be') || file.startsWith('adam')) return 2; // Backend  
+                                  if (file.startsWith('be') || file.startsWith('adam')) return 2; // Backend
                                   if (file.startsWith('fe')) return 3; // Frontend
                                   if (file.startsWith('fs')) return 4; // FullStack
                                   return 5; // 기타
@@ -788,10 +788,10 @@ const ProjectDetailModal = ({
                                                 (file.startsWith('be') || file.startsWith('adam')) ? '백엔드' :
                                                 file.startsWith('fe') ? '프런트엔드' :
                                                 file.startsWith('fs') ? '풀스택' : '기타';
-                                
+
                                 // 파일이 실제로 NAS에 존재하는지 확인
                                 const fileExists = deploymentInfo.verifiedFiles ? deploymentInfo.verifiedFiles.includes(file) : true;
-                                
+
                                 // 파일 타입별 색상 정의
                                 const getFileTypeColors = (fileType) => {
                                   if (!fileExists) return {
@@ -801,7 +801,7 @@ const ProjectDetailModal = ({
                                     subtitle: 'text-red-700',
                                     description: 'text-red-600'
                                   };
-                                  
+
                                   switch (fileType) {
                                     case '모로우':
                                       return {
@@ -837,12 +837,12 @@ const ProjectDetailModal = ({
                                       };
                                   }
                                 };
-                                
+
                                 const colors = getFileTypeColors(fileType);
-                                
+
                                 return (
-                                  <div 
-                                    key={index} 
+                                  <div
+                                    key={index}
                                     className={`border rounded-lg p-4 ${colors.bg} ${colors.border}`}
                                   >
                                     <div className="flex items-center justify-between">
@@ -859,12 +859,12 @@ const ProjectDetailModal = ({
                                             {file}
                                           </p>
                                           <p className={`text-xs ${colors.description}`}>
-                                            {!fileExists 
+                                            {!fileExists
                                               ? '파일이 NAS에서 확인되지 않습니다'
                                               : fileType === '메인버전'
-                                                ? '메인 릴리즈 파일' 
-                                                : isEncrypted 
-                                                  ? '암호화된 컴포넌트 파일' 
+                                                ? '메인 릴리즈 파일'
+                                                : isEncrypted
+                                                  ? '암호화된 컴포넌트 파일'
                                                   : '컴포넌트 파일'}
                                           </p>
                                           {/* 파일 정보 표시 */}
@@ -880,7 +880,7 @@ const ProjectDetailModal = ({
                                           )}
                                         </div>
                                       </div>
-                                      <button 
+                                      <button
                                         className={`px-3 py-1 rounded-md text-sm font-medium flex items-center whitespace-nowrap ${
                                           !fileExists || !deploymentInfo.directoryVerified || downloadingFiles.has(`deploy-${file}`)
                                             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -898,19 +898,19 @@ const ProjectDetailModal = ({
                                         onClick={async (e) => {
                                           e.preventDefault();
                                           e.stopPropagation();
-                                          
+
                                           if (!fileExists || !deploymentInfo.directoryVerified) {
                                             // 파일이 없는 경우는 버튼이 비활성화되어 있어서 이 코드에 도달하지 않음
                                             return;
                                           }
-                                          
+
                                           const downloadKey = `deploy-${file}`;
                                           setDownloadingFiles(prev => new Set(prev).add(downloadKey));
-                                          
+
                                           try {
                                             console.log(`[PROJECT-MODAL] 배포 파일 다운로드 시작`);
                                             console.log(`[PROJECT-MODAL] 파일: ${file}, 타입: ${fileType}`);
-                                            
+
                                             // 파일 경로 구성
                                             let filePath;
                                             if (deploymentInfo && deploymentInfo.nasPath) {
@@ -934,7 +934,7 @@ const ProjectDetailModal = ({
                                               }
                                             } else {
                                               // 폴백: 버전 기반 경로 구성
-                                              const versionMatch = deployment.project_name?.match(/^(\d+\.\d+\.\d+)/) || 
+                                              const versionMatch = deployment.project_name?.match(/^(\d+\.\d+\.\d+)/) ||
                                                                  deployment.version?.match(/(\d+\.\d+\.\d+)/) ||
                                                                  ['', '3.0.0'];
                                               const version = versionMatch[1];
@@ -945,7 +945,7 @@ const ProjectDetailModal = ({
                                               const fallbackDate = versionFallbacks[version] || '250310';
                                               filePath = `/nas/release_version/release/product/mr${version}/${fallbackDate}/${deployment.build_number}/${file}`;
                                             }
-                                            
+
                                             const result = await downloadService.downloadFile(filePath, file, {
                                               onProgress: (progress) => {
                                                 console.log(`[PROJECT-MODAL] 배포 파일 다운로드 진행:`, progress);
@@ -953,7 +953,7 @@ const ProjectDetailModal = ({
                                               },
                                               strategy: 'redirect'
                                             });
-                                            
+
                                             if (!result.success) {
                                               console.error(`[PROJECT-MODAL] ❌ 배포 파일 다운로드 실패: ${result.error}`);
                                               // 에러는 downloadService에서 토스트로 표시됨
@@ -976,10 +976,10 @@ const ProjectDetailModal = ({
                                     </div>
                                   </div>
                                 );
-                              }) : 
+                              }) :
                               /* 실제 파일이 없으면 메시지 표시 - 목 데이터 사용 안함 */
                               [(
-                                <div 
+                                <div
                                   key="no-files-message"
                                   className="col-span-full flex flex-col items-center justify-center py-12"
                                 >

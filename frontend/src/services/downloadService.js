@@ -35,7 +35,7 @@ class DownloadService {
   async downloadFile(filePath, fileName, options = {}) {
     const downloadId = this.generateDownloadId();
     const startTime = Date.now();
-    
+
     try {
       console.log(`[DOWNLOAD-${downloadId}] =================================`);
       console.log(`[DOWNLOAD-${downloadId}] 통합 다운로드 시작`);
@@ -46,10 +46,10 @@ class DownloadService {
       // 다운로드 준비 알림
       this.showUserFeedback('preparing', fileName, { downloadId });
       if (options.onProgress) {
-        options.onProgress({ 
-          type: 'start', 
+        options.onProgress({
+          type: 'start',
           downloadId,
-          message: '스트리밍 다운로드를 준비 중입니다...' 
+          message: '스트리밍 다운로드를 준비 중입니다...'
         });
       }
 
@@ -108,16 +108,16 @@ class DownloadService {
 
       // 다운로드 기록 저장
       this.saveDownloadHistory(downloadId, filePath, fileName, 'success', duration);
-      
+
       // 활성 다운로드에서 제거
       this.activeDownloads.delete(downloadId);
 
       if (options.onProgress) {
-        options.onProgress({ 
-          type: 'complete', 
+        options.onProgress({
+          type: 'complete',
           downloadId,
           duration,
-          message: '다운로드가 완료되었습니다.' 
+          message: '다운로드가 완료되었습니다.'
         });
       }
 
@@ -134,24 +134,24 @@ class DownloadService {
 
       // 다운로드 기록 저장
       this.saveDownloadHistory(downloadId, filePath, fileName, 'failed', duration, error.message);
-      
+
       // 활성 다운로드에서 제거
       this.activeDownloads.delete(downloadId);
 
       if (options.onProgress) {
-        options.onProgress({ 
-          type: 'error', 
+        options.onProgress({
+          type: 'error',
           downloadId,
           duration,
-          message: errorMessage 
+          message: errorMessage
         });
       }
 
-      return { 
-        success: false, 
+      return {
+        success: false,
         downloadId,
         error: errorMessage,
-        duration 
+        duration
       };
     }
   }
@@ -161,7 +161,7 @@ class DownloadService {
    */
   async downloadViaRedirect(downloadUrl, downloadId, options) {
     console.log(`[DOWNLOAD-${downloadId}] 즉시 스트리밍 다운로드 시작`);
-    
+
     // 다운로드 상태 업데이트
     const downloadInfo = this.activeDownloads.get(downloadId);
     if (downloadInfo) {
@@ -169,10 +169,10 @@ class DownloadService {
     }
 
     if (options.onProgress) {
-      options.onProgress({ 
-        type: 'redirect', 
+      options.onProgress({
+        type: 'redirect',
         downloadId,
-        message: '즉시 다운로드 시작 중...' 
+        message: '즉시 다운로드 시작 중...'
       });
     }
 
@@ -183,22 +183,22 @@ class DownloadService {
       link.href = downloadUrl;
       link.download = ''; // 브라우저가 파일명을 자동으로 결정
       link.style.display = 'none';
-      
+
       // DOM에 추가하고 즉시 클릭
       document.body.appendChild(link);
       link.click();
-      
+
       // 정리
       setTimeout(() => {
         document.body.removeChild(link);
       }, 100);
-      
+
       console.log(`[DOWNLOAD-${downloadId}] 즉시 다운로드 링크 클릭 완료`);
-      
+
       return { success: true, method: 'instant-download' };
     } catch (error) {
       console.error(`[DOWNLOAD-${downloadId}] 즉시 다운로드 실패, 폴백 시도:`, error);
-      
+
       // 폴백: window.open을 사용한 즉시 다운로드
       try {
         const newWindow = window.open(downloadUrl, '_blank');
@@ -210,7 +210,7 @@ class DownloadService {
             }
           }, 1000);
         }
-        
+
         console.log(`[DOWNLOAD-${downloadId}] 폴백 다운로드 완료`);
         return { success: true, method: 'instant-download-fallback' };
       } catch (fallbackError) {
@@ -227,7 +227,7 @@ class DownloadService {
   async downloadViaProxy(filePath, fileName, downloadId, options) {
     console.log(`[DOWNLOAD-${downloadId}] ⚠️ 프록시 방식 다운로드 시작 (레거시 모드)`);
     console.warn(`[DOWNLOAD-${downloadId}] 프록시 방식은 메모리 버퍼링이 발생합니다. 대용량 파일에는 권장하지 않습니다.`);
-    
+
     // 다운로드 상태 업데이트
     const downloadInfo = this.activeDownloads.get(downloadId);
     if (downloadInfo) {
@@ -235,10 +235,10 @@ class DownloadService {
     }
 
     if (options.onProgress) {
-      options.onProgress({ 
-        type: 'start', 
+      options.onProgress({
+        type: 'start',
         downloadId,
-        message: '서버에서 파일을 메모리로 로딩 중... (시간이 걸릴 수 있습니다)' 
+        message: '서버에서 파일을 메모리로 로딩 중... (시간이 걸릴 수 있습니다)'
       });
     }
 
@@ -249,18 +249,18 @@ class DownloadService {
       onDownloadProgress: (progressEvent) => {
         if (progressEvent.total) {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          
+
           // 토스트 진행률 업데이트
-          this.showUserFeedback('progress', fileName, { 
-            downloadId, 
+          this.showUserFeedback('progress', fileName, {
+            downloadId,
             progress: percentCompleted,
             loaded: progressEvent.loaded,
             total: progressEvent.total
           });
-          
+
           if (options.onProgress) {
-            options.onProgress({ 
-              type: 'progress', 
+            options.onProgress({
+              type: 'progress',
               downloadId,
               progress: percentCompleted,
               loaded: progressEvent.loaded,
@@ -275,13 +275,13 @@ class DownloadService {
     // Blob을 사용하여 파일 다운로드
     const blob = new Blob([response.data]);
     const url = window.URL.createObjectURL(blob);
-    
+
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;
     document.body.appendChild(link);
     link.click();
-    
+
     // 정리
     window.URL.revokeObjectURL(url);
     document.body.removeChild(link);
@@ -294,31 +294,31 @@ class DownloadService {
    */
   async downloadViaDirect(downloadUrl, fileName, downloadId, options) {
     console.log(`[DOWNLOAD-${downloadId}] 직접 방식 다운로드 시작`);
-    
+
     if (options.onProgress) {
-      options.onProgress({ 
-        type: 'start', 
+      options.onProgress({
+        type: 'start',
         downloadId,
-        message: '직접 다운로드 중...' 
+        message: '직접 다운로드 중...'
       });
     }
 
     // fetch를 사용한 직접 다운로드
     const response = await fetch(downloadUrl);
-    
+
     if (!response.ok) {
       throw new Error(`다운로드 실패: ${response.status} ${response.statusText}`);
     }
 
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
-    
+
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;
     document.body.appendChild(link);
     link.click();
-    
+
     window.URL.revokeObjectURL(url);
     document.body.removeChild(link);
 
@@ -331,10 +331,10 @@ class DownloadService {
   createDownloadUrl(filePath, token, options = {}) {
     const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
     // API_BASE_URL이 이미 /api를 포함하고 있으므로 중복 제거
-    const baseUrl = API_BASE_URL.endsWith('/api') || API_BASE_URL.includes('/api') 
-      ? `${API_BASE_URL}/files/download` 
+    const baseUrl = API_BASE_URL.endsWith('/api') || API_BASE_URL.includes('/api')
+      ? `${API_BASE_URL}/files/download`
       : `${API_BASE_URL}/api/files/download`;
-    
+
     const params = new URLSearchParams({
       path: filePath
     });
@@ -358,11 +358,11 @@ class DownloadService {
 
     // 백엔드 스트리밍 구현 후 모든 파일에 대해 redirect 우선 사용
     // redirect 방식은 브라우저가 직접 처리하여 메모리 버퍼링 없음
-    
+
     // 파일 크기에 따른 전략 선택 (스트리밍 최적화)
     if (options.fileSize) {
       const fileSizeMB = options.fileSize / (1024 * 1024);
-      
+
       if (fileSizeMB > 50) {
         return 'redirect'; // 대용량 파일은 무조건 리다이렉트 (메모리 우회)
       } else if (fileSizeMB > 5) {
@@ -404,8 +404,8 @@ class DownloadService {
         case 'progress':
           if (typeof progress === 'number') {
             const fileSize = total ? this.formatFileSize(total) : null;
-            this.toastManager.showDownloadProgress(fileName, progress, { 
-              downloadId, 
+            this.toastManager.showDownloadProgress(fileName, progress, {
+              downloadId,
               fileSize,
               loaded,
               total
@@ -460,11 +460,11 @@ class DownloadService {
     if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
       return '다운로드 시간이 초과되었습니다. 인터넷 연결을 확인하고 잠시 후 다시 시도해주세요.';
     }
-    
+
     if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
       return '네트워크 연결에 문제가 있습니다. 인터넷 연결을 확인해주세요.';
     }
-    
+
     // HTTP 상태 코드별 에러 처리
     const status = error.response?.status;
     switch (status) {
@@ -487,33 +487,33 @@ class DownloadService {
       case 504:
         return '서버가 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요.';
     }
-    
+
     // 서버에서 제공한 구체적인 에러 메시지 우선 사용
     if (error.response?.data?.error?.message) {
       return error.response.data.error.message;
     }
-    
+
     if (error.response?.data?.message) {
       return error.response.data.message;
     }
-    
+
     // 브라우저 관련 에러
     if (error.message.includes('popup') || error.message.includes('blocked')) {
       return '팝업이 차단되었습니다. 브라우저 설정에서 팝업을 허용해주세요.';
     }
-    
+
     if (error.message.includes('CORS')) {
       return '보안 정책으로 인해 다운로드할 수 없습니다. 관리자에게 문의하세요.';
     }
-    
+
     // 디스크 공간 관련 에러 (일부 브라우저에서 감지 가능)
     if (error.message.includes('disk') || error.message.includes('space')) {
       return '디스크 공간이 부족합니다. 저장 공간을 확보한 후 다시 시도해주세요.';
     }
-    
+
     // 기타 에러의 경우 원본 메시지 사용하되 사용자 친화적으로 변환
     const originalMessage = error.message || '알 수 없는 오류';
-    
+
     // 일반적인 개발자 용어를 사용자 친화적으로 변환
     let userFriendlyMessage = originalMessage
       .replace(/fetch/gi, '요청')
@@ -521,7 +521,7 @@ class DownloadService {
       .replace(/response/gi, '응답')
       .replace(/server/gi, '서버')
       .replace(/client/gi, '클라이언트');
-    
+
     return `다운로드에 실패했습니다: ${userFriendlyMessage}`;
   }
 
@@ -540,7 +540,7 @@ class DownloadService {
     };
 
     this.downloadHistory.push(record);
-    
+
     // 최대 100개 기록만 유지
     if (this.downloadHistory.length > 100) {
       this.downloadHistory = this.downloadHistory.slice(-100);
@@ -595,14 +595,14 @@ const downloadService = new DownloadService();
 export default downloadService;
 
 // 편의를 위한 개별 함수 export
-export const downloadFile = (filePath, fileName, options) => 
+export const downloadFile = (filePath, fileName, options) =>
   downloadService.downloadFile(filePath, fileName, options);
 
-export const getActiveDownloads = () => 
+export const getActiveDownloads = () =>
   downloadService.getActiveDownloads();
 
-export const getDownloadHistory = (limit) => 
+export const getDownloadHistory = (limit) =>
   downloadService.getDownloadHistory(limit);
 
-export const cancelDownload = (downloadId) => 
+export const cancelDownload = (downloadId) =>
   downloadService.cancelDownload(downloadId);
