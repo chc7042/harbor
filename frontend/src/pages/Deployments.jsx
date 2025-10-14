@@ -129,7 +129,11 @@ const Deployments = () => {
           created_at: deployment.deployedAt,
           duration: deployment.duration,
           description: deployment.commitMessage || `Build ${deployment.buildNumber} deployment`,
-          jenkins_url: deployment.jenkinsUrl
+          jenkins_url: deployment.jenkinsUrl,
+          // 지연 로딩을 위한 아티팩트 관련 필드 추가
+          version: deployment.version, // 아티팩트 로딩 시 필요
+          artifacts: deployment.artifacts || [], // 초기 빈 배열
+          hasArtifacts: deployment.hasArtifacts || false // 아티팩트 존재 여부
         }));
 
         // 프론트엔드에서 필터링 적용
