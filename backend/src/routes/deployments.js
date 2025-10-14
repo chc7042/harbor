@@ -945,20 +945,13 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
       try {
         logger.info(`배포 정보 조회 시작 - 프로젝트: ${fullProjectName}, 빌드: ${buildNumber}`);
 
-        // 1. 먼저 deployment_paths 테이블에서 기존 검증된 데이터 확인
+        // 1. 먼저 deployment_paths 테이블에서 기존 검증된 데이터 확인 (최적화됨)
         let deploymentInfo = null;
         try {
           logger.info(`DB 쿼리 시도 - 프로젝트: ${fullProjectName}, 빌드: ${buildNumber}`);
-          const { Pool } = require('pg');
-          const pool = new Pool({
-            host: process.env.DB_HOST,
-            port: process.env.DB_PORT,
-            database: process.env.DB_NAME,
-            user: process.env.DB_USER,
-            password: process.env.DB_PASSWORD,
-          });
+          const { query } = require('../config/database');
 
-          const dbResult = await pool.query(
+          const dbResult = await query(
             'SELECT * FROM deployment_paths WHERE project_name = $1 AND build_number = $2',
             [fullProjectName, parseInt(buildNumber)],
           );
@@ -1029,7 +1022,6 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
           } else {
             logger.warn(`DB에서 레코드를 찾지 못함 - ${fullProjectName}#${buildNumber}`);
           }
-          await pool.end();
         } catch (dbError) {
           logger.error(`Database query failed: ${dbError.message}`);
           logger.error(`DB 연결 정보 - host: ${process.env.DB_HOST}, port: ${process.env.DB_PORT}, db: ${process.env.DB_NAME}, user: ${process.env.DB_USER}`);
@@ -1263,20 +1255,13 @@ router.get('/deployment-info/:projectName/:buildNumber',
       try {
         logger.info(`배포 정보 조회 시작 (2-segment) - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
 
-        // 1. 먼저 deployment_paths 테이블에서 기존 검증된 데이터 확인
+        // 1. 먼저 deployment_paths 테이블에서 기존 검증된 데이터 확인 (최적화됨)
         let deploymentInfo = null;
         try {
           logger.info(`DB 쿼리 시도 (2-segment) - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
-          const { Pool } = require('pg');
-          const pool = new Pool({
-            host: process.env.DB_HOST,
-            port: process.env.DB_PORT,
-            database: process.env.DB_NAME,
-            user: process.env.DB_USER,
-            password: process.env.DB_PASSWORD,
-          });
+          const { query } = require('../config/database');
 
-          const dbResult = await pool.query(
+          const dbResult = await query(
             'SELECT * FROM deployment_paths WHERE project_name = $1 AND build_number = $2',
             [projectName, parseInt(buildNumber)],
           );
@@ -1302,7 +1287,6 @@ router.get('/deployment-info/:projectName/:buildNumber',
           } else {
             logger.warn(`DB에서 레코드를 찾지 못함 (2-segment) - ${projectName}#${buildNumber}`);
           }
-          await pool.end();
         } catch (dbError) {
           logger.error(`Database query failed (2-segment): ${dbError.message}`);
           logger.error(`DB 연결 정보 (2-segment) - host: ${process.env.DB_HOST}, port: ${process.env.DB_PORT}, db: ${process.env.DB_NAME}, user: ${process.env.DB_USER}`);
