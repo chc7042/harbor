@@ -776,7 +776,7 @@ const ProjectDetailModal = ({
                                 // 모로우, 백엔드, 프런트엔드 순서로 정렬
                                 const getOrder = (file) => {
                                   if (file.startsWith('mr')) return 1; // Morrow
-                                  if (file.startsWith('be')) return 2; // Backend  
+                                  if (file.startsWith('be') || file.startsWith('adam')) return 2; // Backend  
                                   if (file.startsWith('fe')) return 3; // Frontend
                                   if (file.startsWith('fs')) return 4; // FullStack
                                   return 5; // 기타
@@ -785,7 +785,7 @@ const ProjectDetailModal = ({
                               }).map((file, index) => {
                                 const isEncrypted = file.includes('.enc.');
                                 const fileType = file.startsWith('mr') ? '모로우' :
-                                                file.startsWith('be') ? '백엔드' :
+                                                (file.startsWith('be') || file.startsWith('adam')) ? '백엔드' :
                                                 file.startsWith('fe') ? '프런트엔드' :
                                                 file.startsWith('fs') ? '풀스택' : '기타';
                                 
