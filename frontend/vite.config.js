@@ -68,8 +68,5 @@ export default defineConfig({
     'import.meta.env.VITE_API_URL': JSON.stringify(
       process.env.VITE_API_URL || '/api'
     ),
-    'import.meta.env.VITE_WS_URL': JSON.stringify(
-      process.env.VITE_WS_URL || 'ws://localhost:3001'
-    ),
   },
 });

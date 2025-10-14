@@ -89,7 +89,6 @@ LDAP_BIND_CREDENTIALS=your_ldap_password
 
 # Frontend URLs
 VITE_API_URL=/api
-VITE_WS_URL=wss://your.domain.com
 ```
 
 ### 개발 환경 (.env.dev)
@@ -105,7 +104,6 @@ JWT_REFRESH_SECRET=dev-refresh-secret
 
 # Frontend URLs
 VITE_API_URL=http://localhost:3001/api
-VITE_WS_URL=ws://localhost:3001
 ```
 
 ## 🐳 컨테이너 정보

@@ -45,9 +45,7 @@ COPY frontend/ ./
 
 # 환경 변수 설정 (빌드 타임)
 ARG VITE_API_URL=
-ARG VITE_WS_URL=ws://harbor.roboetech.com
 ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_WS_URL=$VITE_WS_URL
 
 # 프로덕션 빌드
 RUN npm run build
@@ -100,7 +98,7 @@ WORKDIR /app
 RUN apk add --no-cache \
     openldap-dev \
     postgresql-client \
-    curl \
+    curl jq \
     samba-client
 
 # 패키지 파일들을 먼저 복사 (캐시 최적화)
@@ -134,7 +132,7 @@ RUN adduser -S nodeuser -u 1001
 RUN apk add --no-cache \
     openldap-dev \
     postgresql-client \
-    curl \
+    curl jq \
     dumb-init \
     samba-client
 

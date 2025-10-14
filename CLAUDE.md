@@ -188,7 +188,6 @@ ENABLE_MOCK_DB=false
 **Frontend (.env)**:
 ```bash
 VITE_API_URL=/api
-VITE_WS_URL=wss://harbor.roboetech.com
 ```
 
 ## Key Development Patterns

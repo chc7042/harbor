@@ -93,7 +93,6 @@ services:
       - "5173:5173"
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:3001/api}
-      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3001}
     volumes:
       - ./frontend/src:/app/src:ro
       - ./frontend/public:/app/public:ro
