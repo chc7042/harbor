@@ -18,6 +18,55 @@ class JenkinsWebhookService {
       'build.completed',
       'build.finalized',
     ];
+
+    // 중복 요청 방지를 위한 캐시
+    this.recentRequests = new Map();
+    this.cacheTimeout = 5 * 60 * 1000; // 5분간 캐시 유지
+
+    // 캐시 정리 타이머
+    this.cleanupTimer = setInterval(() => {
+      this.cleanupExpiredCache();
+    }, 60 * 1000); // 1분마다 정리
+  }
+
+  /**
+   * 캐시된 요청 정리
+   */
+  cleanupExpiredCache() {
+    const now = Date.now();
+    for (const [key, timestamp] of this.recentRequests.entries()) {
+      if (now - timestamp > this.cacheTimeout) {
+        this.recentRequests.delete(key);
+      }
+    }
+  }
+
+  /**
+   * 중복 요청 확인 및 캐시 추가
+   */
+  isDuplicateRequest(projectName, buildNumber, eventType, payload) {
+    // 요청 고유 식별자 생성 (프로젝트명, 빌드번호, 이벤트타입, 페이로드 해시)
+    const payloadHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(payload))
+      .digest('hex')
+      .substring(0, 8);
+
+    const requestId = `${projectName}:${buildNumber}:${eventType}:${payloadHash}`;
+    const now = Date.now();
+
+    // 최근 요청 캐시에서 확인
+    if (this.recentRequests.has(requestId)) {
+      const lastRequestTime = this.recentRequests.get(requestId);
+      if (now - lastRequestTime < this.cacheTimeout) {
+        logger.warn(`Duplicate webhook request detected and ignored: ${requestId}`);
+        return true;
+      }
+    }
+
+    // 캐시에 현재 요청 추가
+    this.recentRequests.set(requestId, now);
+    return false;
   }
 
   /**
@@ -345,9 +394,25 @@ class JenkinsWebhookService {
 
       // 데이터 파싱
       const deploymentData = this.parseWebhookData(payload);
-
-      // 이벤트 유형 확인
       const eventType = headers['x-jenkins-event'] || 'unknown';
+
+      // 중복 요청 체크
+      const parsedPayload = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      if (this.isDuplicateRequest(
+        deploymentData.project_name,
+        deploymentData.build_number,
+        eventType,
+        parsedPayload,
+      )) {
+        return {
+          success: true,
+          message: 'Duplicate request ignored',
+          deployment: null,
+          eventType,
+          ignored: true,
+        };
+      }
+
       logger.info(`Processing Jenkins webhook: ${eventType} for ${deploymentData.project_name} #${deploymentData.build_number}`);
 
       // 데이터베이스 저장
@@ -417,6 +482,18 @@ class JenkinsWebhookService {
       }
       throw new AppError(`Failed to get webhook status: ${error.message}`, 500);
     }
+  }
+
+  /**
+   * 서비스 종료 시 정리 작업
+   */
+  destroy() {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    this.recentRequests.clear();
+    logger.info('Jenkins Webhook Service destroyed');
   }
 }
 
