@@ -96,18 +96,11 @@ const DeploymentDetailModal = ({
       const url = `/api/deployments/deployment-info/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}`;
       console.log('Making fetch request to:', url);
       
-      // 2초 타임아웃을 추가하여 빠른 실패 보장
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-      
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        signal: controller.signal
+        }
       });
-      
-      clearTimeout(timeoutId);
       
       console.log('Response status:', response.status);
       if (response.ok) {
@@ -123,11 +116,7 @@ const DeploymentDetailModal = ({
         console.warn('Deployment info API returned non-success response:', response.status);
       }
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.warn('Deployment info request timed out after 2 seconds');
-      } else {
-        console.error('Failed to fetch deployment info:', error);
-      }
+      console.error('Failed to fetch deployment info:', error);
     } finally {
       setLoadingDeploymentInfo(false);
     }

@@ -1351,9 +1351,9 @@ router.get('/deployment-info/:projectName/:buildNumber',
         // 아래는 원래의 느린 코드 (비활성화됨)
         if (false) {
           logger.info('📋 deploymentInfo 내용:', JSON.stringify(deploymentInfo, null, 2));
-          // 프로젝트명에서 버전과 날짜 추출 (예: mr3.0.0_250310_26)
-          let version = '3.0.0';
-          let date = '250310';
+          // 프로젝트명에서 버전과 날짜 추출 (예: mr4.0.0_release)
+          let version = '4.0.0';
+          let date = '251013';
           let buildNum = buildNumber;
 
           // 프로젝트명 및 NAS 경로에서 정보 추출 (Windows 경로 지원)

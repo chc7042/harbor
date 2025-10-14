@@ -407,7 +407,7 @@ class SynologyApiService {
 
         // Backend 파일 패턴: be{version}_{date}_*_*.enc.tar.gz 또는 adam_{date}_*.enc.tar.gz
         if (fileName.match(new RegExp(`^be${version.replace(/\./g, '\\.')}_${date}_\\d+_\\d+\\.enc\\.tar\\.gz$`)) ||
-            fileName.match(new RegExp(`^adam_${date}\\d+\\.enc\\.tar\\.gz$`))) {
+            fileName.match(new RegExp(`^adam_${date}_\\d+\\.enc\\.tar\\.gz$`))) {
           fileMap.backend = fileName;
         }
 
