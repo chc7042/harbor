@@ -13,8 +13,8 @@ class NASScanner {
     // NAS 스캔 기본 경로
     const nasReleasePath = process.env.NAS_RELEASE_PATH || 'release_version';
     this.nasBasePath = process.env.NAS_BASE_PATH || `/nas/${nasReleasePath}`;
-    // 폴링 간격 (기본: 5분)
-    this.scanInterval = parseInt(process.env.NAS_SCAN_INTERVAL) || 5 * 60 * 1000; // 5분
+    // 폴링 간격 (기본: 15분)
+    this.scanInterval = parseInt(process.env.NAS_SCAN_INTERVAL) || 15 * 60 * 1000; // 15분
     this.maxFileSize = parseInt(process.env.NAS_MAX_FILE_SIZE, 10) || 1024 * 1024 * 1024; // 1GB
     this.allowedExtensions = (process.env.NAS_ALLOWED_EXTENSIONS || '.tar.gz,.zip,.jar,.war,.tgz').split(',');
 

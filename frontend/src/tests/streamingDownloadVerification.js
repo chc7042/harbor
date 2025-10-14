@@ -21,16 +21,19 @@ class StreamingDownloadVerifier {
   startMemoryMonitoring() {
     const startMemory = performance.memory ? performance.memory.usedJSHeapSize : 0;
     
-    this.memoryInterval = setInterval(() => {
-      if (performance.memory) {
-        this.memoryUsage.push({
-          timestamp: Date.now(),
-          usedJSHeapSize: performance.memory.usedJSHeapSize,
-          totalJSHeapSize: performance.memory.totalJSHeapSize,
-          usedJSHeapSizeMB: Math.round(performance.memory.usedJSHeapSize / 1024 / 1024),
-        });
-      }
-    }, 1000); // 1초마다 메모리 사용량 기록
+    // 개발 환경에서만 메모리 모니터링 활성화
+    if (import.meta.env.MODE === 'development' && import.meta.env.VITE_ENABLE_MEMORY_MONITORING === 'true') {
+      this.memoryInterval = setInterval(() => {
+        if (performance.memory) {
+          this.memoryUsage.push({
+            timestamp: Date.now(),
+            usedJSHeapSize: performance.memory.usedJSHeapSize,
+            totalJSHeapSize: performance.memory.totalJSHeapSize,
+            usedJSHeapSizeMB: Math.round(performance.memory.usedJSHeapSize / 1024 / 1024),
+          });
+        }
+      }, 1000); // 1초마다 메모리 사용량 기록
+    }
 
     return startMemory;
   }
