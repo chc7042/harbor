@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (shared for dev)
+  postgres:
+    image: postgres:15-alpine
+    container_name: harbor-postgres-dev
+    restart: unless-stopped
+    networks:
+      - harbor-dev-network
+    environment:
+      POSTGRES_DB: ${DB_NAME:-harbor_dev}
+      POSTGRES_USER: ${DB_USER:-harbor_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-harbor_dev_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+    command: ["postgres", "-c", "ssl=off"]
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-harbor_user} -d ${DB_NAME:-harbor_dev}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Backend Development Server
+  backend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend-development
+    container_name: harbor-backend-dev
+    restart: unless-stopped
+    networks:
+      - harbor-dev-network
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+
+      # Database configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-harbor_dev}
+      DB_USER: ${DB_USER:-harbor_user}
+      DB_PASSWORD: ${DB_PASSWORD:-harbor_dev_password}
+      DB_SSL: false
+
+      # JWT configuration
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret}
+      JWT_EXPIRES_IN: 24h
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret}
+      JWT_REFRESH_EXPIRES_IN: 7d
+
+      # LDAP configuration
+      LDAP_URL: ${LDAP_URL:-ldap://172.30.1.97:389}
+      LDAP_BIND_DN: ${LDAP_BIND_DN:-cn=admin,dc=roboetech,dc=com}
+      LDAP_BIND_CREDENTIALS: ${LDAP_BIND_CREDENTIALS:-admin}
+      LDAP_SEARCH_BASE: ${LDAP_SEARCH_BASE:-ou=users,dc=roboetech,dc=com}
+
+      # NAS configuration
+      NAS_BASE_PATH: ${NAS_BASE_PATH:-/nas/release_version}
+      NAS_SCAN_INTERVAL: ${NAS_SCAN_INTERVAL:-300000}
+
+      # Frontend URL
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+
+    volumes:
+      - ./backend/src:/app/src:ro
+      - ./backend/database:/app/database:ro
+      - ./backend/scripts:/app/scripts:ro
+      - dev_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Frontend Development Server
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend-development
+    container_name: harbor-frontend-dev
+    restart: unless-stopped
+    networks:
+      - harbor-dev-network
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001/api}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3001}
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/vite.config.js:/app/vite.config.js:ro
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js:ro
+      - ./frontend/postcss.config.js:/app/postcss.config.js:ro
+    depends_on:
+      - backend-dev
+
+networks:
+  harbor-dev-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  dev_logs:
+    driver: local

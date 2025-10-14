@@ -32,8 +32,8 @@ services:
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.backend
-      target: production
+      dockerfile: Dockerfile
+      target: backend-production
       args:
         - NODE_ENV=production
     container_name: harbor-backend-prod
@@ -150,8 +150,8 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: Dockerfile.frontend
-      target: production
+      dockerfile: Dockerfile
+      target: frontend-production
       args:
         - VITE_API_URL=/api
         - VITE_WS_URL=wss://harbor.roboetech.com
