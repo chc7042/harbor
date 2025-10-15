@@ -62,20 +62,33 @@ const ProjectDetailModal = ({
 
     setLoadingDeploymentInfo(true);
     try {
+      // 빠른 타임아웃 설정 (2초)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+
       const response = await fetch(`/api/deployments/deployment-info/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        },
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
-        setDeploymentInfo(data.data);
+        setDeploymentInfo(data.data || { downloadFile: null, allFiles: [], artifacts: {} });
       } else {
         console.error('Failed to fetch deployment info');
+        setDeploymentInfo({ downloadFile: null, allFiles: [], artifacts: {} });
       }
     } catch (error) {
-      console.error('Error fetching deployment info:', error);
+      if (error.name === 'AbortError') {
+        console.log('ProjectDetailModal deployment info fetch timed out (2s), showing empty state');
+      } else {
+        console.error('Error fetching deployment info:', error);
+      }
+      setDeploymentInfo({ downloadFile: null, allFiles: [], artifacts: {} });
     } finally {
       setLoadingDeploymentInfo(false);
     }
