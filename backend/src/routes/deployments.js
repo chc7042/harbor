@@ -1897,8 +1897,34 @@ router.get('/share/upload',
 
       const nasService = getNASService();
 
-      // 파일 업로드에서 사용하는 동일한 경로 사용
-      const uploadPath = nasService.validateAndNormalizeUploadPath('\\\\nas.roboetech.com\\release_version\\release\\upload');
+      // 여러 가능한 업로드 경로 시도
+      const possibleUploadPaths = [
+        '/release_version/release/upload',  // 현재 사용 중인 경로
+        '/release_version/upload',          // 더 상위 경로
+        '/volume1/release_version/release/upload',  // volume1 포함
+        '/volume1/release_version/upload'   // volume1 포함 상위 경로
+      ];
+
+      let uploadPath = null;
+      let pathExists = null;
+
+      // 존재하는 경로 찾기
+      for (const testPath of possibleUploadPaths) {
+        logger.info(`업로드 경로 테스트 중: ${testPath}`);
+        pathExists = await nasService.synologyApiService.checkPathExists(testPath);
+        logger.info(`경로 ${testPath} 존재 여부: ${JSON.stringify(pathExists)}`);
+        
+        if (pathExists.success && pathExists.exists) {
+          uploadPath = testPath;
+          logger.info(`유효한 업로드 경로 발견: ${uploadPath}`);
+          break;
+        }
+      }
+
+      if (!uploadPath) {
+        logger.error('모든 업로드 경로 테스트 실패, 기본 경로 사용');
+        uploadPath = '/release_version/release/upload';
+      }
 
       try {
         // upload 폴더에 대해서는 직접 경로로 공유 링크 생성

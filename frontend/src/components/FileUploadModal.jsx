@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, FolderOpen } from 'lucide-react';
 import FileUploader from './FileUploader';
 import toast from 'react-hot-toast';
+import api from '../services/api';
 
 const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
   const currentPath = '\\\\nas.roboetech.com\\release_version\\release\\upload';
@@ -25,29 +26,32 @@ const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
 
   const handleOpenSharedFolder = async () => {
     try {
+      console.log('📁 FileUploadModal: 공유 폴더 열기 시작');
       setIsOpeningFolder(true);
 
       // upload 폴더에 대한 공유 링크 가져오기
-      const response = await fetch('/deployments/share/upload', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      console.log('📁 FileUploadModal: API 요청 전송 - /deployments/share/upload');
+      const response = await api.get('/deployments/share/upload');
+      console.log('📁 FileUploadModal: API 응답 수신:', response.data);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.shareUrl) {
-          // 새 창에서 공유 폴더 열기
-          window.open(data.shareUrl, '_blank');
-        } else {
-          throw new Error(data.error || '공유 폴더 링크 생성에 실패했습니다.');
-        }
+      if (response.data.success && response.data.shareUrl) {
+        console.log('📁 FileUploadModal: 공유 링크 생성 성공, 새 창으로 열기:', response.data.shareUrl);
+        // 새 창에서 공유 폴더 열기
+        window.open(response.data.shareUrl, '_blank');
       } else {
-        throw new Error('서버 오류가 발생했습니다.');
+        console.error('📁 FileUploadModal: 공유 링크 생성 실패:', response.data);
+        const errorMsg = response.data.error?.message || response.data.message || response.data.error || '공유 폴더 링크 생성에 실패했습니다.';
+        throw new Error(errorMsg);
       }
     } catch (error) {
-      console.error('공유 폴더 열기 실패:', error);
-      toast.error(`공유 폴더 열기에 실패했습니다: ${error.message}`);
+      console.error('📁 FileUploadModal: 공유 폴더 열기 실패:', error);
+      console.error('📁 FileUploadModal: 에러 상세 정보:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      const errorMessage = error.response?.data?.error || error.message || '공유 폴더 열기에 실패했습니다.';
+      toast.error(`공유 폴더 열기 실패: ${errorMessage}`);
     } finally {
       setIsOpeningFolder(false);
     }
