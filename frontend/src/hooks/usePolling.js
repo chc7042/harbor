@@ -167,12 +167,15 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
 
     const pollingKey = 'deployment_updates';
 
-    // 폴링 시작
-    pollingService.start(pollingKey, fetchDeployments, pollingInterval);
-    setIsPolling(true);
+    // 초기 로딩 후 폴링 시작 (3초 지연)
+    const startTimeout = setTimeout(() => {
+      pollingService.start(pollingKey, fetchDeployments, pollingInterval);
+      setIsPolling(true);
+    }, 3000);
 
     // 정리
     return () => {
+      clearTimeout(startTimeout);
       pollingService.stop(pollingKey);
       setIsPolling(false);
     };
@@ -260,12 +263,15 @@ export const useProjectPolling = (pollingInterval = 5000) => {
 
     const pollingKey = 'project_updates';
 
-    // 폴링 시작 (프로젝트는 덜 자주 업데이트됨)
-    pollingService.start(pollingKey, fetchProjects, pollingInterval);
-    setIsPolling(true);
+    // 초기 로딩 후 폴링 시작 (5초 지연으로 배포 폴링과 시차 두기)
+    const startTimeout = setTimeout(() => {
+      pollingService.start(pollingKey, fetchProjects, pollingInterval);
+      setIsPolling(true);
+    }, 5000);
 
     // 정리
     return () => {
+      clearTimeout(startTimeout);
       pollingService.stop(pollingKey);
       setIsPolling(false);
     };

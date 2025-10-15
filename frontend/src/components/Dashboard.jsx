@@ -322,7 +322,7 @@ const Dashboard = () => {
               Jenkins NAS 배포 현황을 확인하세요
             </p>
             <div className="flex items-center text-sm text-gray-500 space-x-4">
-              {isPollingActive && (
+              {!loading && isPollingActive && (
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                   <span>실시간 업데이트 활성</span>
