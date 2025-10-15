@@ -41,7 +41,7 @@ const PollingStatus = ({ className = '', lastUpdate = null }) => {
   };
 
   return (
-    <div className={`relative flex flex-col items-center space-y-1 ${className}`}>
+    <div className={`relative flex items-center space-x-2 ${className}`}>
       <div
         className={`flex items-center space-x-2 px-3 py-1.5 rounded-full border text-xs font-medium ${config.color} ${config.bgColor} ${config.borderColor}`}
         title={`업데이트 상태: ${config.text}`}
@@ -49,13 +49,15 @@ const PollingStatus = ({ className = '', lastUpdate = null }) => {
         <IconComponent
           className={`w-3 h-3 ${config.animate ? 'animate-spin' : ''}`}
         />
-        <span className="hidden sm:inline">{config.text}</span>
-      </div>
-      {lastUpdate && (
-        <div className="text-xs text-gray-500">
-          {lastUpdate.toLocaleTimeString()}
+        <div className="flex flex-col">
+          <span className="hidden sm:inline">{config.text}</span>
+          {lastUpdate && (
+            <span className="text-xs text-gray-500">
+              {lastUpdate.toLocaleTimeString()}
+            </span>
+          )}
         </div>
-      )}
+      </div>
 
       {/* 토글 버튼 */}
       <button
