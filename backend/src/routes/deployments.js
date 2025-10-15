@@ -157,7 +157,15 @@ router.get('/',
 
         for (const [version, jobGroup] of Object.entries(groupedJobs)) {
           try {
-            // 프로젝트 필터링
+            // 허용된 프로젝트 타입으로 필터링 (mr, fe, be, adam만 허용)
+            const allowedProjectTypes = ['mr', 'fe', 'be', 'adam'];
+            const projectType = version.toLowerCase().match(/^(mr|fe|be|adam)\d+\.\d+\.\d+/);
+            
+            if (!projectType || !allowedProjectTypes.includes(projectType[1])) {
+              continue;
+            }
+
+            // 추가 프로젝트 필터링 (기존 로직 유지)
             if (project && !version.toLowerCase().includes(project.toLowerCase())) {
               continue;
             }
@@ -427,25 +435,55 @@ router.get('/recent',
         const fetchLimit = timeLimit === null ? 10000 : Math.max(parseInt(limit) * parseInt(page), 100);
 
         // Jenkins에서 최근 빌드 조회
+        logger.info(`Jenkins에서 최근 빌드 조회 중 - timeLimit: ${timeLimit}, fetchLimit: ${fetchLimit}`);
         const recentBuilds = await jenkinsService.getRecentBuilds(timeLimit, fetchLimit);
+        logger.info(`Jenkins에서 ${recentBuilds.length}개 빌드 조회됨`);
 
-        const recentDeployments = recentBuilds.map(build => ({
-          id: build.id,
-          projectName: build.projectName,
-          environment: determineEnvironment(build.projectName, build.parameters),
-          version: build.parameters?.VERSION || build.parameters?.TAG || `build-${build.buildNumber}`,
-          status: build.status,
-          deployedBy: build.changes && build.changes.length > 0 ? build.changes[0].author : 'Jenkins',
-          deployedAt: build.timestamp,
-          duration: build.duration,
-          buildNumber: build.buildNumber,
-          jenkinsUrl: build.url,
-          branch: build.parameters?.BRANCH_NAME || build.parameters?.GIT_BRANCH ||
-                 (build.projectName && build.projectName.includes('_release') ?
-                  build.projectName.split('/').pop().replace(/_(release|build)$/, '') : 'main'),
-          commitHash: build.changes && build.changes.length > 0 ? build.changes[0].commitId : null,
-          commitMessage: build.changes && build.changes.length > 0 ? build.changes[0].message : null,
-        }));
+        // 허용된 프로젝트 타입 정의
+        const allowedProjectTypes = ['mr', 'fe', 'be', 'adam'];
+        
+        // 디버깅: 모든 프로젝트명 로그 출력
+        logger.info('=== 필터링 전 프로젝트명 목록 ===');
+        recentBuilds.slice(0, 10).forEach((build, index) => {
+          logger.info(`${index + 1}. 프로젝트: ${build.projectName}`);
+        });
+        
+        const recentDeployments = recentBuilds
+          .filter(build => {
+            // 프로젝트명에서 실제 작업명 추출 (폴더/작업명 형태에서 작업명 부분)
+            const projectName = build.projectName.toLowerCase();
+            const jobName = projectName.includes('/') ? projectName.split('/').pop() : projectName;
+            
+            // errorcsv 포함된 작업은 제외
+            if (jobName.includes('errorcsv')) {
+              logger.info(`🔍 배포 필터링: ${projectName} -> 작업명: ${jobName} -> 제외됨 (errorcsv 포함)`);
+              return false;
+            }
+            
+            // 작업명이 mr, fe, be, adam으로 시작하는 것만 보여주기
+            const isAllowed = jobName.startsWith('mr') || jobName.startsWith('fe') || jobName.startsWith('be') || jobName.startsWith('adam');
+            
+            logger.info(`🔍 배포 필터링: ${projectName} -> 작업명: ${jobName} -> 허용: ${isAllowed}`);
+            
+            return isAllowed;
+          })
+          .map(build => ({
+            id: build.id,
+            projectName: build.projectName,
+            environment: determineEnvironment(build.projectName, build.parameters),
+            version: build.parameters?.VERSION || build.parameters?.TAG || `build-${build.buildNumber}`,
+            status: build.status,
+            deployedBy: build.changes && build.changes.length > 0 ? build.changes[0].author : 'Jenkins',
+            deployedAt: build.timestamp,
+            duration: build.duration,
+            buildNumber: build.buildNumber,
+            jenkinsUrl: build.url,
+            branch: build.parameters?.BRANCH_NAME || build.parameters?.GIT_BRANCH ||
+                   (build.projectName && build.projectName.includes('_release') ?
+                    build.projectName.split('/').pop().replace(/_(release|build)$/, '') : 'main'),
+            commitHash: build.changes && build.changes.length > 0 ? build.changes[0].commitId : null,
+            commitMessage: build.changes && build.changes.length > 0 ? build.changes[0].message : null,
+          }));
 
         // 페이지네이션 처리
         const totalItems = recentDeployments.length;
@@ -470,44 +508,12 @@ router.get('/recent',
         });
 
       } catch (jenkinsError) {
-        logger.error('Jenkins API 호출 실패, mock 데이터 사용:', jenkinsError.message);
-
-        // Jenkins 연결 실패 시 mock 데이터 반환
-        const mockRecentDeployments = [
-          {
-            id: 1,
-            projectName: 'jenkins-connection-failed',
-            environment: 'development',
-            version: 'mock-v1.0.0',
-            status: 'failed',
-            deployedBy: 'Mock User',
-            deployedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-            duration: 180,
-            buildNumber: 999,
-            branch: 'main',
-            error: 'Jenkins API 연결 실패',
-          },
-        ];
-
-        // Mock 데이터에도 페이지네이션 적용
-        const totalItems = mockRecentDeployments.length;
-        const totalPages = Math.ceil(totalItems / parseInt(limit));
-        const startIndex = (parseInt(page) - 1) * parseInt(limit);
-        const endIndex = startIndex + parseInt(limit);
-        const paginatedMockDeployments = mockRecentDeployments.slice(startIndex, endIndex);
-
-        res.json({
-          success: true,
-          data: paginatedMockDeployments,
-          pagination: {
-            currentPage: parseInt(page),
-            totalPages: totalPages,
-            totalItems: totalItems,
-            itemsPerPage: parseInt(limit),
-            hasNext: parseInt(page) < totalPages,
-            hasPrevious: parseInt(page) > 1,
-          },
-          warning: 'Jenkins 서버에 연결할 수 없어 mock 데이터를 표시합니다.',
+        logger.error('Jenkins API 호출 실패:', jenkinsError.message);
+        
+        res.status(500).json({
+          success: false,
+          message: 'Jenkins 서버에 연결할 수 없습니다.',
+          error: jenkinsError.message,
         });
       }
     } catch (error) {

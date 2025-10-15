@@ -287,4 +287,31 @@ export const loadArtifacts = async (version, buildNumber) => {
   }
 };
 
+// NAS 파일 검색 함수
+export const searchNASFiles = async (searchPath = 'release_version', pattern = '', developer = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (searchPath) params.append('path', searchPath);
+    if (pattern) params.append('pattern', pattern);
+    if (developer) params.append('developer', developer);
+
+    console.log('🔍 NAS 검색 요청:', { searchPath, pattern, developer });
+
+    const response = await api.get(`/nas/search?${params}`);
+    
+    console.log('🔍 NAS 검색 응답:', {
+      success: response.data.success,
+      fileCount: response.data.data?.files?.length || 0,
+      searchPath: response.data.data?.searchPath,
+      pattern: response.data.data?.pattern,
+      developer: response.data.data?.developer
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error('NAS 파일 검색 실패:', error);
+    throw error;
+  }
+};
+
 export default api;

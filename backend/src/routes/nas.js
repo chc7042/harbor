@@ -788,6 +788,7 @@ router.get('/search',
   [
     query('path').optional().isString(),
     query('pattern').optional().isString(),
+    query('developer').optional().isString(),
   ],
   async (req, res, next) => {
     try {
@@ -796,17 +797,58 @@ router.get('/search',
         throw new AppError('Invalid query parameters', 400, errors.array());
       }
 
-      const { path: searchPath = 'release_version', pattern } = req.query;
+      const { path: searchPath = 'release_version', pattern, developer } = req.query;
+      
+      logger.info('🔍 NAS 검색 요청:', {
+        searchPath,
+        pattern: pattern || 'no pattern',
+        developer: developer || 'no developer filter',
+        user: req.user?.username || 'unknown'
+      });
 
       const nasService = getNASService();
       const files = await nasService.searchFiles(searchPath, pattern);
+      
+      logger.info('🔍 검색 결과 (필터링 전):', {
+        totalFiles: files.length,
+        searchPath,
+        pattern: pattern || 'no pattern'
+      });
+
+      // 개발자별 필터링 (만약 developer 파라미터가 있다면)
+      let filteredFiles = files;
+      if (developer && developer !== 'all') {
+        const originalCount = filteredFiles.length;
+        filteredFiles = files.filter(file => {
+          const pathMatch = file.path && file.path.toLowerCase().includes(developer.toLowerCase());
+          const nameMatch = file.name && file.name.toLowerCase().includes(developer.toLowerCase());
+          return pathMatch || nameMatch;
+        });
+        
+        logger.info('🔍 개발자별 필터링 결과:', {
+          developer,
+          originalCount,
+          filteredCount: filteredFiles.length,
+          difference: originalCount - filteredFiles.length
+        });
+      }
+
+      logger.info('🔍 최종 검색 결과:', {
+        totalFiles: filteredFiles.length,
+        sampleFiles: filteredFiles.slice(0, 3).map(f => ({
+          name: f.name,
+          path: f.path?.substring(0, 50) + '...',
+          isdir: f.isdir
+        }))
+      });
 
       res.json({
         success: true,
         data: {
           searchPath,
           pattern: pattern || null,
-          files,
+          developer: developer || null,
+          files: filteredFiles,
         },
       });
 

@@ -55,37 +55,50 @@ class JenkinsService {
     return withJenkinsRetry(async () => {
       // projects 폴더의 하위 폴더들 조회
       const url = '/job/projects/api/json?tree=jobs[name,url]';
-      logger.debug(`Fetching Jenkins project folders from URL: ${url}`);
+      logger.info(`🔧 Jenkins: Fetching project folders from URL: ${url}`);
 
       const response = await this.client.get(url);
       const projectFolders = response.data.jobs || [];
 
-      logger.info(`Found ${projectFolders.length} project folders:`, projectFolders.map(folder => folder.name));
+      logger.info(`🔧 Jenkins: Found ${projectFolders.length} project folders:`, projectFolders.map(folder => folder.name));
 
       // 각 프로젝트 폴더에서 실제 작업들 조회
       const allJobs = [];
       for (const folder of projectFolders) {
         try {
           const folderUrl = `/job/projects/job/${encodeURIComponent(folder.name)}/api/json?tree=jobs[name,url,buildable,lastBuild[number,url,result,timestamp,duration,displayName,actions[parameters[name,value],causes[shortDescription],lastBuiltRevision[branch[name]]]]]`;
+          logger.info(`🔧 Jenkins: Fetching jobs from folder ${folder.name}: ${folderUrl}`);
           const folderResponse = await this.client.get(folderUrl);
           const folderJobs = folderResponse.data.jobs || [];
+          logger.info(`🔧 Jenkins: Found ${folderJobs.length} jobs in folder ${folder.name}:`, folderJobs.map(job => job.name));
 
           // 필터링 로직 개선: 일반 버전 프로젝트(x.x.x)와 mr/fs 프로젝트 모두 포함
           const filteredJobs = folderJobs.filter(job => {
             const jobName = job.name.toLowerCase();
             const folderName = folder.name.toLowerCase();
 
+            logger.info(`🔧 Jenkins: Checking job ${jobName} in folder ${folderName}`);
+
             // 일반 버전 프로젝트 (1.2.0, 2.0.0, 3.0.0, 4.0.0 등)
             const versionPattern = /^\d+\.\d+\.\d+$/;
             if (versionPattern.test(folderName)) {
               // 일반 버전 프로젝트의 모든 작업 포함
+              logger.info(`🔧 Jenkins: Including job ${jobName} from version folder ${folderName}`);
               return true;
             }
 
             // mr/fs 프로젝트의 release 작업들
             const releasePattern = /^(mr|fs)\d+\.\d+\.\d+_release$/;
-            return releasePattern.test(jobName);
+            const isReleaseJob = releasePattern.test(jobName);
+            if (isReleaseJob) {
+              logger.info(`🔧 Jenkins: Including release job ${jobName} from folder ${folderName}`);
+            } else {
+              logger.info(`🔧 Jenkins: Excluding job ${jobName} from folder ${folderName} (not matching patterns)`);
+            }
+            return isReleaseJob;
           });
+          
+          logger.info(`🔧 Jenkins: After filtering, ${filteredJobs.length} jobs included from folder ${folder.name}`);
 
           // 프로젝트 폴더 이름을 각 작업에 추가하고 브랜치 정보 추출
           filteredJobs.forEach(job => {
@@ -105,7 +118,8 @@ class JenkinsService {
         }
       }
 
-      logger.info(`Total jobs found: ${allJobs.length}`);
+      logger.info(`🔧 Jenkins: Total jobs retrieved: ${allJobs.length}`);
+      logger.info(`🔧 Jenkins: Final job list:`, allJobs.map(job => `${job.projectFolder}/${job.name}`));
       return allJobs;
     }, {}, 'Jenkins getJobs');
   }
