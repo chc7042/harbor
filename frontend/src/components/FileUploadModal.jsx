@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, FolderOpen } from 'lucide-react';
 import FileUploader from './FileUploader';
+import toast from 'react-hot-toast';
 
 const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
   const currentPath = '\\\\nas.roboetech.com\\release_version\\release\\upload';
@@ -46,7 +47,7 @@ const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
       }
     } catch (error) {
       console.error('공유 폴더 열기 실패:', error);
-      alert(`공유 폴더 열기에 실패했습니다: ${error.message}`);
+      toast.error(`공유 폴더 열기에 실패했습니다: ${error.message}`);
     } finally {
       setIsOpeningFolder(false);
     }

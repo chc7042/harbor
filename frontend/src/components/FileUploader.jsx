@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { uploadFile, uploadFileStream } from '../services/api';
+import toast from 'react-hot-toast';
 
 const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
   const [isUploading, setIsUploading] = useState(false);
@@ -58,7 +59,6 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
         currentPath
       });
 
-      validateFile(file);
       setIsUploading(true);
       setProgress(0);
       setUploadStatus('업로드 준비 중...');
@@ -85,6 +85,7 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
       if (result.success) {
         console.log('📤 FileUploader: Upload successful!');
         setUploadStatus('업로드가 완료되었습니다!');
+        toast.success(`파일 업로드 완료: ${file.name}`);
         onUploadComplete && onUploadComplete(result.data);
 
         // 성공 후 초기화
@@ -110,8 +111,10 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
         response: error.response
       });
 
-      setUploadStatus(error.message || '업로드에 실패했습니다.');
-      onUploadError && onUploadError(error.message);
+      const errorMessage = error.message || '업로드에 실패했습니다.';
+      setUploadStatus(errorMessage);
+      toast.error(`파일 업로드 실패: ${errorMessage}`);
+      onUploadError && onUploadError(errorMessage);
 
       setTimeout(() => {
         setIsUploading(false);
@@ -124,7 +127,14 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
   const handleFileSelect = (event) => {
     const files = event.target.files;
     if (files && files.length > 0) {
-      handleUpload(files[0]);
+      try {
+        validateFile(files[0]);
+        handleUpload(files[0]);
+      } catch (error) {
+        toast.error(error.message);
+        setUploadStatus(error.message);
+        setTimeout(() => setUploadStatus(''), 3000);
+      }
     }
   };
 
@@ -134,7 +144,14 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
 
     const files = event.dataTransfer.files;
     if (files && files.length > 0) {
-      handleUpload(files[0]);
+      try {
+        validateFile(files[0]);
+        handleUpload(files[0]);
+      } catch (error) {
+        toast.error(error.message);
+        setUploadStatus(error.message);
+        setTimeout(() => setUploadStatus(''), 3000);
+      }
     }
   };
 
