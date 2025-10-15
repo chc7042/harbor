@@ -65,9 +65,9 @@ const PollingStatus = ({ className = '', lastUpdate = null }) => {
       <button
         onClick={handleTogglePolling}
         className="text-xs text-primary-600 hover:text-primary-800 underline"
-        title={isActive ? '자동 업데이트 중지' : '자동 업데이트 시작'}
+        title={isActive ? '자동 업데이트 시작' : '자동 업데이트 중지'}
       >
-        {isActive ? '중지' : '시작'}
+        {isActive ? '시작' : '중지'}
       </button>
 
       {/* 상세 정보 버튼 */}
