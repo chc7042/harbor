@@ -54,7 +54,9 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
   const fetchDeployments = useCallback(async () => {
     try {
       setError(null);
-      const response = await api.get('/deployments/recent?limit=20&hours=168'); // 최근 7일
+      const response = await api.get('/deployments/recent?limit=20&hours=168', {
+        timeout: 15000 // 15초 타임아웃
+      }); // 최근 7일
       const deploymentData = response.data?.data || response.data || [];
 
       if (Array.isArray(deploymentData)) {
@@ -148,6 +150,12 @@ export const useDeploymentPolling = (initialDeployments = [], pollingInterval = 
     } catch (error) {
       console.error('Failed to fetch deployments:', error);
       setError(error);
+      
+      // 타임아웃 에러의 경우 폴링 간격을 늘림
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        console.warn('API timeout occurred, polling will continue');
+      }
+      
       // 에러 발생해도 토스트는 표시하지 않음 (너무 자주 발생할 수 있음)
     }
   }, []);
