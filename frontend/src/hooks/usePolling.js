@@ -296,11 +296,13 @@ export const useProjectPolling = (pollingInterval = 5000) => {
  */
 export const usePollingStatus = () => {
   const [isActive, setIsActive] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [activePolling, setActivePolling] = useState([]);
 
   useEffect(() => {
     // 초기 상태 설정
     setIsActive(pollingService.isPollingActive());
+    setIsUpdating(pollingService.isCurrentlyUpdating());
     setActivePolling(pollingService.getActivePolling());
 
     // 폴링 상태 변경 이벤트 리스너
@@ -309,18 +311,27 @@ export const usePollingStatus = () => {
       setActivePolling(data.activePolling);
     };
 
+    // 업데이트 상태 변경 이벤트 리스너
+    const handleUpdatingChange = (data) => {
+      setIsUpdating(data.isUpdating);
+    };
+
     pollingService.on('polling_status_changed', handleStatusChange);
+    pollingService.on('updating_status_changed', handleUpdatingChange);
 
     // 백업용 주기적 체크 (이벤트가 놓치는 경우를 대비)
     const interval = setInterval(() => {
       const currentActive = pollingService.isPollingActive();
+      const currentUpdating = pollingService.isCurrentlyUpdating();
       const currentPolling = pollingService.getActivePolling();
       setIsActive(currentActive);
+      setIsUpdating(currentUpdating);
       setActivePolling(currentPolling);
     }, 10000); // 10초마다
 
     return () => {
       pollingService.off('polling_status_changed', handleStatusChange);
+      pollingService.off('updating_status_changed', handleUpdatingChange);
       clearInterval(interval);
     };
   }, []);
@@ -331,6 +342,7 @@ export const usePollingStatus = () => {
 
   return {
     isActive,
+    isUpdating,
     activePolling,
     stopAllPolling
   };

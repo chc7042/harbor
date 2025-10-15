@@ -3,6 +3,7 @@ class PollingService {
     this.intervals = new Map();
     this.subscribers = new Map();
     this.isActive = false;
+    this.isUpdating = false; // 실제 업데이트 진행 중 여부
   }
 
   /**
@@ -16,10 +17,15 @@ class PollingService {
 
     const intervalId = setInterval(async () => {
       try {
+        this.isUpdating = true;
+        this.emit('updating_status_changed', { isUpdating: true });
         await callback();
       } catch (error) {
         console.error(`Polling error for ${key}:`, error);
         // 에러가 발생해도 폴링은 계속 진행
+      } finally {
+        this.isUpdating = false;
+        this.emit('updating_status_changed', { isUpdating: false });
       }
     }, interval);
 
@@ -111,6 +117,14 @@ class PollingService {
    */
   isPollingActive() {
     return this.isActive;
+  }
+
+  /**
+   * 실제 업데이트 진행 상태 확인
+   * @returns {boolean}
+   */
+  isCurrentlyUpdating() {
+    return this.isUpdating;
   }
 
   /**

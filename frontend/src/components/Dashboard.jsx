@@ -18,7 +18,7 @@ const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   // 폴링 상태 관리
-  const { isActive: isPollingActive } = usePollingStatus();
+  const { isActive: isPollingActive, isUpdating } = usePollingStatus();
 
   const [initialDeployments, setInitialDeployments] = useState([]);
 
@@ -322,10 +322,16 @@ const Dashboard = () => {
               Jenkins NAS 배포 현황을 확인하세요
             </p>
             <div className="flex items-center text-sm text-gray-500 space-x-4">
-              {!loading && isPollingActive && (
+              {!loading && isUpdating && (
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span>실시간 업데이트 활성</span>
+                  <span>자동 업데이트 중</span>
+                </div>
+              )}
+              {!loading && !isUpdating && isPollingActive && (
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span>실시간 업데이트 대기</span>
                 </div>
               )}
               {deploymentsLastUpdate && (
