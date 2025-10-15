@@ -3,7 +3,7 @@ class PollingService {
     this.intervals = new Map();
     this.subscribers = new Map();
     this.isActive = false;
-    this.isUpdating = false; // 실제 업데이트 진행 중 여부
+    this.updatingKeys = new Set(); // 현재 업데이트 중인 폴링 키들
   }
 
   /**
@@ -16,16 +16,25 @@ class PollingService {
     this.stop(key); // 기존 폴링 중지
 
     const intervalId = setInterval(async () => {
+      let timeoutId;
       try {
-        this.isUpdating = true;
-        this.emit('updating_status_changed', { isUpdating: true });
-        await callback();
+        this.updatingKeys.add(key);
+        this.emit('updating_status_changed', { isUpdating: this.updatingKeys.size > 0, updatingKeys: Array.from(this.updatingKeys) });
+        
+        // 타임아웃 설정 (10초)
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error(`Polling timeout for ${key}`)), 10000);
+        });
+        
+        await Promise.race([callback(), timeoutPromise]);
+        clearTimeout(timeoutId);
       } catch (error) {
         console.error(`Polling error for ${key}:`, error);
+        if (timeoutId) clearTimeout(timeoutId);
         // 에러가 발생해도 폴링은 계속 진행
       } finally {
-        this.isUpdating = false;
-        this.emit('updating_status_changed', { isUpdating: false });
+        this.updatingKeys.delete(key);
+        this.emit('updating_status_changed', { isUpdating: this.updatingKeys.size > 0, updatingKeys: Array.from(this.updatingKeys) });
       }
     }, interval);
 
@@ -124,7 +133,7 @@ class PollingService {
    * @returns {boolean}
    */
   isCurrentlyUpdating() {
-    return this.isUpdating;
+    return this.updatingKeys.size > 0;
   }
 
   /**
