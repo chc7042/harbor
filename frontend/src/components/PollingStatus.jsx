@@ -11,11 +11,11 @@ const PollingStatus = ({ className = '' }) => {
     if (isActive) {
       return {
         icon: RefreshCw,
-        text: '자동 업데이트 중',
-        color: 'text-green-600',
-        bgColor: 'bg-green-100',
-        borderColor: 'border-green-200',
-        animate: true
+        text: '실시간 업데이트 대기',
+        color: 'text-blue-600',
+        bgColor: 'bg-blue-100',
+        borderColor: 'border-blue-200',
+        animate: false
       };
     } else {
       return {
