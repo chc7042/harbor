@@ -325,12 +325,6 @@ const Dashboard = () => {
               Jenkins NAS 배포 현황을 확인하세요
             </p>
             <div className="flex items-center text-sm text-gray-500 space-x-4">
-              {!loading && isPollingActive && (
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span>실시간 업데이트 대기</span>
-                </div>
-              )}
               {deploymentsLastUpdate && (
                 <span>마지막 업데이트: {deploymentsLastUpdate.toLocaleTimeString()}</span>
               )}

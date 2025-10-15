@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { RefreshCw, Pause, Play, Info, Clock } from 'lucide-react';
-import { usePollingStatus } from '../hooks/usePolling';
+import { usePollingStatus, useDeploymentPolling } from '../hooks/usePolling';
 import pollingService from '../services/pollingService';
 
-const PollingStatus = ({ className = '' }) => {
+const PollingStatus = ({ className = '', lastUpdate = null }) => {
   const { isActive, activePolling } = usePollingStatus();
   const [showDetails, setShowDetails] = useState(false);
 
@@ -41,7 +41,7 @@ const PollingStatus = ({ className = '' }) => {
   };
 
   return (
-    <div className={`relative flex items-center space-x-2 ${className}`}>
+    <div className={`relative flex flex-col items-center space-y-1 ${className}`}>
       <div
         className={`flex items-center space-x-2 px-3 py-1.5 rounded-full border text-xs font-medium ${config.color} ${config.bgColor} ${config.borderColor}`}
         title={`업데이트 상태: ${config.text}`}
@@ -51,6 +51,11 @@ const PollingStatus = ({ className = '' }) => {
         />
         <span className="hidden sm:inline">{config.text}</span>
       </div>
+      {lastUpdate && (
+        <div className="text-xs text-gray-500">
+          {lastUpdate.toLocaleTimeString()}
+        </div>
+      )}
 
       {/* 토글 버튼 */}
       <button
