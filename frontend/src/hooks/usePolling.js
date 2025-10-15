@@ -301,9 +301,15 @@ export const usePollingStatus = () => {
 
   useEffect(() => {
     // 초기 상태 설정
-    setIsActive(pollingService.isPollingActive());
-    setIsUpdating(pollingService.isCurrentlyUpdating());
-    setActivePolling(pollingService.getActivePolling());
+    const initialActive = pollingService.isPollingActive();
+    const initialUpdating = pollingService.isCurrentlyUpdating();
+    const initialPolling = pollingService.getActivePolling();
+    
+    console.log('[usePollingStatus] Initial state:', { initialActive, initialUpdating, initialPolling });
+    
+    setIsActive(initialActive);
+    setIsUpdating(initialUpdating);
+    setActivePolling(initialPolling);
 
     // 폴링 상태 변경 이벤트 리스너
     const handleStatusChange = (data) => {
@@ -313,6 +319,7 @@ export const usePollingStatus = () => {
 
     // 업데이트 상태 변경 이벤트 리스너
     const handleUpdatingChange = (data) => {
+      console.log('[usePollingStatus] Updating status changed:', data);
       setIsUpdating(data.isUpdating);
     };
 

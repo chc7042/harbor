@@ -19,6 +19,7 @@ class PollingService {
       let timeoutId;
       try {
         this.updatingKeys.add(key);
+        console.log(`[PollingService] ${key} started. Updating keys:`, Array.from(this.updatingKeys));
         this.emit('updating_status_changed', { isUpdating: this.updatingKeys.size > 0, updatingKeys: Array.from(this.updatingKeys) });
         
         // 타임아웃 설정 (10초)
@@ -34,6 +35,7 @@ class PollingService {
         // 에러가 발생해도 폴링은 계속 진행
       } finally {
         this.updatingKeys.delete(key);
+        console.log(`[PollingService] ${key} finished. Updating keys:`, Array.from(this.updatingKeys));
         this.emit('updating_status_changed', { isUpdating: this.updatingKeys.size > 0, updatingKeys: Array.from(this.updatingKeys) });
       }
     }, interval);
