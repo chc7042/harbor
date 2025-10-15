@@ -13,11 +13,11 @@ const PollingStatus = ({ className = '', lastUpdate = null }) => {
     if (isActive) {
       return {
         icon: RefreshCw,
-        text: '실시간 업데이트 대기',
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-100',
-        borderColor: 'border-blue-200',
-        animate: false
+        text: '자동 업데이트 중',
+        color: 'text-green-600',
+        bgColor: 'bg-green-100',
+        borderColor: 'border-green-200',
+        animate: true
       };
     } else {
       return {
@@ -65,9 +65,9 @@ const PollingStatus = ({ className = '', lastUpdate = null }) => {
       <button
         onClick={handleTogglePolling}
         className="text-xs text-primary-600 hover:text-primary-800 underline"
-        title={isActive ? '자동 업데이트 시작' : '자동 업데이트 중지'}
+        title={isActive ? '자동 업데이트 중지' : '자동 업데이트 시작'}
       >
-        {isActive ? '시작' : '중지'}
+        {isActive ? '중지' : '시작'}
       </button>
 
       {/* 상세 정보 버튼 */}
