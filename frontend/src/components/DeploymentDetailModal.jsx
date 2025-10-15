@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   CheckCircle,
@@ -48,6 +48,9 @@ const DeploymentDetailModal = ({
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [deploymentInfo, setDeploymentInfo] = useState(null);
   const [loadingDeploymentInfo, setLoadingDeploymentInfo] = useState(false);
+  
+  // 컴포넌트 mount 상태 추적
+  const isMountedRef = useRef(true);
 
   // 실제 Jenkins 로그를 가져오는 함수
   const fetchLogs = async () => {
@@ -116,16 +119,22 @@ const DeploymentDetailModal = ({
           console.log('DeploymentInfo received:', data.data);
           console.log('downloadFile:', data.data.downloadFile);
           console.log('allFiles:', data.data.allFiles);
-          setDeploymentInfo(data.data);
+          if (isMountedRef.current) {
+            setDeploymentInfo(data.data);
+          }
         } else {
           // 성공 응답이지만 데이터가 없는 경우 빈 상태로 설정
           console.log('No deployment info data available');
-          setDeploymentInfo({ downloadFile: null, allFiles: [], artifacts: {} });
+          if (isMountedRef.current) {
+            setDeploymentInfo({ downloadFile: null, allFiles: [], artifacts: {} });
+          }
         }
       } else {
         // API 호출은 성공했지만 응답이 실패인 경우
         console.warn('Deployment info API returned non-success response:', response.status);
-        setDeploymentInfo({ downloadFile: null, allFiles: [], artifacts: {} });
+        if (isMountedRef.current) {
+          setDeploymentInfo({ downloadFile: null, allFiles: [], artifacts: {} });
+        }
       }
     } catch (error) {
       if (error.name === 'AbortError') {
@@ -134,9 +143,13 @@ const DeploymentDetailModal = ({
         console.error('Failed to fetch deployment info:', error);
       }
       // 오류나 타임아웃 시 빈 상태로 설정
-      setDeploymentInfo({ downloadFile: null, allFiles: [], artifacts: {} });
+      if (isMountedRef.current) {
+        setDeploymentInfo({ downloadFile: null, allFiles: [], artifacts: {} });
+      }
     } finally {
-      setLoadingDeploymentInfo(false);
+      if (isMountedRef.current) {
+        setLoadingDeploymentInfo(false);
+      }
     }
   };
 
@@ -200,6 +213,13 @@ const DeploymentDetailModal = ({
       fetchDeploymentInfo();
     }
   }, [activeTab, isOpen, deployment, deploymentInfo]);
+
+  // Cleanup: 컴포넌트 unmount 시 mount 상태 false로 설정
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   if (!isOpen || !deployment) return null;
 
