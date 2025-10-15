@@ -6,6 +6,8 @@ import pollingService from '../services/pollingService';
 const PollingStatus = ({ className = '', lastUpdate = null }) => {
   const { isActive, activePolling } = usePollingStatus();
   const [showDetails, setShowDetails] = useState(false);
+  
+  console.log('[PollingStatus] Props:', { isActive, lastUpdate, activePolling });
 
   const getStatusConfig = () => {
     if (isActive) {
@@ -52,8 +54,8 @@ const PollingStatus = ({ className = '', lastUpdate = null }) => {
         <div className="flex flex-col leading-tight">
           <span className="hidden sm:inline">{config.text}</span>
           {lastUpdate && (
-            <span className="text-xs text-gray-500">
-              {lastUpdate.toLocaleTimeString()}
+            <span className="text-xs text-gray-400 leading-none">
+              마지막: {lastUpdate.toLocaleTimeString()}
             </span>
           )}
         </div>

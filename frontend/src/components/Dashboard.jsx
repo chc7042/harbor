@@ -29,6 +29,13 @@ const Dashboard = () => {
   
   // 디버그 로그
   console.log('[Dashboard] Polling status:', { isPollingActive, isUpdating, loading });
+
+  // 마지막 업데이트 시간을 localStorage에 저장
+  useEffect(() => {
+    if (deploymentsLastUpdate) {
+      localStorage.setItem('harbor_last_update', deploymentsLastUpdate.toISOString());
+    }
+  }, [deploymentsLastUpdate]);
   const [totalItems, setTotalItems] = useState(0);
 
   // 검색 및 필터 상태

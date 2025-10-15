@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useDeploymentPolling } from '../hooks/usePolling';
 import PollingStatus from './PollingStatus';
 import NotificationSettings from './NotificationSettings';
 import UserAvatar from './UserAvatar';
@@ -14,9 +13,19 @@ const Header = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isNotificationSettingsOpen, setIsNotificationSettingsOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  
-  // 폴링 상태에서 마지막 업데이트 시간 가져오기
-  const { lastUpdate: deploymentsLastUpdate } = useDeploymentPolling([], 30000);
+  const [lastUpdate, setLastUpdate] = useState(null);
+
+  // localStorage에서 마지막 업데이트 시간 가져오기
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const stored = localStorage.getItem('harbor_last_update');
+      if (stored) {
+        setLastUpdate(new Date(stored));
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
 
   const handleLogout = async () => {
@@ -88,7 +97,7 @@ const Header = () => {
           {/* 사용자 메뉴 */}
           <div className="flex items-center space-x-4">
             {/* 연결 상태 */}
-            <PollingStatus lastUpdate={deploymentsLastUpdate} />
+            <PollingStatus lastUpdate={lastUpdate} />
             {/* 알림 버튼 */}
             <button
               onClick={() => setIsNotificationSettingsOpen(true)}
