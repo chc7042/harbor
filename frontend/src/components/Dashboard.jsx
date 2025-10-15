@@ -19,9 +19,6 @@ const Dashboard = () => {
   const navigate = useNavigate();
   // 폴링 상태 관리
   const { isActive: isPollingActive, isUpdating } = usePollingStatus();
-  
-  // 디버그 로그
-  console.log('[Dashboard] Polling status:', { isPollingActive, isUpdating, loading });
 
   const [initialDeployments, setInitialDeployments] = useState([]);
 
@@ -29,6 +26,9 @@ const Dashboard = () => {
   const { deployments, isPolling: isDeploymentPolling, lastUpdate: deploymentsLastUpdate, refresh: refreshDeployments } = useDeploymentPolling(initialDeployments, 30000);
   const { projects, isPolling: isProjectPolling, lastUpdate: projectsLastUpdate, refresh: refreshProjects } = useProjectPolling(60000);
   const [loading, setLoading] = useState(true);
+  
+  // 디버그 로그
+  console.log('[Dashboard] Polling status:', { isPollingActive, isUpdating, loading });
   const [totalItems, setTotalItems] = useState(0);
 
   // 검색 및 필터 상태
