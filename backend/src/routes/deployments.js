@@ -911,6 +911,68 @@ function determineEnvironment(jobName, parameters = {}) {
   return 'development';
 }
 
+// 공통 배포 정보 조회 함수
+async function getDeploymentInfo(projectName, buildNumber, version = null, req) {
+  const logger = require('../config/logger');
+  const jenkinsService = getJenkinsService();
+  const nasService = getNASService();
+  const SynologyApiService = require('../services/synologyApiService');
+  const synologyApiService = new SynologyApiService();
+
+  logger.info(`배포 정보 조회 시작 - 프로젝트: ${projectName}, 빌드: ${buildNumber}, 버전: ${version}`);
+
+  // 1. 먼저 deployment_paths 테이블에서 기존 검증된 데이터 확인 (최적화됨)
+  let deploymentInfo = null;
+  try {
+    logger.info(`DB 쿼리 시도 - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+    const { query } = require('../config/database');
+
+    const dbResult = await query(
+      'SELECT * FROM deployment_paths WHERE project_name = $1 AND build_number = $2',
+      [projectName, parseInt(buildNumber)],
+    );
+
+    logger.info(`DB 쿼리 결과 - 행 개수: ${dbResult.rows.length}`);
+
+    if (dbResult.rows.length > 0) {
+      const dbRecord = dbResult.rows[0];
+      logger.info(`DB 레코드 발견 - all_files: ${JSON.stringify(dbRecord.all_files)}`);
+      deploymentInfo = {
+        deploymentPath: dbRecord.nas_path,
+        nasPath: dbRecord.nas_path,
+        downloadFile: dbRecord.download_file,
+        allFiles: dbRecord.all_files || [],
+        verifiedFiles: dbRecord.all_files || [],
+        directoryVerified: true,
+        downloadFileVerified: true,
+        buildDate: dbRecord.build_date,
+        buildNumber: dbRecord.build_number,
+      };
+      logger.info(`Found verified deployment data in database for ${projectName}#${buildNumber}`);
+      logger.info(`DB allFiles: ${JSON.stringify(dbRecord.all_files)}`);
+
+      // DB에서 데이터를 찾은 경우 Synology API 호출 건너뛰기
+      logger.info('DB에서 데이터를 찾았으므로 빠른 응답 제공');
+    } else {
+      logger.warn(`DB에서 레코드를 찾지 못함 - ${projectName}#${buildNumber}`);
+    }
+  } catch (dbError) {
+    logger.error(`Database query failed: ${dbError.message}`);
+    logger.error(`DB 연결 정보 - host: ${process.env.DB_HOST}, port: ${process.env.DB_PORT}, db: ${process.env.DB_NAME}, user: ${process.env.DB_USER}`);
+  }
+
+  // 2. DB에 데이터가 없으면 Jenkins에서 동적으로 조회
+  if (!deploymentInfo) {
+    logger.info(`Jenkins에서 배포 정보 조회 - ${projectName}#${buildNumber}`);
+    deploymentInfo = await jenkinsService.extractDeploymentInfo(projectName, parseInt(buildNumber));
+  }
+
+  return {
+    success: true,
+    data: deploymentInfo || { downloadFile: null, allFiles: [], artifacts: {} },
+  };
+}
+
 // Jenkins 배포 정보 조회 (3-segment URL: version/projectName/buildNumber)
 router.get('/deployment-info/:version/:projectName/:buildNumber',
   [
@@ -937,6 +999,19 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
       logger.info(`배포 정보 조회 요청 (3-segment) - 사용자: ${req.user.username}, 버전: ${version}, 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
       logger.info(`Full project name: ${fullProjectName}`);
 
+      // 공통 함수 사용
+      const result = await getDeploymentInfo(fullProjectName, buildNumber, version, req);
+      
+      return res.json({
+        success: result.success,
+        data: {
+          projectName: fullProjectName,
+          buildNumber: parseInt(buildNumber),
+          status: 'SUCCESS',
+          ...result.data
+        }
+      });
+
       const jenkinsService = getJenkinsService();
       const nasService = getNASService();
       const SynologyApiService = require('../services/synologyApiService');
@@ -962,7 +1037,7 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
             const dbRecord = dbResult.rows[0];
             logger.info(`DB 레코드 발견 - all_files: ${JSON.stringify(dbRecord.all_files)}`);
             deploymentInfo = {
-              deploymentPath: dbRecord.path,
+              deploymentPath: dbRecord.nas_path,
               nasPath: dbRecord.nas_path,
               downloadFile: dbRecord.download_file,
               allFiles: dbRecord.all_files || [],
@@ -975,8 +1050,8 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
             logger.info(`Found verified deployment data in database for ${fullProjectName}#${buildNumber}`);
             logger.info(`DB allFiles: ${JSON.stringify(dbRecord.all_files)}`);
 
-            // DB에서 데이터를 찾은 경우에도 Synology 공유 링크가 없으면 생성
-            if (!dbRecord.synology_share_url) {
+            // DB에서 데이터를 찾은 경우 Synology API 호출 건너뛰기
+            if (false) {
               logger.info('DB에서 데이터를 찾았지만 Synology 공유 링크가 없음, 생성 시도');
 
               // 버전 정보 추출
@@ -998,7 +1073,7 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
               try {
                 const shareResult = await Promise.race([
                   synologyApiService.getOrCreateVersionShareLink(extractedVersion, date, buildNum),
-                  new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 10000)),
+                  new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 3000)),
                 ]);
 
                 logger.info('🔗 Synology API 응답 (DB 데이터 보완):', JSON.stringify(shareResult, null, 2));
@@ -1016,8 +1091,8 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
                 logger.warn(`Synology share link error (DB 데이터 보완): ${shareError.message}`);
               }
             } else {
-              deploymentInfo.synologyShareUrl = dbRecord.synology_share_url;
-              logger.info('DB에서 기존 Synology 공유 링크 사용:', dbRecord.synology_share_url);
+              // DB에서 데이터를 찾았으므로 Synology API 호출 건너뛰기
+              logger.info('DB에서 데이터를 찾았으므로 빠른 응답 제공');
             }
           } else {
             logger.warn(`DB에서 레코드를 찾지 못함 - ${fullProjectName}#${buildNumber}`);
@@ -1149,7 +1224,7 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
           try {
             const shareResult = await Promise.race([
               synologyApiService.getOrCreateVersionShareLink(extractedVersion, date, buildNum),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 10000)),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 3000)),
             ]);
 
             logger.info('🔗 Synology API 응답 (3-segment):', JSON.stringify(shareResult, null, 2));
@@ -1272,7 +1347,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
             const dbRecord = dbResult.rows[0];
             logger.info(`DB 레코드 발견 (2-segment) - all_files: ${JSON.stringify(dbRecord.all_files)}`);
             deploymentInfo = {
-              deploymentPath: dbRecord.path,
+              deploymentPath: dbRecord.nas_path,
               nasPath: dbRecord.nas_path,
               downloadFile: dbRecord.download_file,
               allFiles: dbRecord.all_files || [],
@@ -1356,7 +1431,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
           try {
             const shareResult = await Promise.race([
               synologyApiService.getOrCreateVersionShareLink(version, date, buildNum),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 10000)),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 3000)),
             ]);
 
             logger.info('🔗 Synology API 응답:', JSON.stringify(shareResult, null, 2));
@@ -1656,7 +1731,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
               const folderPath = `/release_version/release/product/mr${version}/${date}/${buildNum}`;
               const actualFileNamesResult = await Promise.race([
                 synologyApiService.findActualFileNames(folderPath, version, date),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('File listing timeout')), 10000)),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('File listing timeout')), 3000)),
               ]);
 
               let actualFileNames = {};
@@ -1694,7 +1769,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
               // 1. 폴더 공유 링크 생성 (기존)
               const shareResult = await Promise.race([
                 synologyApiService.getOrCreateVersionShareLink(version, date, buildNum),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 10000)),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Synology API timeout')), 3000)),
               ]);
 
               if (shareResult.success) {
@@ -1716,7 +1791,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
                 try {
                   const fileDownloadResult = await Promise.race([
                     synologyApiService.getOrCreateFileDownloadLink(version, date, buildNum, deploymentInfo.downloadFile),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('File download link timeout')), 10000)),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('File download link timeout')), 3000)),
                   ]);
 
                   if (fileDownloadResult.success) {

@@ -96,13 +96,20 @@ const DeploymentDetailModal = ({
       const url = `/api/deployments/deployment-info/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}`;
       console.log('Making fetch request to:', url);
 
+      // 타임아웃 설정 (5초)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        },
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
       console.log('Response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data) {
@@ -110,13 +117,24 @@ const DeploymentDetailModal = ({
           console.log('downloadFile:', data.data.downloadFile);
           console.log('allFiles:', data.data.allFiles);
           setDeploymentInfo(data.data);
+        } else {
+          // 성공 응답이지만 데이터가 없는 경우 빈 상태로 설정
+          console.log('No deployment info data available');
+          setDeploymentInfo({ downloadFile: null, allFiles: [], artifacts: {} });
         }
       } else {
         // API 호출은 성공했지만 응답이 실패인 경우
         console.warn('Deployment info API returned non-success response:', response.status);
+        setDeploymentInfo({ downloadFile: null, allFiles: [], artifacts: {} });
       }
     } catch (error) {
-      console.error('Failed to fetch deployment info:', error);
+      if (error.name === 'AbortError') {
+        console.log('Deployment info fetch timed out (2s), showing empty state');
+      } else {
+        console.error('Failed to fetch deployment info:', error);
+      }
+      // 오류나 타임아웃 시 빈 상태로 설정
+      setDeploymentInfo({ downloadFile: null, allFiles: [], artifacts: {} });
     } finally {
       setLoadingDeploymentInfo(false);
     }
