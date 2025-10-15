@@ -293,12 +293,30 @@ export const usePollingStatus = () => {
   const [activePolling, setActivePolling] = useState([]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setIsActive(pollingService.isPollingActive());
-      setActivePolling(pollingService.getActivePolling());
-    }, 1000);
+    // 초기 상태 설정
+    setIsActive(pollingService.isPollingActive());
+    setActivePolling(pollingService.getActivePolling());
 
-    return () => clearInterval(interval);
+    // 폴링 상태 변경 이벤트 리스너
+    const handleStatusChange = (data) => {
+      setIsActive(data.isActive);
+      setActivePolling(data.activePolling);
+    };
+
+    pollingService.on('polling_status_changed', handleStatusChange);
+
+    // 백업용 주기적 체크 (이벤트가 놓치는 경우를 대비)
+    const interval = setInterval(() => {
+      const currentActive = pollingService.isPollingActive();
+      const currentPolling = pollingService.getActivePolling();
+      setIsActive(currentActive);
+      setActivePolling(currentPolling);
+    }, 10000); // 10초마다
+
+    return () => {
+      pollingService.off('polling_status_changed', handleStatusChange);
+      clearInterval(interval);
+    };
   }, []);
 
   const stopAllPolling = useCallback(() => {

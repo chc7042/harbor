@@ -25,6 +25,7 @@ class PollingService {
 
     this.intervals.set(key, intervalId);
     this.isActive = true;
+    this.emit('polling_status_changed', { isActive: true, activePolling: this.getActivePolling() });
     console.log(`Polling started for ${key} with ${interval}ms interval`);
   }
 
@@ -43,6 +44,7 @@ class PollingService {
     if (this.intervals.size === 0) {
       this.isActive = false;
     }
+    this.emit('polling_status_changed', { isActive: this.isActive, activePolling: this.getActivePolling() });
   }
 
   /**
@@ -55,6 +57,7 @@ class PollingService {
     });
     this.intervals.clear();
     this.isActive = false;
+    this.emit('polling_status_changed', { isActive: false, activePolling: [] });
   }
 
   /**
