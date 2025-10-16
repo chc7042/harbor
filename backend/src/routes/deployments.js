@@ -454,14 +454,15 @@ router.get('/recent',
             const projectName = build.projectName.toLowerCase();
             const jobName = projectName.includes('/') ? projectName.split('/').pop() : projectName;
             
-            // errorcsv 포함된 작업은 제외
-            if (jobName.includes('errorcsv')) {
-              logger.info(`🔍 배포 필터링: ${projectName} -> 작업명: ${jobName} -> 제외됨 (errorcsv 포함)`);
+            // 특정 작업 타입 제외 (errorcsv, update_scripts)
+            if (jobName.endsWith('_errorcsv') || jobName === 'errorcsv' || 
+                jobName.endsWith('_update_scripts') || jobName === 'update_scripts') {
+              logger.info(`🔍 배포 필터링: ${projectName} -> 작업명: ${jobName} -> 제외됨 (시스템 작업)`);
               return false;
             }
             
-            // 작업명이 mr, fe, be, adam으로 시작하는 것만 보여주기
-            const isAllowed = jobName.startsWith('mr') || jobName.startsWith('fe') || jobName.startsWith('be') || jobName.startsWith('adam');
+            // 작업명이 mr, fe, be, adam, fs로 시작하는 것만 보여주기
+            const isAllowed = jobName.startsWith('mr') || jobName.startsWith('fe') || jobName.startsWith('be') || jobName.startsWith('adam') || jobName.startsWith('fs');
             
             logger.info(`🔍 배포 필터링: ${projectName} -> 작업명: ${jobName} -> 허용: ${isAllowed}`);
             

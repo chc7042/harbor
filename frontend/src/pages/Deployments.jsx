@@ -22,7 +22,7 @@ const Deployments = () => {
     status: 'all',
     environment: 'all',
     project: 'all',
-    dateRange: 'all',
+    dateRange: 'unlimited',
     startDate: '',
     endDate: ''
   });
@@ -100,10 +100,19 @@ const Deployments = () => {
         }
       }
 
-      // Jenkins 최근 배포 데이터 가져오기 - unlimited나 all이 아닌 경우에만 시간 제한 적용
-      if (filters.dateRange !== 'unlimited' && filters.dateRange !== 'all') {
-        params.append('hours', '8760'); // 1년(365일) 범위로 설정
-      } else {
+      // 날짜 범위에 따른 시간 제한 설정
+      const dateRangeHours = {
+        'today': '24',
+        'yesterday': '48', 
+        'last7days': '168',   // 7일
+        'last30days': '720',  // 30일
+        'unlimited': null,    // 제한 없음
+        'all': null          // 제한 없음
+      };
+
+      const hours = dateRangeHours[filters.dateRange];
+      if (hours) {
+        params.append('hours', hours);
       }
 
       const response = await api.get(`/deployments/recent?${params}`);
