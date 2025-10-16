@@ -87,15 +87,23 @@ class JenkinsService {
               return true;
             }
 
-            // mr/fs 프로젝트의 release 작업들
-            const releasePattern = /^(mr|fs)\d+\.\d+\.\d+_release$/;
-            const isReleaseJob = releasePattern.test(jobName);
-            if (isReleaseJob) {
-              logger.info(`🔧 Jenkins: Including release job ${jobName} from folder ${folderName}`);
-            } else {
-              logger.info(`🔧 Jenkins: Excluding job ${jobName} from folder ${folderName} (not matching patterns)`);
+            // mr/fs 버전 폴더 (mr1.1.0, fs2.0.0 등)
+            const mrFsVersionPattern = /^(mr|fs)\d+\.\d+\.\d+$/;
+            if (mrFsVersionPattern.test(folderName)) {
+              // mr/fs 버전 폴더의 release 작업들만 포함
+              const releasePattern = /^(mr|fs)\d+\.\d+\.\d+_release$/;
+              const isReleaseJob = releasePattern.test(jobName);
+              if (isReleaseJob) {
+                logger.info(`🔧 Jenkins: Including release job ${jobName} from mr/fs version folder ${folderName}`);
+              } else {
+                logger.info(`🔧 Jenkins: Excluding job ${jobName} from mr/fs version folder ${folderName} (not release job)`);
+              }
+              return isReleaseJob;
             }
-            return isReleaseJob;
+
+            // 기타 폴더는 제외
+            logger.info(`🔧 Jenkins: Excluding job ${jobName} from folder ${folderName} (not matching any pattern)`);
+            return false;
           });
           
           logger.info(`🔧 Jenkins: After filtering, ${filteredJobs.length} jobs included from folder ${folder.name}`);
@@ -1277,6 +1285,7 @@ class JenkinsService {
 
       // 모든 파일 목록 패턴
       const allFilePatterns = [
+        /(adam_\d+_\d+\.enc\.tar\.gz)/gi,                    // adam 파일 패턴 추가
         /(be\d+\.\d+\.\d+_\d+_\d+_\d+\.enc\.tar\.gz)/gi,
         /(fe\d+\.\d+\.\d+_\d+_\d+_\d+\.enc\.tar\.gz)/gi,
         /(mr\d+\.\d+\.\d+_\d+_\d+_\d+\.enc\.tar\.gz)/gi,
@@ -1458,7 +1467,7 @@ class JenkinsService {
       for (const job of jobs) {
         try {
           logger.debug(`Fetching builds for job: ${job.fullJobName}`);
-          const builds = await this.getJobBuilds(job.fullJobName, 10);
+          const builds = await this.getJobBuilds(job.fullJobName, 100);
           logger.debug(`Retrieved ${builds.length} builds for job ${job.fullJobName}`);
 
           if (builds.length === 0) {

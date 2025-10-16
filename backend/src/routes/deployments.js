@@ -943,12 +943,35 @@ async function getDeploymentInfo(projectName, buildNumber, version = null, req) 
     if (dbResult.rows.length > 0) {
       const dbRecord = dbResult.rows[0];
       logger.info(`DB 레코드 발견 - all_files: ${JSON.stringify(dbRecord.all_files)}`);
+      // allFiles를 안전한 문자열 배열로 변환
+      const safeAllFiles = (() => {
+        try {
+          const allFiles = dbRecord.all_files || [];
+          if (Array.isArray(allFiles)) {
+            return allFiles.map(file => {
+              if (typeof file === 'string') {
+                return file;
+              } else if (typeof file === 'object' && file !== null) {
+                return file.name || file.fileName || file.originalname || JSON.stringify(file);
+              } else {
+                return String(file);
+              }
+            });
+          } else {
+            return [];
+          }
+        } catch (error) {
+          logger.error('Error processing allFiles:', error);
+          return [];
+        }
+      })();
+
       deploymentInfo = {
         deploymentPath: dbRecord.nas_path,
         nasPath: dbRecord.nas_path,
         downloadFile: dbRecord.download_file,
-        allFiles: dbRecord.all_files || [],
-        verifiedFiles: dbRecord.all_files || [],
+        allFiles: safeAllFiles,
+        verifiedFiles: safeAllFiles,
         directoryVerified: true,
         downloadFileVerified: true,
         buildDate: dbRecord.build_date,
@@ -973,9 +996,66 @@ async function getDeploymentInfo(projectName, buildNumber, version = null, req) 
     deploymentInfo = await jenkinsService.extractDeploymentInfo(projectName, parseInt(buildNumber));
   }
 
+  // allFiles를 파일 타입별로 분류 (안전한 문자열로 변환)
+  const artifacts = {};
+  if (deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) {
+    // allFiles의 각 요소를 안전한 문자열로 변환
+    const safeFileNames = deploymentInfo.allFiles.map(file => {
+      if (typeof file === 'string') {
+        return file;
+      } else if (typeof file === 'object' && file !== null) {
+        return file.name || file.fileName || file.originalname || JSON.stringify(file);
+      } else {
+        return String(file);
+      }
+    });
+    
+    // 프로젝트명이 be4.0.0_release인 경우 백엔드 파일만 필터링
+    const isBackendProject = projectName.includes('be4.0.0_release');
+    
+    safeFileNames.forEach(fileName => {
+      let fileType = 'UNKNOWN';
+      
+      if (isBackendProject) {
+        // 백엔드 프로젝트의 경우 adam 또는 be 파일만 표시
+        if (fileName.startsWith('adam_') || fileName.includes('adam_')) {
+          fileType = 'BE'; // 백엔드
+          logger.info(`백엔드 프로젝트 - adam 파일 발견: ${fileName}`);
+        } else if (fileName.includes('be4.0.0') || fileName.match(/be\d+\.\d+\.\d+/)) {
+          fileType = 'BE'; // 백엔드
+          logger.info(`백엔드 프로젝트 - be 파일 발견: ${fileName}`);
+        } else {
+          // 백엔드 프로젝트에서 백엔드 파일이 아닌 경우 무시
+          logger.info(`백엔드 프로젝트 - 백엔드 파일이 아님, 무시: ${fileName}`);
+          return;
+        }
+      } else {
+        // 기존 분류 로직 (일반 프로젝트용)
+        if (fileName.includes('V4.0.0') || fileName.match(/^V\d+\.\d+\.\d+/)) {
+          fileType = 'V'; // 메인버전
+        } else if (fileName.includes('mr4.0.0') || fileName.match(/mr\d+\.\d+\.\d+/)) {
+          fileType = 'MR'; // MR빌드
+        } else if (fileName.includes('fe4.0.0') || fileName.match(/fe\d+\.\d+\.\d+/)) {
+          fileType = 'FE'; // 프론트엔드
+        } else if (fileName.includes('be4.0.0') || fileName.match(/be\d+\.\d+\.\d+/)) {
+          fileType = 'BE'; // 백엔드
+        }
+      }
+      
+      if (!artifacts[fileType]) {
+        artifacts[fileType] = [];
+      }
+      // 문자열만 push하여 프론트엔드에서 안전하게 처리되도록 함
+      artifacts[fileType].push(fileName);
+    });
+  }
+
   return {
     success: true,
-    data: deploymentInfo || { downloadFile: null, allFiles: [], artifacts: {} },
+    data: {
+      ...(deploymentInfo || { downloadFile: null, allFiles: [] }),
+      artifacts
+    },
   };
 }
 
@@ -1042,19 +1122,43 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
           if (dbResult.rows.length > 0) {
             const dbRecord = dbResult.rows[0];
             logger.info(`DB 레코드 발견 - all_files: ${JSON.stringify(dbRecord.all_files)}`);
+            
+            // allFiles를 안전한 문자열 배열로 변환
+            const safeAllFiles = (() => {
+              try {
+                const allFiles = dbRecord.all_files || [];
+                if (Array.isArray(allFiles)) {
+                  return allFiles.map(file => {
+                    if (typeof file === 'string') {
+                      return file;
+                    } else if (typeof file === 'object' && file !== null) {
+                      return file.name || file.fileName || file.originalname || JSON.stringify(file);
+                    } else {
+                      return String(file);
+                    }
+                  });
+                } else {
+                  return [];
+                }
+              } catch (error) {
+                logger.error('Error processing allFiles:', error);
+                return [];
+              }
+            })();
+
             deploymentInfo = {
               deploymentPath: dbRecord.nas_path,
               nasPath: dbRecord.nas_path,
               downloadFile: dbRecord.download_file,
-              allFiles: dbRecord.all_files || [],
-              verifiedFiles: dbRecord.all_files || [],
+              allFiles: safeAllFiles,
+              verifiedFiles: safeAllFiles,
               directoryVerified: true,
               downloadFileVerified: true,
               buildDate: dbRecord.build_date,
               buildNumber: dbRecord.build_number,
             };
             logger.info(`Found verified deployment data in database for ${fullProjectName}#${buildNumber}`);
-            logger.info(`DB allFiles: ${JSON.stringify(dbRecord.all_files)}`);
+            logger.info(`DB allFiles processed: ${JSON.stringify(safeAllFiles)}`);
 
             // DB에서 데이터를 찾은 경우 Synology API 호출 건너뛰기
             if (false) {
