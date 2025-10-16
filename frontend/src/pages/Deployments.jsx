@@ -47,7 +47,6 @@ const Deployments = () => {
   }, []);
 
   useEffect(() => {
-    console.log('useEffect triggered - filters changed:', filters);
     fetchDeployments();
   }, [searchTerm, filters, currentPage, itemsPerPage, sortConfig]);
 
@@ -66,7 +65,6 @@ const Deployments = () => {
 
   const fetchDeployments = async () => {
     try {
-      console.log('fetchDeployments started, filters:', filters);
       setLoading(true);
 
       // API 요청 파라미터 구성
@@ -102,20 +100,15 @@ const Deployments = () => {
         }
       }
 
-      // Jenkins 최근 배포 데이터 가져오기 - unlimited가 아닌 경우에만 시간 제한 적용
-      if (filters.dateRange !== 'unlimited') {
-        params.append('hours', '720'); // 30일 범위로 설정
-        console.log('Adding hours limit: 720');
+      // Jenkins 최근 배포 데이터 가져오기 - unlimited나 all이 아닌 경우에만 시간 제한 적용
+      if (filters.dateRange !== 'unlimited' && filters.dateRange !== 'all') {
+        params.append('hours', '8760'); // 1년(365일) 범위로 설정
       } else {
-        console.log('No hours limit (unlimited)');
       }
 
-      console.log('Final API URL:', `/deployments/recent?${params}`);
       const response = await api.get(`/deployments/recent?${params}`);
-      console.log('API response received:', response.data);
       if (response.data.success) {
         const deploymentData = response.data.data || [];
-        console.log('API data length:', deploymentData.length);
 
         // 프론트엔드 형식에 맞게 데이터 변환
         const transformedData = deploymentData.map(deployment => ({
@@ -136,9 +129,40 @@ const Deployments = () => {
           hasArtifacts: deployment.hasArtifacts || false // 아티팩트 존재 여부
         }));
 
-        // 프론트엔드에서 필터링 적용
-        const filteredDeployments = filterMockData(transformedData);
-        const sortedDeployments = sortMockData(filteredDeployments);
+        // 배포 데이터 정렬 (배포시간 기준 최신순)
+        const sortedDeployments = transformedData.sort((a, b) => {
+          let aValue, bValue;
+
+          switch (sortConfig.field) {
+            case 'created_at':
+              aValue = new Date(a.created_at);
+              bValue = new Date(b.created_at);
+              break;
+            case 'project_name':
+              aValue = a.project_name;
+              bValue = b.project_name;
+              break;
+            case 'build_number':
+              aValue = parseInt(a.build_number) || 0;
+              bValue = parseInt(b.build_number) || 0;
+              break;
+            case 'status':
+              aValue = a.status;
+              bValue = b.status;
+              break;
+            default:
+              aValue = new Date(a.created_at);
+              bValue = new Date(b.created_at);
+          }
+
+          if (aValue < bValue) {
+            return sortConfig.direction === 'asc' ? -1 : 1;
+          }
+          if (aValue > bValue) {
+            return sortConfig.direction === 'asc' ? 1 : -1;
+          }
+          return 0;
+        });
 
         const startIndex = (currentPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
@@ -283,7 +307,6 @@ const Deployments = () => {
   };
 
   const handleFilterChange = (newFilters) => {
-    console.log('handleFilterChange called:', newFilters);
     setFilters(newFilters);
     setCurrentPage(1); // 필터 변경 시 첫 페이지로 이동
   };

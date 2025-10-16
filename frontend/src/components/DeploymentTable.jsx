@@ -39,7 +39,6 @@ const DeploymentTable = ({
     setLoadingArtifacts(prev => new Set(prev).add(deploymentKey));
 
     try {
-      console.log(`[ARTIFACT-LOADING] 아티팩트 로딩 시작 - 버전: ${deployment.version}, 빌드: ${deployment.buildNumber}`);
 
       const response = await loadArtifacts(deployment.version, deployment.buildNumber);
 
@@ -51,7 +50,6 @@ const DeploymentTable = ({
         };
         onDeploymentUpdate(updatedDeployment);
 
-        console.log(`[ARTIFACT-LOADING] ✅ 아티팩트 로딩 완료 - ${response.data.artifacts?.length || 0}개`);
       }
     } catch (error) {
       console.error(`[ARTIFACT-LOADING] ❌ 아티팩트 로딩 실패:`, error);
@@ -149,23 +147,18 @@ const DeploymentTable = ({
     const downloadKey = `${deploymentId}-${artifact.fileName}`;
 
     if (downloadingFiles.has(downloadKey)) {
-      console.log('다운로드가 이미 진행 중입니다.');
       return;
     }
 
     try {
       setDownloadingFiles(prev => new Set([...prev, downloadKey]));
 
-      console.log(`[DEPLOYMENT-TABLE] 통합 다운로드 시작`);
-      console.log(`[DEPLOYMENT-TABLE] 파일 경로: ${artifact.filePath}`);
-      console.log(`[DEPLOYMENT-TABLE] 파일명: ${artifact.fileName}`);
 
       const result = await downloadService.downloadFile(
         artifact.filePath,
         artifact.fileName,
         {
           onProgress: (progress) => {
-            console.log(`[DEPLOYMENT-TABLE] 다운로드 진행:`, progress);
             // 여기서 UI 업데이트 가능 (토스트, 진행바 등)
           },
           strategy: 'redirect' // 기본적으로 리다이렉트 사용 (가장 빠름)
@@ -173,7 +166,6 @@ const DeploymentTable = ({
       );
 
       if (result.success) {
-        console.log(`[DEPLOYMENT-TABLE] ✅ 다운로드 완료: ${artifact.fileName}`);
       } else {
         console.error(`[DEPLOYMENT-TABLE] ❌ 다운로드 실패: ${result.error}`);
         // 에러는 downloadService에서 토스트로 표시됨
@@ -301,7 +293,31 @@ const DeploymentTable = ({
                 <tr
                   key={deployment.id}
                   className="cursor-pointer transition-colors hover:bg-gray-50"
-                  onClick={() => onRowClick?.(deployment)}
+                  onClick={(e) => {
+                    // Jenkins 링크나 ExternalLink 아이콘 클릭인지 확인 (더 정확한 방법)
+                    const jenkinsLink = e.target.closest('a[title="Jenkins에서 보기"]');
+                    const isJenkinsRelated = jenkinsLink || 
+                                           e.target.closest('svg')?.closest('a[title="Jenkins에서 보기"]') ||
+                                           e.target.tagName === 'svg' && e.target.closest('a[title="Jenkins에서 보기"]');
+                    
+                    if (isJenkinsRelated) {
+                      // Jenkins 링크는 그대로 동작하게 하고 모달만 차단
+                      return;
+                    }
+                    
+                    // 액션 컬럼(마지막 td) 클릭 차단 - 다운로드 버튼이나 Jenkins 링크 영역
+                    const clickedCell = e.target.closest('td');
+                    const allCells = e.currentTarget.querySelectorAll('td');
+                    const isLastCell = clickedCell === allCells[allCells.length - 1];
+                    
+                    if (isLastCell) {
+                      // 액션 영역 클릭은 모달 열기 차단
+                      return;
+                    }
+                    
+                    // 테이블 행의 다른 부분 클릭이면 모달 열기
+                    onRowClick?.(deployment);
+                  }}
                 >
 
                   <td>
@@ -395,7 +411,7 @@ const DeploymentTable = ({
                     </div>
                   </td>
 
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td>
                     <div className="flex items-center space-x-1">
                       {/* 아티팩트 관련 버튼 - 지연 로딩 지원 */}
                       {deployment.hasArtifacts && deployment.artifacts && deployment.artifacts.length === 0 ? (
@@ -405,7 +421,7 @@ const DeploymentTable = ({
                             className={`p-1 transition-colors rounded text-xs px-2 py-1 ${
                               loadingArtifacts.has(`${deployment.version}-${deployment.buildNumber}`)
                                 ? 'bg-blue-100 text-blue-600 animate-pulse'
-                                : 'bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-600'
+                                : 'bg-yellow-200 text-yellow-800 hover:bg-yellow-300 border border-yellow-400'
                             }`}
                             title="아티팩트 정보 로드"
                             disabled={loadingArtifacts.has(`${deployment.version}-${deployment.buildNumber}`)}
@@ -424,14 +440,12 @@ const DeploymentTable = ({
                             className={`p-1 transition-colors rounded ${
                               downloadingFiles.has(`${deployment.id}-${deployment.artifacts[0]?.fileName}`)
                                 ? 'text-blue-500 animate-pulse'
-                                : 'text-gray-400 hover:text-green-600'
+                                : 'bg-green-200 text-green-800 hover:bg-green-300 border border-green-400'
                             }`}
                             title={`${deployment.artifacts.length}개 아티팩트 다운로드`}
                             disabled={downloadingFiles.has(`${deployment.id}-${deployment.artifacts[0]?.fileName}`)}
                             onClick={async (e) => {
                               e.stopPropagation();
-                              console.log('통합 다운로드 버튼 클릭 - version:', deployment.version);
-                              console.log('Artifacts:', deployment.artifacts);
 
                               if (deployment.artifacts.length === 1) {
                                 // 단일 아티팩트 - 통합 다운로드 서비스 사용
@@ -459,17 +473,22 @@ const DeploymentTable = ({
                         </div>
                       ) : null}
 
-                      {/* 상세 정보 버튼 */}
-                      <button
-                        className="p-1 text-gray-400 hover:text-primary-600 transition-colors rounded"
-                        title="상세 정보"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRowClick?.(deployment);
-                        }}
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </button>
+                      {/* Jenkins 링크 버튼 */}
+                      {deployment.jenkins_url && (
+                        <a
+                          href={deployment.jenkins_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1 text-gray-400 hover:text-blue-600 transition-colors rounded inline-block"
+                          title="Jenkins에서 보기"
+                          onClick={(e) => {
+                            // 이벤트 전파 차단으로 테이블 행 클릭 방지
+                            e.stopPropagation();
+                          }}
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
                     </div>
                   </td>
                 </tr>

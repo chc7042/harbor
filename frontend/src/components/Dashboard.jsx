@@ -26,9 +26,6 @@ const Dashboard = () => {
   const { deployments, isPolling: isDeploymentPolling, lastUpdate: deploymentsLastUpdate, refresh: refreshDeployments } = useDeploymentPolling(initialDeployments, 30000);
   const { projects, isPolling: isProjectPolling, lastUpdate: projectsLastUpdate, refresh: refreshProjects } = useProjectPolling(60000);
   const [loading, setLoading] = useState(true);
-  
-  // 디버그 로그
-  console.log('[Dashboard] Polling status:', { isPollingActive, isUpdating, loading });
 
   // 마지막 업데이트 시간을 localStorage에 저장
   useEffect(() => {
@@ -82,12 +79,10 @@ const Dashboard = () => {
   // 폴링으로 실시간 업데이트 수신 (배포 상태 변경 감지)
   useEffect(() => {
     const handleDeploymentUpdate = (updatedDeployment) => {
-      console.log('Deployment update detected:', updatedDeployment);
       // 폴링 서비스가 자동으로 상태를 업데이트하므로 추가 처리 불필요
     };
 
     const handleStatusChange = (data) => {
-      console.log('Deployment status change detected:', data);
       // 상태 변경 감지 시 필요한 추가 처리
     };
 

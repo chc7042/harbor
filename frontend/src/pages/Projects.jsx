@@ -21,20 +21,17 @@ import toast from 'react-hot-toast';
 
 // 프로젝트/폴더의 전체 상태를 계산하는 함수
 const calculateProjectStatus = (project) => {
-  console.log('Calculating status for project:', project.name, project); // 디버깅
 
   const collectAllJobs = (item) => {
     let jobs = [];
 
     // 직접적인 jobs
     if (item.jobs && Array.isArray(item.jobs) && item.jobs.length > 0) {
-      console.log('Found direct jobs in', item.name, ':', item.jobs.length); // 디버깅
       jobs.push(...item.jobs);
     }
 
     // 하위 폴더들의 jobs (재귀적으로)
     if (item.folders && Array.isArray(item.folders) && item.folders.length > 0) {
-      console.log('Found folders in', item.name, ':', item.folders.length); // 디버깅
       item.folders.forEach(folder => {
         jobs.push(...collectAllJobs(folder));
       });
@@ -44,10 +41,8 @@ const calculateProjectStatus = (project) => {
   };
 
   const allJobs = collectAllJobs(project);
-  console.log('All jobs collected for', project.name, ':', allJobs.length, allJobs); // 디버깅
 
   if (allJobs.length === 0) {
-    console.log('No jobs found for', project.name, '- returning unknown'); // 디버깅
     return 'ABORTED'; // unknown 대신 더 중립적인 상태 사용
   }
 
@@ -55,33 +50,26 @@ const calculateProjectStatus = (project) => {
   const buildResults = allJobs
     .map(job => {
       const result = job.lastBuild?.result;
-      console.log('Job', job.name, 'lastBuild result:', result); // 디버깅
       return result;
     })
     .filter(result => result);
 
-  console.log('Build results for', project.name, ':', buildResults); // 디버깅
 
   if (buildResults.length === 0) {
-    console.log('No build results found for', project.name, '- returning ABORTED'); // 디버깅
     return 'ABORTED';
   }
 
   // 우선순위: FAILURE > UNSTABLE > SUCCESS
   if (buildResults.includes('FAILURE')) {
-    console.log('Found FAILURE in', project.name); // 디버깅
     return 'FAILURE';
   }
   if (buildResults.includes('UNSTABLE')) {
-    console.log('Found UNSTABLE in', project.name); // 디버깅
     return 'UNSTABLE';
   }
   if (buildResults.includes('SUCCESS')) {
-    console.log('Found SUCCESS in', project.name); // 디버깅
     return 'SUCCESS';
   }
 
-  console.log('No valid status found for', project.name, '- returning ABORTED'); // 디버깅
   return 'ABORTED';
 };
 
@@ -104,7 +92,6 @@ const JenkinsProjectTree = ({
   const hasSubItems = (project.jobs && project.jobs.length > 0) || (project.folders && project.folders.length > 0);
   const isFolder = project._class === 'com.cloudbees.hudson.plugins.folder.Folder' || project.folders || hasSubItems;
 
-  console.log('Project:', project.name, 'hasSubItems:', hasSubItems, 'isFolder:', isFolder, 'jobs:', project.jobs?.length, 'folders:', project.folders?.length);
   const indentLevel = depth * 20; // 들여쓰기 레벨
 
   // 프로젝트의 전체 상태를 계산
@@ -374,13 +361,9 @@ const Projects = () => {
         }
       });
 
-      console.log('Original projects:', projectsData.map(p => p.name)); // 디버깅용
-      console.log('Processed projects:', processedProjects.map(p => p.name)); // 디버깅용
-      console.log('Full processed project data structure:', JSON.stringify(processedProjects, null, 2)); // 전체 구조 확인
 
       // 프로젝트를 버전 번호 기준으로 내림차순 정렬 (3.0.0, 2.0.0, 1.2.0 순서)
       const sortedProjects = processedProjects.sort((a, b) => {
-        console.log('Comparing:', a.name, 'vs', b.name); // 디버깅용
 
         // 더 유연한 버전 번호 추출 (1.2, 1.2.0 모두 지원)
         const versionA = a.name.match(/(\d+)\.(\d+)\.?(\d*)/);
@@ -398,13 +381,11 @@ const Projects = () => {
           const vA = parseVersion(versionA);
           const vB = parseVersion(versionB);
 
-          console.log('Parsed versions:', a.name, vA, 'vs', b.name, vB); // 디버깅용
 
           // 메이저, 마이너, 패치 버전을 차례로 비교 (내림차순)
           for (let i = 0; i < 3; i++) {
             if (vA[i] !== vB[i]) {
               const result = vB[i] - vA[i];
-              console.log(`Difference at position ${i}: ${vB[i]} - ${vA[i]} = ${result}`); // 디버깅용
               return result; // 내림차순
             }
           }
@@ -415,7 +396,6 @@ const Projects = () => {
         return b.name.localeCompare(a.name);
       });
 
-      console.log('Sorted projects:', sortedProjects.map(p => p.name)); // 디버깅용
 
       setProjects(sortedProjects);
       setAllJobs(jobs);
@@ -452,19 +432,14 @@ const Projects = () => {
   };
 
   const toggleProject = (projectName) => {
-    console.log('Toggle project called for:', projectName); // 디버깅
-    console.log('Current expanded projects:', Array.from(expandedProjects)); // 디버깅
 
     const newExpanded = new Set(expandedProjects);
     if (newExpanded.has(projectName)) {
-      console.log('Collapsing:', projectName); // 디버깅
       newExpanded.delete(projectName);
     } else {
-      console.log('Expanding:', projectName); // 디버깅
       newExpanded.add(projectName);
     }
 
-    console.log('New expanded projects:', Array.from(newExpanded)); // 디버깅
     setExpandedProjects(newExpanded);
   };
 
@@ -670,7 +645,6 @@ const Projects = () => {
             const isJenkinsFolder = project._class === 'com.cloudbees.hudson.plugins.folder.Folder';
             const hasSubItems = hasJobs || hasFolders || isJenkinsFolder;
 
-            console.log(`Project: ${project.name}, _class: ${project._class}, hasJobs: ${hasJobs}, hasFolders: ${hasFolders}, isJenkinsFolder: ${isJenkinsFolder}, hasSubItems: ${hasSubItems}, isExpanded: ${isExpanded}, data:`, project);
 
             return (
               <div key={project.name} className="border border-gray-200 rounded-md">
@@ -678,7 +652,6 @@ const Projects = () => {
                 <div
                   className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 transition-colors"
                   onClick={() => {
-                    console.log(`Clicked on project: ${project.name}`);
                     toggleProject(projectKey);
                   }}
                 >

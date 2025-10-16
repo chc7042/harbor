@@ -180,7 +180,6 @@ const ProjectHierarchy = ({
 
     // 실제 사용자 정보 반환 (name 우선, 없으면 username)
     const currentUser = user.name || user.username || user.email || 'Unknown User';
-    console.log('Current user:', currentUser, 'from user object:', user);
     return currentUser;
   };
 
@@ -222,7 +221,6 @@ const ProjectHierarchy = ({
       }
     };
 
-    console.log('Saving memo with author:', currentUser);
     saveMemos(newMemos);
     setEditingMemo(null);
     setMemoText('');
@@ -271,7 +269,6 @@ const ProjectHierarchy = ({
     });
 
     if (hasUpdates) {
-      console.log('Updated admin memos to current user:', currentUser);
       localStorage.setItem('projectMemos', JSON.stringify(parsedMemos));
       setMemos(parsedMemos);
     }

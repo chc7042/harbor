@@ -116,13 +116,6 @@ export const downloadFile = async (downloadUrl, fileName, onProgress = null) => 
 // 파일 업로드 함수
 export const uploadFile = async (file, path, onProgress = null) => {
   try {
-    console.log('🚀 API: Starting file upload', {
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: file.type,
-      path: path,
-      apiBaseURL: api.defaults.baseURL
-    });
 
     // 업로드 시작 알림
     if (onProgress) {
@@ -133,9 +126,6 @@ export const uploadFile = async (file, path, onProgress = null) => {
     formData.append('file', file);
     formData.append('path', path);
 
-    console.log('🚀 API: FormData created, making POST request to /files/upload');
-    console.log('🚀 API: Request headers will include multipart/form-data');
-    console.log('🚀 API: Authorization token:', localStorage.getItem('token') ? 'Present' : 'Missing');
 
     const response = await api.post('/files/upload', formData, {
       headers: {
@@ -143,11 +133,6 @@ export const uploadFile = async (file, path, onProgress = null) => {
       },
       timeout: 300000, // 5분 타임아웃
       onUploadProgress: (progressEvent) => {
-        console.log('🚀 API: Upload progress:', {
-          loaded: progressEvent.loaded,
-          total: progressEvent.total,
-          percentage: progressEvent.total ? Math.round((progressEvent.loaded * 100) / progressEvent.total) : 0
-        });
 
         if (onProgress && progressEvent.total) {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -162,11 +147,6 @@ export const uploadFile = async (file, path, onProgress = null) => {
       },
     });
 
-    console.log('🚀 API: Upload response received:', {
-      status: response.status,
-      statusText: response.statusText,
-      data: response.data
-    });
 
     if (onProgress) {
       onProgress({ type: 'complete', message: '업로드가 완료되었습니다.' });
@@ -177,19 +157,6 @@ export const uploadFile = async (file, path, onProgress = null) => {
       data: response.data.data
     };
   } catch (error) {
-    console.error('🚀 API: File upload error:', error);
-    console.error('🚀 API: Error details:', {
-      message: error.message,
-      code: error.code,
-      name: error.name,
-      stack: error.stack,
-      response: error.response ? {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data,
-        headers: error.response.headers
-      } : 'No response object'
-    });
 
     let errorMessage = '업로드에 실패했습니다.';
 
@@ -201,7 +168,6 @@ export const uploadFile = async (file, path, onProgress = null) => {
       errorMessage = error.response.data.error.message;
     }
 
-    console.error('🚀 API: Final error message:', errorMessage);
 
     if (onProgress) {
       onProgress({ type: 'error', message: errorMessage });
@@ -295,17 +261,9 @@ export const searchNASFiles = async (searchPath = 'release_version', pattern = '
     if (pattern) params.append('pattern', pattern);
     if (developer) params.append('developer', developer);
 
-    console.log('🔍 NAS 검색 요청:', { searchPath, pattern, developer });
 
     const response = await api.get(`/nas/search?${params}`);
     
-    console.log('🔍 NAS 검색 응답:', {
-      success: response.data.success,
-      fileCount: response.data.data?.files?.length || 0,
-      searchPath: response.data.data?.searchPath,
-      pattern: response.data.data?.pattern,
-      developer: response.data.data?.developer
-    });
 
     return response.data;
   } catch (error) {

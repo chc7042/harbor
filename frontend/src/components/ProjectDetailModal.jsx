@@ -56,9 +56,6 @@ const ProjectDetailModal = ({
   const fetchDeploymentInfo = async () => {
     if (!deployment) return;
 
-    console.log('ProjectDetailModal deployment object:', deployment);
-    console.log('project_name:', deployment.project_name);
-    console.log('build_number:', deployment.build_number);
 
     setLoadingDeploymentInfo(true);
     try {
@@ -84,7 +81,6 @@ const ProjectDetailModal = ({
       }
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.log('ProjectDetailModal deployment info fetch timed out (2s), showing empty state');
       } else {
         console.error('Error fetching deployment info:', error);
       }
@@ -107,9 +103,6 @@ const ProjectDetailModal = ({
     try {
       // Debug logging for development
       if (process.env.NODE_ENV === 'development') {
-        console.log('=== DEBUG: fetchLogs called ===');
-        console.log('jobType:', jobType);
-        console.log('deployment.project_name:', deployment.project_name);
       }
 
       let jobProjectName;
@@ -121,14 +114,12 @@ const ProjectDetailModal = ({
         // 백엔드 job name 구성: 3.0.0/mr3.0.0_release -> 3.0.0/be3.0.0_release
         const jobProjectName_fixed = deployment.project_name.replace('/mr', '/be');
         if (process.env.NODE_ENV === 'development') {
-          console.log('BE job - final jobProjectName:', jobProjectName_fixed);
         }
         jobProjectName = jobProjectName_fixed;
       } else if (jobType === 'fs') {
         // 프런트엔드 job name 구성: 3.0.0/mr3.0.0_release -> 3.0.0/fe3.0.0_release
         const jobProjectName_fixed = deployment.project_name.replace('/mr', '/fe');
         if (process.env.NODE_ENV === 'development') {
-          console.log('FS job - final jobProjectName:', jobProjectName_fixed);
         }
         jobProjectName = jobProjectName_fixed;
       } else {
@@ -226,12 +217,9 @@ const ProjectDetailModal = ({
 
   // 배포 버전 탭 활성화 시 배포 정보 가져오기
   useEffect(() => {
-    console.log('ProjectDetailModal useEffect triggered - activeTab:', activeTab, 'isOpen:', isOpen, 'deployment:', !!deployment, 'deploymentInfo:', !!deploymentInfo);
     if (activeTab === 'artifacts' && isOpen && deployment && !deploymentInfo) {
-      console.log('배포 버전 tab activated, calling fetchDeploymentInfo...');
       fetchDeploymentInfo();
     } else {
-      console.log('Conditions not met for fetchDeploymentInfo - activeTab:', activeTab, 'isOpen:', isOpen, 'deployment:', !!deployment, 'deploymentInfo:', !!deploymentInfo);
     }
   }, [activeTab, isOpen, deployment, deploymentInfo]);
 
@@ -426,7 +414,6 @@ const ProjectDetailModal = ({
                     <select
                       value={selectedJobType}
                       onChange={(e) => {
-                        console.log('Job type changed to:', e.target.value);
                         setSelectedJobType(e.target.value);
                       }}
                       className="appearance-none bg-white border border-gray-300 rounded-md px-3 py-2 pr-8 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -652,8 +639,6 @@ const ProjectDetailModal = ({
                                             setDownloadingFiles(prev => new Set(prev).add(downloadKey));
 
                                             try {
-                                              console.log(`[PROJECT-MODAL] 통합 다운로드 시작`);
-                                              console.log(`[PROJECT-MODAL] 파일: ${file}`);
 
                                               // 파일 경로 구성
                                               let filePath;
@@ -692,7 +677,6 @@ const ProjectDetailModal = ({
 
                                               const result = await downloadService.downloadFile(filePath, file, {
                                                 onProgress: (progress) => {
-                                                  console.log(`[PROJECT-MODAL] 다운로드 진행:`, progress);
                                                   setDownloadStatus(progress);
                                                 },
                                                 strategy: 'redirect'
@@ -921,8 +905,6 @@ const ProjectDetailModal = ({
                                           setDownloadingFiles(prev => new Set(prev).add(downloadKey));
 
                                           try {
-                                            console.log(`[PROJECT-MODAL] 배포 파일 다운로드 시작`);
-                                            console.log(`[PROJECT-MODAL] 파일: ${file}, 타입: ${fileType}`);
 
                                             // 파일 경로 구성
                                             let filePath;
@@ -961,7 +943,6 @@ const ProjectDetailModal = ({
 
                                             const result = await downloadService.downloadFile(filePath, file, {
                                               onProgress: (progress) => {
-                                                console.log(`[PROJECT-MODAL] 배포 파일 다운로드 진행:`, progress);
                                                 setDownloadStatus(progress);
                                               },
                                               strategy: 'redirect'

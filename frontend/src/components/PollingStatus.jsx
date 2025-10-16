@@ -6,8 +6,6 @@ import pollingService from '../services/pollingService';
 const PollingStatus = ({ className = '', lastUpdate = null }) => {
   const { isActive, activePolling } = usePollingStatus();
   const [showDetails, setShowDetails] = useState(false);
-  
-  console.log('[PollingStatus] Props:', { isActive, lastUpdate, activePolling });
 
   const getStatusConfig = () => {
     if (isActive) {

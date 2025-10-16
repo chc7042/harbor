@@ -37,6 +37,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    minify: false, // Disable minification to see detailed errors
     rollupOptions: {
       output: {
         // Add timestamp to force cache invalidation

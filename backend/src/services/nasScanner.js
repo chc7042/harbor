@@ -68,7 +68,6 @@ class NASScanner {
       }
     }, this.scanInterval);
 
-    logger.info(`Polling started with ${this.scanInterval / 1000}s interval`);
   }
 
   /**

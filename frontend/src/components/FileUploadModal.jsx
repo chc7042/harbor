@@ -9,7 +9,6 @@ const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
   const [isOpeningFolder, setIsOpeningFolder] = useState(false);
 
   const handleUploadComplete = (data) => {
-    console.log('Upload completed:', data);
     if (onUploadComplete) {
       onUploadComplete(data);
     }
@@ -26,16 +25,12 @@ const FileUploadModal = ({ isOpen, onClose, onUploadComplete }) => {
 
   const handleOpenSharedFolder = async () => {
     try {
-      console.log('📁 FileUploadModal: 공유 폴더 열기 시작');
       setIsOpeningFolder(true);
 
       // upload 폴더에 대한 공유 링크 가져오기
-      console.log('📁 FileUploadModal: API 요청 전송 - /deployments/share/upload');
       const response = await api.get('/deployments/share/upload');
-      console.log('📁 FileUploadModal: API 응답 수신:', response.data);
 
       if (response.data.success && response.data.shareUrl) {
-        console.log('📁 FileUploadModal: 공유 링크 생성 성공, 새 창으로 열기:', response.data.shareUrl);
         // 새 창에서 공유 폴더 열기
         window.open(response.data.shareUrl, '_blank');
       } else {

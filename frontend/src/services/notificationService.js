@@ -297,7 +297,6 @@ class NotificationService {
     if ('serviceWorker' in navigator) {
       try {
         const registration = await navigator.serviceWorker.register('/sw.js');
-        console.log('Service Worker registered:', registration);
         return registration;
       } catch (error) {
         console.error('Service Worker registration failed:', error);
@@ -318,7 +317,6 @@ class NotificationService {
         applicationServerKey: this.urlBase64ToUint8Array(process.env.VITE_VAPID_PUBLIC_KEY)
       });
 
-      console.log('Push subscription:', subscription);
       return subscription;
     } catch (error) {
       console.error('Failed to subscribe to push notifications:', error);

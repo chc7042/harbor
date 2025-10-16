@@ -37,11 +37,6 @@ class DownloadService {
     const startTime = Date.now();
 
     try {
-      console.log(`[DOWNLOAD-${downloadId}] =================================`);
-      console.log(`[DOWNLOAD-${downloadId}] 통합 다운로드 시작`);
-      console.log(`[DOWNLOAD-${downloadId}] 파일 경로: ${filePath}`);
-      console.log(`[DOWNLOAD-${downloadId}] 파일명: ${fileName}`);
-      console.log(`[DOWNLOAD-${downloadId}] 옵션:`, options);
 
       // 다운로드 준비 알림
       this.showUserFeedback('preparing', fileName, { downloadId });
@@ -67,15 +62,12 @@ class DownloadService {
         throw new Error('인증 토큰이 없습니다. 다시 로그인해주세요.');
       }
 
-      console.log(`[DOWNLOAD-${downloadId}] JWT 토큰 확인 완료`);
 
       // 백엔드 리다이렉트 URL 생성 (JWT 토큰 포함)
       const downloadUrl = this.createDownloadUrl(filePath, token, options);
-      console.log(`[DOWNLOAD-${downloadId}] 다운로드 URL 생성: ${downloadUrl.substring(0, 100)}...`);
 
       // 다운로드 전략 선택
       const strategy = options.strategy || this.selectDownloadStrategy(filePath, options);
-      console.log(`[DOWNLOAD-${downloadId}] 선택된 전략: ${strategy}`);
 
       let result;
       switch (strategy) {
@@ -94,8 +86,6 @@ class DownloadService {
 
       // 다운로드 시작 처리 (redirect 방식은 브라우저가 처리)
       const duration = Date.now() - startTime;
-      console.log(`[DOWNLOAD-${downloadId}] ✅ 다운로드 시작됨 (${duration}ms)`);
-      console.log(`[DOWNLOAD-${downloadId}] =================================`);
 
       // redirect 방식의 경우 완료 메시지 표시하지 않음 (브라우저가 직접 처리)
       // 대신 시작 상태만 알림
@@ -160,7 +150,6 @@ class DownloadService {
    * 리다이렉트 방식 다운로드 (즉시 다운로드, 스트리밍 지원, 메모리 효율적)
    */
   async downloadViaRedirect(downloadUrl, downloadId, options) {
-    console.log(`[DOWNLOAD-${downloadId}] 즉시 스트리밍 다운로드 시작`);
 
     // 다운로드 상태 업데이트
     const downloadInfo = this.activeDownloads.get(downloadId);
@@ -193,7 +182,6 @@ class DownloadService {
         document.body.removeChild(link);
       }, 100);
 
-      console.log(`[DOWNLOAD-${downloadId}] 즉시 다운로드 링크 클릭 완료`);
 
       return { success: true, method: 'instant-download' };
     } catch (error) {
@@ -211,7 +199,6 @@ class DownloadService {
           }, 1000);
         }
 
-        console.log(`[DOWNLOAD-${downloadId}] 폴백 다운로드 완료`);
         return { success: true, method: 'instant-download-fallback' };
       } catch (fallbackError) {
         console.error(`[DOWNLOAD-${downloadId}] 모든 즉시 다운로드 방식 실패:`, fallbackError);
@@ -225,7 +212,6 @@ class DownloadService {
    * ⚠️ 메모리 버퍼링 발생 - 대용량 파일에는 사용하지 않음
    */
   async downloadViaProxy(filePath, fileName, downloadId, options) {
-    console.log(`[DOWNLOAD-${downloadId}] ⚠️ 프록시 방식 다운로드 시작 (레거시 모드)`);
     console.warn(`[DOWNLOAD-${downloadId}] 프록시 방식은 메모리 버퍼링이 발생합니다. 대용량 파일에는 권장하지 않습니다.`);
 
     // 다운로드 상태 업데이트
@@ -293,7 +279,6 @@ class DownloadService {
    * 직접 방식 다운로드 (외부 URL 다운로드)
    */
   async downloadViaDirect(downloadUrl, fileName, downloadId, options) {
-    console.log(`[DOWNLOAD-${downloadId}] 직접 방식 다운로드 시작`);
 
     if (options.onProgress) {
       options.onProgress({
@@ -546,7 +531,6 @@ class DownloadService {
       this.downloadHistory = this.downloadHistory.slice(-100);
     }
 
-    console.log(`[DOWNLOAD-${downloadId}] 다운로드 기록 저장:`, record);
   }
 
   /**
@@ -572,7 +556,6 @@ class DownloadService {
   cancelDownload(downloadId) {
     if (this.activeDownloads.has(downloadId)) {
       this.activeDownloads.delete(downloadId);
-      console.log(`[DOWNLOAD-${downloadId}] 다운로드 취소됨`);
       return true;
     }
     return false;
@@ -584,7 +567,6 @@ class DownloadService {
   cancelAllDownloads() {
     const count = this.activeDownloads.size;
     this.activeDownloads.clear();
-    console.log(`모든 활성 다운로드 취소됨: ${count}개`);
     return count;
   }
 }

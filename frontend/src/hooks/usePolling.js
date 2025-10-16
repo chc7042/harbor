@@ -313,8 +313,6 @@ export const usePollingStatus = () => {
     const initialUpdating = pollingService.isCurrentlyUpdating();
     const initialPolling = pollingService.getActivePolling();
     
-    console.log('[usePollingStatus] Initial state:', { initialActive, initialUpdating, initialPolling });
-    
     setIsActive(initialActive);
     setIsUpdating(initialUpdating);
     setActivePolling(initialPolling);
@@ -327,7 +325,6 @@ export const usePollingStatus = () => {
 
     // 업데이트 상태 변경 이벤트 리스너
     const handleUpdatingChange = (data) => {
-      console.log('[usePollingStatus] Updating status changed:', data);
       setIsUpdating(data.isUpdating);
     };
 
@@ -339,9 +336,15 @@ export const usePollingStatus = () => {
       const currentActive = pollingService.isPollingActive();
       const currentUpdating = pollingService.isCurrentlyUpdating();
       const currentPolling = pollingService.getActivePolling();
-      setIsActive(currentActive);
-      setIsUpdating(currentUpdating);
-      setActivePolling(currentPolling);
+      
+      // 상태가 실제로 변경된 경우에만 업데이트
+      if (currentActive !== isActive || 
+          currentUpdating !== isUpdating || 
+          JSON.stringify(currentPolling) !== JSON.stringify(activePolling)) {
+        setIsActive(currentActive);
+        setIsUpdating(currentUpdating);
+        setActivePolling(currentPolling);
+      }
     }, 10000); // 10초마다
 
     return () => {
@@ -349,7 +352,7 @@ export const usePollingStatus = () => {
       pollingService.off('updating_status_changed', handleUpdatingChange);
       clearInterval(interval);
     };
-  }, []);
+  }, [isActive, isUpdating, activePolling]);
 
   const stopAllPolling = useCallback(() => {
     pollingService.stopAll();

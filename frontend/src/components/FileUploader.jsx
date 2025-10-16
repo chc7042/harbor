@@ -52,12 +52,6 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
 
   const handleUpload = async (file) => {
     try {
-      console.log('📤 FileUploader: Starting upload process', {
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        currentPath
-      });
 
       setIsUploading(true);
       setProgress(0);
@@ -65,25 +59,19 @@ const FileUploader = ({ currentPath, onUploadComplete, onUploadError }) => {
 
       const uploadPath = currentPath || '\\\\nas.roboetech.com\\release_version\\release\\upload';
 
-      console.log('📤 FileUploader: Upload path set to:', uploadPath);
 
       // 파일 크기에 따라 업로드 방식 선택 (일시적으로 스트리밍 비활성화)
       const useStreaming = false; // file.size > STREAM_THRESHOLD;
       const uploadFunction = useStreaming ? uploadFileStream : uploadFile;
 
-      console.log('📤 FileUploader: Using upload function:', useStreaming ? 'uploadFileStream' : 'uploadFile');
-      console.log('📤 FileUploader: Calling upload function...');
 
       const result = await uploadFunction(file, uploadPath, (progressInfo) => {
-        console.log('📤 FileUploader: Progress update:', progressInfo);
         setProgress(progressInfo.progress || 0);
         setUploadStatus(progressInfo.message || '');
       });
 
-      console.log('📤 FileUploader: Upload function returned:', result);
 
       if (result.success) {
-        console.log('📤 FileUploader: Upload successful!');
         setUploadStatus('업로드가 완료되었습니다!');
         toast.success(`파일 업로드 완료: ${file.name}`);
         onUploadComplete && onUploadComplete(result.data);
