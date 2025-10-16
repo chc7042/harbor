@@ -136,6 +136,9 @@ const FILE_PATTERNS = {
   // FE 프론트엔드 파일 패턴
   FRONTEND_FILE: /^fe\d+\.\d+\.\d+_\d{6}_\d{4}_\d+\.enc\.tar\.gz$/,
 
+  // FS 파일 시스템 파일 패턴 (추가)
+  FILESYSTEM_FILE: /^fs\d+\.\d+\.\d+_\d{6}_\d{4}_\d+\.enc\.tar\.gz$/,
+
   // ADAM 백엔드 파일 패턴 (프로젝트명이 adam인 백엔드 파일)
   ADAM_BACKEND: /^adam_.*\.(tar\.gz|enc\.tar\.gz)$/,
 
@@ -192,6 +195,7 @@ function categorizeFiles(files) {
     mrFiles: [],
     backendFiles: [],
     frontendFiles: [],
+    filesystemFiles: [],
     otherFiles: [],
   };
 
@@ -208,6 +212,8 @@ function categorizeFiles(files) {
       categorized.backendFiles.push(file);
     } else if (matchesPattern(file, 'FRONTEND_FILE')) {
       categorized.frontendFiles.push(file);
+    } else if (matchesPattern(file, 'FILESYSTEM_FILE')) {
+      categorized.filesystemFiles.push(file);
     } else {
       categorized.otherFiles.push(file);
     }

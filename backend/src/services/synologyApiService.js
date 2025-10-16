@@ -5,6 +5,8 @@ const logger = require('../config/logger');
 class SynologyApiService {
   constructor() {
     this.baseUrl = process.env.SYNOLOGY_BASE_URL || 'http://nas.roboetech.com:5000';
+    this.username = process.env.SYNOLOGY_USERNAME || 'nasadmin';
+    this.password = process.env.SYNOLOGY_PASSWORD || 'Cmtes123';
     this.sessionId = null;
     this.sessionExpiry = null;
   }
@@ -21,8 +23,8 @@ class SynologyApiService {
           api: 'SYNO.API.Auth',
           version: 6,
           method: 'login',
-          account: process.env.SYNOLOGY_USERNAME || 'nasadmin',
-          passwd: process.env.SYNOLOGY_PASSWORD || 'Cmtes123',
+          account: this.username,
+          passwd: this.password,
           session: process.env.SYNOLOGY_SESSION_NAME || 'FileStation',
           format: process.env.SYNOLOGY_FORMAT || 'sid',
         },
@@ -450,6 +452,24 @@ class SynologyApiService {
       logger.info(`[SYNOLOGY-${requestId}] 파일 경로: ${filePath}`);
       logger.info(`[SYNOLOGY-${requestId}] 옵션:`, options);
 
+      // 먼저 파일 존재 여부 확인 (세션이 있을 때만)
+      try {
+        await this.ensureValidSession();
+        const fileInfo = await this.getFileInfo(filePath);
+        if (!fileInfo.success) {
+          logger.warn(`[SYNOLOGY-${requestId}] 파일이 존재하지 않음: ${filePath}`);
+          throw new Error(`File does not exist: ${filePath}`);
+        }
+        logger.info(`[SYNOLOGY-${requestId}] 파일 존재 확인됨: ${filePath}`);
+      } catch (sessionError) {
+        logger.warn(`[SYNOLOGY-${requestId}] 세션 또는 파일 확인 실패, 계속 진행: ${sessionError.message}`);
+        // 세션이 없거나 파일 확인에 실패해도 URL 생성은 시도
+        if (sessionError.message.includes('File does not exist')) {
+          // 파일 존재 여부 확인에서 실패한 경우는 에러를 다시 던짐
+          throw sessionError;
+        }
+      }
+
       // URL 생성 전략들
       const urlStrategies = [
         {
@@ -533,6 +553,13 @@ class SynologyApiService {
     const normalizedPath = this.normalizePath(filePath);
     logger.info(`[SYNOLOGY-${requestId}] 정규화된 경로: ${normalizedPath}`);
 
+    // 파일 존재 여부 확인
+    const fileInfo = await this.getFileInfo(normalizedPath);
+    if (!fileInfo.success) {
+      logger.warn(`[SYNOLOGY-${requestId}] 파일이 존재하지 않음: ${normalizedPath}`);
+      throw new Error(`File does not exist: ${normalizedPath}`);
+    }
+
     // 세션 기반 다운로드 URL 생성
     const downloadUrl = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${encodeURIComponent(normalizedPath)}&mode=download&_sid=${this.sessionId}`;
 
@@ -614,16 +641,25 @@ class SynologyApiService {
    * 경로 정규화
    */
   normalizePath(filePath) {
-    // 경로 앞의 /nas/release_version/ 제거 (이미 제거되었을 수도 있음)
     let normalized = filePath;
 
+    // /nas/release_version/ 접두어를 /release_version/으로 변환
     if (normalized.startsWith('/nas/release_version/')) {
-      normalized = '/' + normalized.replace('/nas/release_version/', '');
+      normalized = normalized.replace('/nas/release_version/', '/release_version/');
     }
 
     // /volume1/ 접두어 제거 (Synology API는 공유 폴더명으로 시작)
     if (normalized.startsWith('/volume1/')) {
       normalized = normalized.replace('/volume1/', '/');
+    }
+
+    // release_version 공유 폴더가 없으면 추가
+    if (!normalized.startsWith('/release_version/') && !normalized.startsWith('/release_version')) {
+      if (normalized.startsWith('/')) {
+        normalized = '/release_version' + normalized;
+      } else {
+        normalized = '/release_version/' + normalized;
+      }
     }
 
     // 중복 슬래시 제거
@@ -976,14 +1012,15 @@ class SynologyApiService {
     try {
       await this.ensureValidSession();
 
-      logger.info(`Getting file info for path: ${filePath}`);
+      const normalizedPath = this.normalizePath(filePath);
+      logger.info(`Getting file info for path: ${filePath} -> ${normalizedPath}`);
 
       const response = await axios.get(`${this.baseUrl}/webapi/entry.cgi`, {
         params: {
           api: 'SYNO.FileStation.List',
           version: 2,
           method: 'getinfo',
-          path: filePath,
+          path: normalizedPath,
           additional: '["size","time","type"]',
           _sid: this.sessionId,
         },
@@ -997,7 +1034,20 @@ class SynologyApiService {
         const {files} = response.data.data;
         if (files && files.length > 0) {
           const fileData = files[0];
-          logger.info(`File info retrieved for ${filePath}:`, JSON.stringify(fileData, null, 2));
+          
+          // 파일이 실제로 존재하는지 확인 (code: 408은 파일이 존재하지 않음을 의미)
+          if (fileData.code === 408) {
+            logger.warn(`File does not exist (code 408): ${normalizedPath}`);
+            return { success: false, error: 'File not found' };
+          }
+          
+          // 실제 파일 정보가 있는지 확인 (name, path 등이 있어야 함)
+          if (!fileData.name || !fileData.path) {
+            logger.warn(`Invalid file data returned for ${normalizedPath}:`, JSON.stringify(fileData, null, 2));
+            return { success: false, error: 'File not found' };
+          }
+          
+          logger.info(`File info retrieved for ${normalizedPath}:`, JSON.stringify(fileData, null, 2));
           return {
             success: true,
             data: fileData,

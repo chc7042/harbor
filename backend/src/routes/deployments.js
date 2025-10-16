@@ -352,41 +352,8 @@ router.get('/',
         });
 
       } catch (jenkinsError) {
-        logger.error('Jenkins API 호출 실패, mock 데이터 사용:', jenkinsError.message);
-
-        // Jenkins 연결 실패 시 mock 데이터 반환
-        const mockDeployments = {
-          data: [
-            {
-              id: 1,
-              projectName: 'jenkins-connection-failed',
-              environment: 'development',
-              version: 'mock-v1.0.0',
-              status: 'failed',
-              deployedBy: 'Mock User',
-              deployedAt: new Date().toISOString(),
-              duration: 180,
-              buildNumber: 999,
-              branch: 'main',
-              error: 'Jenkins API 연결 실패',
-            },
-          ],
-          pagination: {
-            currentPage: parseInt(page),
-            totalPages: 1,
-            totalItems: 1,
-            itemsPerPage: parseInt(limit),
-            hasNext: false,
-            hasPrevious: false,
-          },
-        };
-
-        res.json({
-          success: true,
-          data: mockDeployments.data,
-          pagination: mockDeployments.pagination,
-          warning: 'Jenkins 서버에 연결할 수 없어 mock 데이터를 표시합니다.',
-        });
+        logger.error('Jenkins API 호출 실패:', jenkinsError.message);
+        throw new AppError('Jenkins 서버에 연결할 수 없습니다', 503);
       }
     } catch (error) {
       next(error);
@@ -706,31 +673,7 @@ router.get('/stats/summary',
   async (req, res, next) => {
     try {
       // TODO: 실제 배포 통계 조회 로직 구현
-      // const stats = await deploymentService.getDeploymentStats();
-
-      // 임시 데이터
-      const mockStats = {
-        totalDeployments: 1247,
-        successfulDeployments: 1189,
-        failedDeployments: 58,
-        successRate: 95.3,
-        averageDuration: 145,
-        deploymentsToday: 12,
-        deploymentsThisWeek: 87,
-        deploymentsThisMonth: 342,
-        topProjects: [
-          { name: 'api-gateway', deployments: 89 },
-          { name: 'user-service', deployments: 76 },
-          { name: 'payment-service', deployments: 54 },
-        ],
-      };
-
-      logger.info(`배포 통계 조회 - 사용자: ${req.user.username}`);
-
-      res.json({
-        success: true,
-        data: mockStats,
-      });
+      throw new AppError('배포 통계 기능이 아직 구현되지 않았습니다', 501);
     } catch (error) {
       next(error);
     }
@@ -747,11 +690,14 @@ function groupJobsByVersion(jobs) {
   const groups = {};
 
   for (const job of jobs) {
-    // 버전 패턴 매칭: x.x.x/mrx.x.x_release 또는 x.x.x/fsx.x.x_release
-    const versionMatch = job.name.match(/^(\d+\.\d+\.\d+)\/(mr|fs)(\d+\.\d+\.\d+)_release$/);
+    // 패턴 1: x.x.x/mrx.x.x_release 또는 x.x.x/fsx.x.x_release (nested 형태)
+    const nestedVersionMatch = job.name.match(/^(\d+\.\d+\.\d+)\/(mr|fs)(\d+\.\d+\.\d+)_release$/);
+    
+    // 패턴 2: mrx.x.x_release 또는 fsx.x.x_release (standalone 형태)
+    const standaloneVersionMatch = job.name.match(/^(mr|fs)(\d+\.\d+\.\d+)_release$/);
 
-    if (versionMatch) {
-      const [, version, prefix, subVersion] = versionMatch;
+    if (nestedVersionMatch) {
+      const [, version, prefix, subVersion] = nestedVersionMatch;
 
       if (!groups[version]) {
         groups[version] = {
@@ -766,15 +712,38 @@ function groupJobsByVersion(jobs) {
       } else if (prefix === 'fs') {
         groups[version].fsJob = job;
       }
+    } else if (standaloneVersionMatch) {
+      const [, prefix, version] = standaloneVersionMatch;
+      const groupKey = `${prefix}${version}`;
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = {
+          version: groupKey,
+          mrJob: null,
+          fsJob: null,
+        };
+      }
+
+      if (prefix === 'mr') {
+        groups[groupKey].mrJob = job;
+      } else if (prefix === 'fs') {
+        groups[groupKey].fsJob = job;
+      }
     }
   }
 
-  // 완전한 그룹만 반환 (mr과 fs 모두 있는 경우)
+  // 완전한 그룹 또는 standalone mr job 반환
   const completeGroups = {};
   for (const [version, group] of Object.entries(groups)) {
+    // 기존 로직: mr과 fs 모두 있는 경우
     if (group.mrJob && group.fsJob) {
       completeGroups[version] = group;
       logger.info(`Complete version group found: ${version} with mr and fs jobs`);
+    }
+    // 새로운 로직: standalone mr job도 허용
+    else if (group.mrJob && !group.fsJob) {
+      completeGroups[version] = group;
+      logger.info(`Standalone mr job found: ${version}`);
     }
   }
 
@@ -788,11 +757,11 @@ function groupJobsByVersion(jobs) {
 async function processVersionGroup(jenkinsService, version, jobGroup) {
   try {
     // mr job 빌드 조회
-    const mrBuilds = await jenkinsService.getJobBuilds(jobGroup.mrJob.name, 10);
+    const mrBuilds = jobGroup.mrJob ? await jenkinsService.getJobBuilds(jobGroup.mrJob.name, 10) : [];
     const latestMrBuild = mrBuilds[0];
 
-    // fs job 빌드 조회
-    const fsBuilds = await jenkinsService.getJobBuilds(jobGroup.fsJob.name, 10);
+    // fs job 빌드 조회 (standalone mr job인 경우 fsJob이 null일 수 있음)
+    const fsBuilds = jobGroup.fsJob ? await jenkinsService.getJobBuilds(jobGroup.fsJob.name, 10) : [];
     const latestFsBuild = fsBuilds[0];
 
     if (!latestMrBuild && !latestFsBuild) {
@@ -831,8 +800,14 @@ async function processVersionGroup(jenkinsService, version, jobGroup) {
       changes = [...(latestMrBuild.changes || []), ...(latestFsBuild.changes || [])];
       parameters = { ...latestMrBuild.parameters, ...latestFsBuild.parameters };
     } else if (latestMrBuild) {
-      // mr만 있는 경우
-      overallStatus = latestMrBuild.status === 'success' || latestMrBuild.status === 'SUCCESS' ? 'in_progress' : latestMrBuild.status;
+      // mr만 있는 경우 (standalone mr job)
+      if (jobGroup.fsJob) {
+        // fs job이 정의되어 있다면 mr 성공 시 in_progress
+        overallStatus = latestMrBuild.status === 'success' || latestMrBuild.status === 'SUCCESS' ? 'in_progress' : latestMrBuild.status;
+      } else {
+        // standalone mr job인 경우 mr job의 상태를 그대로 사용
+        overallStatus = latestMrBuild.status === 'SUCCESS' ? 'success' : latestMrBuild.status.toLowerCase();
+      }
       timestamp = new Date(latestMrBuild.timestamp);
       duration = latestMrBuild.duration || 0;
       changes = latestMrBuild.changes || [];
@@ -999,6 +974,8 @@ async function getDeploymentInfo(projectName, buildNumber, version = null, req) 
 
   // allFiles를 파일 타입별로 분류 (안전한 문자열로 변환)
   const artifacts = {};
+  const artifactsList = []; // 프론트엔드용 배열 형태
+  
   if (deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) {
     // allFiles의 각 요소를 안전한 문자열로 변환
     const safeFileNames = deploymentInfo.allFiles.map(file => {
@@ -1048,6 +1025,16 @@ async function getDeploymentInfo(projectName, buildNumber, version = null, req) 
       }
       // 문자열만 push하여 프론트엔드에서 안전하게 처리되도록 함
       artifacts[fileType].push(fileName);
+      
+      // 프론트엔드용 배열에도 추가 (파일 객체 형태)
+      artifactsList.push({
+        filename: fileName,
+        filePath: deploymentInfo?.nasPath ? `${deploymentInfo.nasPath}/${fileName}` : fileName,
+        nasPath: deploymentInfo?.nasPath ? `${deploymentInfo.nasPath}/${fileName}` : fileName,
+        fileType: fileType,
+        version: version || projectName,
+        buildNumber: buildNumber
+      });
     });
   }
 
@@ -1055,7 +1042,8 @@ async function getDeploymentInfo(projectName, buildNumber, version = null, req) 
     success: true,
     data: {
       ...(deploymentInfo || { downloadFile: null, allFiles: [] }),
-      artifacts
+      artifacts,
+      artifactsList // 프론트엔드용 배열 형태 추가
     },
   };
 }
@@ -1504,16 +1492,71 @@ router.get('/deployment-info/:projectName/:buildNumber',
           });
         }
 
-        // 3. DB에 데이터가 없는 경우만 느린 작업 수행
-        logger.info(`캐시된 데이터가 없어 실시간 조회를 시작합니다`);
-        // 성능상의 이유로 실시간 조회는 비활성화 (캐시된 데이터만 사용)
+        // 3. DB에 데이터가 없는 경우 실제 NAS에서 파일 찾기
+        logger.info(`캐시된 데이터가 없어 실시간 NAS 조회를 시작합니다`);
+        
+        try {
+          // 프로젝트명에서 버전 정보 추출
+          const versionMatch = projectName.match(/(\d+\.\d+\.\d+)/);
+          const version = versionMatch ? versionMatch[1] : '1.0.1';
+          
+          // 날짜와 빌드번호 기반으로 경로 구성 (1.0.1 -> 250407 매핑)
+          const versionDateMap = {
+            '1.0.0': '240904', '1.0.1': '250407', '1.1.0': '241204',
+            '1.2.0': '250929', '2.0.0': '250116', '3.0.0': '250310', '4.0.0': '250904'
+          };
+          const expectedDate = versionDateMap[version] || '250407';
+          const searchPath = `release/product/mr${version}/${expectedDate}/${buildNumber}`;
+          
+          logger.info(`실시간 NAS 조회 경로: ${searchPath}`);
+          
+          // NAS에서 실제 파일 목록 조회
+          await nasService.connect();
+          const files = await nasService.listDirectory(searchPath);
+          
+          // V로 시작하는 파일 찾기
+          const vFiles = files.filter(file => file.startsWith('V') && file.endsWith('.tar.gz'));
+          logger.info(`실시간 조회로 발견된 V 파일들: ${JSON.stringify(vFiles)}`);
+          
+          if (vFiles.length > 0) {
+            const realTimeData = {
+              projectName,
+              buildNumber: parseInt(buildNumber),
+              status: 'SUCCESS',
+              deploymentPath: `/${searchPath}`,
+              nasPath: `/${searchPath}`,
+              downloadFile: vFiles[0], // 첫 번째 V 파일을 다운로드 파일로 설정
+              allFiles: vFiles,
+              verifiedFiles: vFiles,
+              directoryVerified: true,
+              downloadFileVerified: true,
+              buildDate: expectedDate,
+              cached: false, // 실시간 조회 데이터임을 표시
+            };
+            
+            logger.info(`실시간 조회 성공 - 파일들: ${JSON.stringify(vFiles)}`);
+            
+            return res.json({
+              success: true,
+              data: realTimeData,
+              message: '실시간 NAS 조회로 배포 정보를 찾았습니다.',
+            });
+          } else {
+            logger.warn(`실시간 조회에서 V 파일을 찾지 못함: ${searchPath}`);
+          }
+          
+        } catch (nasError) {
+          logger.error(`실시간 NAS 조회 실패: ${nasError.message}`);
+        }
+        
+        // 실시간 조회도 실패한 경우
         return res.json({
           success: false,
-          message: '캐시된 배포 정보가 없습니다. 관리자에게 문의하세요.',
+          message: 'NAS에서 배포 파일을 찾을 수 없습니다.',
           data: {
             projectName,
             buildNumber: parseInt(buildNumber),
-            status: 'NO_CACHE',
+            status: 'NOT_FOUND',
             cached: false,
           }
         });
@@ -1822,9 +1865,19 @@ router.get('/deployment-info/:projectName/:buildNumber',
             }
           }
         } else {
-          deploymentInfo.directoryVerified = false;
-          deploymentInfo.verificationError = 'No NAS path found in deployment info';
-          logger.warn(`No NAS path found for deployment ${projectName}#${buildNumber}`);
+          // Jenkins 서비스에서 이미 검증이 완료된 경우 그 값을 유지
+          if (deploymentInfo.directoryVerified === undefined) {
+            deploymentInfo.directoryVerified = false;
+            deploymentInfo.verificationError = 'No NAS path found in deployment info';
+            logger.warn(`No NAS path found for deployment ${projectName}#${buildNumber}`);
+          } else {
+            // Jenkins 서비스에서 이미 검증이 완료된 경우 로그만 남김
+            logger.debug(`Using Jenkins-verified deployment info for ${projectName}#${buildNumber}`, {
+              directoryVerified: deploymentInfo.directoryVerified,
+              nasPath: deploymentInfo.nasPath || 'not available',
+              downloadFileVerified: deploymentInfo.downloadFileVerified
+            });
+          }
         }
 
         // 시놀로지 공유 링크 및 파일별 다운로드 링크 생성 (디렉토리가 존재하는 경우만)
@@ -2298,8 +2351,61 @@ router.get(
 
       logger.info(`아티팩트 조회 요청 - 사용자: ${req.user.username}, 버전: ${version}, 빌드: ${buildNumber}`);
 
-      // NAS에서 해당 버전의 아티팩트 검색
-      const artifacts = await nasService.searchFinalArtifactsByVersion(version);
+      // deployment_paths 테이블에서 아티팩트 검색 (NAS 대신 DB 사용)
+      let artifacts = [];
+      
+      try {
+        const { query } = require('../config/database');
+        const dbResult = await query(
+          'SELECT all_files, nas_path, project_name FROM deployment_paths WHERE version = $1 OR project_name LIKE $2',
+          [version, `%${version}%`]
+        );
+        
+        logger.info(`🔍 [ARTIFACTS-DEBUG] DB에서 버전 ${version} 검색 결과: ${dbResult.rows.length}개 레코드`);
+        
+        if (dbResult.rows.length > 0) {
+          for (const row of dbResult.rows) {
+            const allFiles = row.all_files || [];
+            const nasPath = row.nas_path || '';
+            
+            logger.info(`🔍 [ARTIFACTS-DEBUG] 프로젝트: ${row.project_name}, all_files: ${JSON.stringify(allFiles)}`);
+            
+            if (Array.isArray(allFiles) && allFiles.length > 0) {
+              allFiles.forEach(fileName => {
+                const safeFileName = typeof fileName === 'string' ? fileName : 
+                  (typeof fileName === 'object' && fileName ? 
+                    (fileName.name || fileName.fileName || fileName.originalname || JSON.stringify(fileName)) : 
+                    String(fileName));
+                
+                artifacts.push({
+                  filename: safeFileName,
+                  filePath: nasPath ? `${nasPath}/${safeFileName}` : safeFileName,
+                  nasPath: nasPath ? `${nasPath}/${safeFileName}` : safeFileName,
+                  version: version,
+                  buildNumber: parseInt(buildNumber),
+                  verified: true,
+                  source: 'database'
+                });
+              });
+            }
+          }
+        } else {
+          logger.warn(`🔍 [ARTIFACTS-DEBUG] DB에서 버전 ${version}에 대한 데이터를 찾지 못함`);
+          // fallback to NAS service
+          artifacts = await nasService.searchArtifactsByVersion(version);
+        }
+      } catch (dbError) {
+        logger.error(`🔍 [ARTIFACTS-DEBUG] DB 검색 실패: ${dbError.message}, NAS 서비스로 fallback`);
+        // fallback to original NAS service
+        artifacts = await nasService.searchArtifactsByVersion(version);
+      }
+      
+      logger.info(`🔍 [ARTIFACTS-DEBUG] 최종 아티팩트 개수: ${artifacts?.length || 0}`);
+      if (artifacts && artifacts.length > 0) {
+        artifacts.forEach((artifact, index) => {
+          logger.info(`🔍 [ARTIFACTS-DEBUG] 아티팩트 ${index + 1}: ${JSON.stringify(artifact, null, 2)}`);
+        });
+      }
 
       res.json({
         success: true,

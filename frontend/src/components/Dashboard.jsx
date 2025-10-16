@@ -26,6 +26,7 @@ const Dashboard = () => {
   const { deployments, isPolling: isDeploymentPolling, lastUpdate: deploymentsLastUpdate, refresh: refreshDeployments } = useDeploymentPolling(initialDeployments, 30000);
   const { projects, isPolling: isProjectPolling, lastUpdate: projectsLastUpdate, refresh: refreshProjects } = useProjectPolling(60000);
   const [loading, setLoading] = useState(true);
+  const [allDeployments, setAllDeployments] = useState([]);
 
   // 마지막 업데이트 시간을 localStorage에 저장
   useEffect(() => {
@@ -101,6 +102,9 @@ const Dashboard = () => {
     try {
       // 초기 배포 데이터 로드
       await fetchDeployments();
+      
+      // 프로젝트 계층 구조용 모든 배포 데이터 로드
+      await fetchAllDeployments();
 
       // 프로젝트는 폴링이 자동으로 처리하므로 수동 호출
       await refreshProjects();
@@ -109,6 +113,50 @@ const Dashboard = () => {
       toast.error('초기 데이터를 불러오는데 실패했습니다.');
     }
   }, [refreshProjects]);
+
+  // 프로젝트 계층 구조용 - 모든 배포 가져오기 (날짜 필터 없음)
+  const fetchAllDeployments = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/deployments/recent');
+      const deploymentData = response.data?.data || response.data || [];
+
+      if (Array.isArray(deploymentData)) {
+        const transformedData = deploymentData.map(deployment => ({
+          id: deployment.id,
+          project_name: deployment.projectName || deployment.project_name,
+          build_number: deployment.buildNumber || deployment.build_number,
+          status: deployment.status,
+          environment: deployment.environment || 'development',
+          deployed_by: deployment.deployedBy || deployment.deployed_by || 'Jenkins',
+          deployed_at: deployment.deployedAt || deployment.deployed_at,
+          duration: deployment.duration,
+          git_branch: deployment.gitBranch || deployment.git_branch,
+          git_commit: deployment.gitCommit || deployment.git_commit,
+          git_commit_message: deployment.gitCommitMessage || deployment.git_commit_message,
+          git_author: deployment.gitAuthor || deployment.git_author,
+          jenkins_job_url: deployment.jenkinsJobUrl || deployment.jenkins_job_url,
+          jenkins_build_url: deployment.jenkinsBuildUrl || deployment.jenkins_build_url,
+          jenkins_console_url: deployment.jenkinsConsoleUrl || deployment.jenkins_console_url,
+          version: deployment.version,
+          triggered_by: deployment.triggeredBy || deployment.triggered_by || 'Jenkins',
+          error_message: deployment.errorMessage || deployment.error_message,
+          created_at: deployment.createdAt || deployment.created_at,
+          updated_at: deployment.updatedAt || deployment.updated_at
+        }));
+
+        setAllDeployments(transformedData);
+      } else {
+        console.warn('Unexpected deployments data format:', deploymentData);
+        setAllDeployments([]);
+      }
+    } catch (error) {
+      console.error('Error fetching all deployments:', error);
+      setAllDeployments([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchDeployments = async () => {
     try {
@@ -389,7 +437,7 @@ const Dashboard = () => {
         {viewMode === 'projects' && (
           <ProjectHierarchy
             projects={projects}
-            deployments={deployments}
+            deployments={allDeployments}
             onJobClick={handleJobClick}
             className="mb-6"
           />

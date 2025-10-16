@@ -1,7 +1,6 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/authSimple');
 const { query, param, validationResult } = require('express-validator');
-const { getNASScanner } = require('../services/nasScanner');
 const { getNASService } = require('../services/nasService');
 const { AppError } = require('../middleware/error');
 const logger = require('../config/logger');
@@ -498,55 +497,8 @@ router.get('/files',
       const { page = 1, limit = 20, project, extension } = req.query;
       const offset = (page - 1) * limit;
 
-      // 개발환경에서는 mock 데이터 반환
-      if (process.env.NODE_ENV === 'development') {
-        const mockFiles = [
-          {
-            id: 1,
-            file_path: 'harbor-frontend/build-1.tar.gz',
-            project_name: 'harbor-frontend',
-            file_name: 'build-1.tar.gz',
-            file_size: 1024000,
-            file_hash: 'sha256:abc123def456',
-            build_number: 1,
-            file_extension: '.tar.gz',
-            scanned_at: new Date(),
-          },
-          {
-            id: 2,
-            file_path: 'harbor-backend/build-2.tar.gz',
-            project_name: 'harbor-backend',
-            file_name: 'build-2.tar.gz',
-            file_size: 2048000,
-            file_hash: 'sha256:def456ghi789',
-            build_number: 2,
-            file_extension: '.tar.gz',
-            scanned_at: new Date(),
-          },
-        ];
-
-        const filteredFiles = mockFiles.filter(file => {
-          if (project && !file.project_name.includes(project)) return false;
-          if (extension && file.file_extension !== extension) return false;
-          return true;
-        });
-
-        return res.json({
-          success: true,
-          data: {
-            files: filteredFiles.slice(offset, offset + limit),
-            pagination: {
-              page: parseInt(page),
-              limit: parseInt(limit),
-              total: filteredFiles.length,
-              totalPages: Math.ceil(filteredFiles.length / limit),
-            },
-          },
-        });
-      }
-
-      // 프로덕션 환경에서는 실제 데이터베이스 조회
-      let whereClause = 'WHERE deleted_at IS NULL';
+      // 실제 데이터베이스 조회
+      let whereClause = 'WHERE is_active = true';
       const queryParams = [];
       let paramIndex = 1;
 
@@ -557,8 +509,9 @@ router.get('/files',
       }
 
       if (extension) {
-        whereClause += ` AND file_extension = $${paramIndex}`;
-        queryParams.push(extension);
+        // file_extension 컬럼이 없으므로 file_name으로 확장자 필터링
+        whereClause += ` AND file_name LIKE $${paramIndex}`;
+        queryParams.push(`%${extension}`);
         paramIndex++;
       }
 
@@ -571,10 +524,10 @@ router.get('/files',
       // 파일 목록 조회
       const filesQuery = `
         SELECT id, file_path, project_name, file_name, file_size, file_hash,
-               build_number, file_extension, scanned_at, modified_at
+               build_number, scan_date
         FROM nas_files
         ${whereClause}
-        ORDER BY scanned_at DESC
+        ORDER BY scan_date DESC
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `;
 

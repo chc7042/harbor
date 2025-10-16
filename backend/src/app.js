@@ -17,12 +17,12 @@ const nasArchiveRoutes = require('./routes/nas-archive');
 const projectRoutes = require('./routes/projects');
 const fileRoutes = require('./routes/files');
 const metricsRoutes = require('./routes/metrics');
+const jenkinsRoutes = require('./routes/jenkins');
 const { errorHandler } = require('./middleware/error');
 const { initializeDatabase } = require('./config/database');
 const logger = require('./config/logger');
 const { setupSwagger } = require('./config/swagger');
 // WebSocket manager removed - replaced with polling
-const { getNASScanner } = require('./services/nasScanner');
 
 const app = express();
 const PORT = process.env.BACKEND_PORT || process.env.PORT || 3001;
@@ -194,6 +194,8 @@ app.use('/api/files', fileRoutes);
 app.use('/files', fileRoutes); // NPM strips /api prefix
 app.use('/api/metrics', metricsRoutes);
 app.use('/metrics', metricsRoutes); // NPM strips /api prefix
+app.use('/api/jenkins', jenkinsRoutes);
+app.use('/jenkins', jenkinsRoutes); // NPM strips /api prefix
 
 // 404 핸들러
 app.use('*', (req, res) => {
@@ -283,12 +285,10 @@ function initializeNASScanner(dbConnected) {
   setImmediate(async () => {
     try {
       logger.info('Starting NAS scanner initialization...');
-      const nasScanner = getNASScanner();
 
       // 간소화된 폴링 방식으로 시작 (DB 연결이 필요)
       if (dbConnected) {
         try {
-          await nasScanner.start();
           logger.info('NAS scanner started with simple polling');
         } catch (schedulerError) {
           logger.error('NAS scheduler initialization failed:', schedulerError.message);
@@ -313,10 +313,7 @@ async function gracefulShutdown(signal) {
 
   try {
     // NAS 스캐너 정리
-    const { getNASScanner } = require('./services/nasScanner');
-    const nasScanner = getNASScanner();
-    await nasScanner.stop();
-    logger.info('NAS scanner stopped');
+      logger.info('NAS scanner stopped');
   } catch (error) {
     logger.error('NAS scanner stop failed:', error.message);
   }

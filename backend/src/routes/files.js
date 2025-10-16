@@ -83,23 +83,48 @@ router.get('/download',
 
       // 최종 Synology API 경로 구성
       const finalPath = '/release_version/' + cleanPath;
-      const fileName = cleanPath.split('/').pop();
+      const originalFileName = cleanPath.split('/').pop();
 
       logger.info(`파일 다운로드 요청 - 사용자: ${req.user.username}`);
       logger.info(`원본 경로: ${path}`);
       logger.info(`정리된 경로: ${cleanPath}`);
       logger.info(`최종 NAS 경로: ${finalPath}`);
-      logger.info(`파일명: ${fileName}`);
+      logger.info(`원본 파일명: ${originalFileName}`);
 
       // Synology 직접 다운로드 URL 생성 및 리다이렉트 (기존 방식 복원)
       try {
         const downloadUrl = await downloadService.createDownloadUrl(finalPath);
 
         if (downloadUrl.success && downloadUrl.downloadUrl) {
-          logger.info(`✅ 직접 다운로드 URL 생성: ${fileName} -> ${downloadUrl.downloadUrl}`);
+          // 실제 찾은 파일명 추출
+          const actualFileName = downloadUrl.actualPath ? downloadUrl.actualPath.split('/').pop() : originalFileName;
+          
+          logger.info(`✅ 직접 다운로드 URL 생성: ${originalFileName} -> ${actualFileName}`);
+          logger.info(`다운로드 URL: ${downloadUrl.downloadUrl}`);
+          if (downloadUrl.patternMatched) {
+            logger.info(`📝 패턴 매칭으로 실제 파일 발견: ${actualFileName}`);
+          }
 
-          // 직접 다운로드 URL로 리다이렉트 (즉시 다운로드 시작)
-          res.redirect(downloadUrl.downloadUrl);
+          // Synology는 파일명을 포함하지 않는 Content-Disposition을 보내므로
+          // 직접 스트리밍으로 올바른 파일명을 설정
+          logger.info(`스트리밍 다운로드로 전환: ${actualFileName}`);
+          
+          // 다운로드 URL에서 파일 스트리밍
+          const axios = require('axios');
+          const response = await axios({
+            method: 'GET',
+            url: downloadUrl.downloadUrl,
+            responseType: 'stream',
+            timeout: 30000,
+          });
+
+          // 올바른 헤더 설정
+          res.setHeader('Content-Type', 'application/octet-stream');
+          res.setHeader('Content-Disposition', `attachment; filename="${actualFileName}"`);
+          res.setHeader('Content-Length', response.headers['content-length']);
+          
+          // 스트림 파이프
+          response.data.pipe(res);
           return;
         } else {
           throw new Error(`다운로드 URL 생성 실패: ${downloadUrl.error}`);

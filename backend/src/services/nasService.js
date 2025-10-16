@@ -17,11 +17,13 @@ class NASService {
    */
   async connect() {
     try {
-      await this.synologyApiService.login();
-      logger.info('NAS connection established via Synology API');
+      logger.info('🔍 [NAS-CONNECTION] Attempting Synology API login...');
+      const loginResult = await this.synologyApiService.login();
+      logger.info(`🔍 [NAS-CONNECTION] Login result: ${JSON.stringify(loginResult)}`);
+      logger.info('🔍 [NAS-CONNECTION] Synology API login successful');
       return true;
     } catch (error) {
-      logger.error('Failed to connect to NAS via Synology API:', error.message);
+      logger.error(`🔍 [NAS-CONNECTION] Failed to connect to NAS via Synology API: ${error.message}`);
       throw new AppError(`NAS connection failed: ${error.message}`, 503);
     }
   }
@@ -223,10 +225,14 @@ class NASService {
     try {
       await this.ensureConnection();
 
-      // 실제 NAS 구조에 맞는 검색 경로 (mr4.0.0 구조 포함)
+      // 실제 NAS 구조에 맞는 검색 경로 (mr4.0.0, mr1.0.1 구조 포함)
+      const cleanVersion = version.startsWith('mr') ? version.substring(2) : version; // mr 접두사 제거
       const searchPaths = [
-        `release/product/mr${version}`,  // mr4.0.0, mr3.0.0 등 우선
-        `release/product/${version}`,    // 4.0.0, 3.0.0 등
+        `release_version/release/product/mr${cleanVersion}`,  // mr1.0.1 -> mr1.0.1, mr4.0.0 -> mr4.0.0
+        `release_version/release/product/${version}`,         // 전체 버전 그대로
+        `release_version/release/product/${cleanVersion}`,    // 1.0.1, 4.0.0 등
+        `release/product/mr${cleanVersion}`,  // 기존 구조
+        `release/product/${version}`,    
         `release/${version}`,
         `${version}`,
       ];
@@ -235,9 +241,10 @@ class NASService {
 
       for (const searchPath of searchPaths) {
         try {
-          logger.info(`Searching for artifacts in path: ${searchPath}`);
+          logger.info(`🔍 [NAS-SEARCH] Searching for artifacts in path: ${searchPath} (version: ${version})`);
 
           const allItems = await this.listDirectory(searchPath);
+          logger.info(`🔍 [NAS-SEARCH] Found ${allItems.length} items in ${searchPath}: ${JSON.stringify(allItems.slice(0, 5))}`);
 
           for (const dirName of allItems) {
             if (dirName.match(/^\d{6}$/)) { // 날짜 형식 디렉토리
@@ -272,6 +279,7 @@ class NASService {
                       for (const file of compressedFiles) {
                         allArtifacts.push({
                           filename: file.name,
+                          filePath: file.path,
                           nasPath: file.path,
                           fileSize: file.size,
                           lastModified: file.modified,
@@ -292,7 +300,7 @@ class NASService {
             }
           }
         } catch (searchError) {
-          logger.debug(`No artifacts found in path ${searchPath}: ${searchError.message}`);
+          logger.warn(`🔍 [NAS-SEARCH] No artifacts found in path ${searchPath}: ${searchError.message}`);
         }
       }
 

@@ -722,8 +722,18 @@ const ProjectDetailModal = ({
                                     <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
                                       메인버전
                                     </span>
-                                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
-                                      NAS 확인 필요
+                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                      deploymentInfo?.directoryVerified
+                                        ? 'bg-green-100 text-green-600'
+                                        : deploymentInfo?.verificationError
+                                          ? 'bg-red-100 text-red-600'
+                                          : 'bg-yellow-100 text-yellow-600'
+                                    }`}>
+                                      {deploymentInfo?.directoryVerified
+                                        ? 'NAS 디렉토리 확인됨'
+                                        : deploymentInfo?.verificationError
+                                          ? 'NAS 디렉토리 없음'
+                                          : 'NAS 확인 중...'}
                                     </span>
                                   </div>
                                   <p className="text-sm font-medium text-gray-900 mb-1">
@@ -760,6 +770,107 @@ const ProjectDetailModal = ({
                       </div>
                     </div>
 
+                    {/* 풀스택 섹션 */}
+                    {(deploymentInfo?.allFiles && deploymentInfo.allFiles.some(file => file.match(/^fs\d+\.\d+\.\d+_/))) && (
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-medium text-gray-700 border-b pb-2">풀스택</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {deploymentInfo.allFiles
+                            .filter(file => file.match(/^fs\d+\.\d+\.\d+_/))
+                            .map((file, index) => {
+                              const isEncrypted = file.includes('.enc.');
+                              const fileExists = deploymentInfo.verifiedFiles ? deploymentInfo.verifiedFiles.includes(file) : true;
+                              
+                              return (
+                                <div
+                                  key={index}
+                                  className={`p-4 rounded-lg border-2 transition-all duration-200 hover:shadow-lg ${
+                                    fileExists ? 'border-purple-300 bg-purple-50 hover:border-purple-400 hover:bg-purple-100' : 'border-red-300 bg-red-50 hover:border-red-400'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-center space-x-2 mb-2">
+                                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
+                                          풀스택
+                                        </span>
+                                        {isEncrypted && (
+                                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
+                                            암호화
+                                          </span>
+                                        )}
+                                        {!fileExists && (
+                                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                                            파일 없음
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-sm font-medium text-gray-900 mb-1">
+                                        {file}
+                                      </p>
+                                      <div className="flex items-center space-x-4 text-xs text-gray-600">
+                                        {deploymentInfo?.fileInfoMap?.[file] && (
+                                          <>
+                                            <span>
+                                              📦 {formatFileSize(deploymentInfo.fileInfoMap[file].size)}
+                                            </span>
+                                            <span>
+                                              📅 {formatFileDate(deploymentInfo.fileInfoMap[file].mtime)}
+                                            </span>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center space-x-2 ml-2">
+                                      {fileExists ? (
+                                        <button
+                                          className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors duration-200"
+                                          disabled={downloadingFiles.has(`fullstack-${file}`)}
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+
+                                            if (deploymentInfo && deploymentInfo.nasPath) {
+                                              setDownloadingFiles(prev => new Set([...prev, `fullstack-${file}`]));
+                                              let nasPath = deploymentInfo.nasPath;
+                                              
+                                              if (typeof nasPath === 'string' && nasPath.includes('\\\\')) {
+                                                nasPath = nasPath.replace(/\\\\/g, '/').replace(/\\/g, '/');
+                                              }
+                                              
+                                              if (!nasPath.startsWith('/')) {
+                                                nasPath = '/' + nasPath;
+                                              }
+                                              
+                                              const unixPath = nasPath.split('/').filter(p => p.length > 0).join('/');
+                                              const filePath = unixPath + '/' + file;
+                                              
+                                              downloadFile(filePath, file, () => {
+                                                setDownloadingFiles(prev => {
+                                                  const newSet = new Set(prev);
+                                                  newSet.delete(`fullstack-${file}`);
+                                                  return newSet;
+                                                });
+                                              });
+                                            }
+                                          }}
+                                        >
+                                          <Download className="w-4 h-4 mr-1.5" />
+                                          {downloadingFiles.has(`fullstack-${file}`) ? '다운로드 중...' : '다운로드'}
+                                        </button>
+                                      ) : (
+                                        <span className="text-xs text-red-500">파일 없음</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* 배포 파일 섹션 (V 파일 제외) */}
                     <div className="flex-1 flex flex-col space-y-3 overflow-hidden">
                       <h4 className="text-sm font-medium text-gray-700 border-b pb-2 flex-shrink-0">배포 파일</h4>
@@ -768,7 +879,7 @@ const ProjectDetailModal = ({
                           {/* 실제 파일만 표시 (V 파일 제외) - 목 데이터 사용 안함 */}
                           {(deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) ?
                             deploymentInfo.allFiles
-                              .filter(file => !file.startsWith('V')) // V 파일 제외
+                              .filter(file => !file.startsWith('V') && !file.match(/^fs\d+\.\d+\.\d+_/)) // V 파일과 fs 메인 버전 파일 제외
                               .sort((a, b) => {
                                 // 모로우, 백엔드, 프런트엔드 순서로 정렬
                                 const getOrder = (file) => {

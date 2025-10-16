@@ -31,16 +31,21 @@ const DeploymentTable = ({
   // 아티팩트 지연 로딩 함수
   const handleLoadArtifacts = async (deployment) => {
     const deploymentKey = `${deployment.version}-${deployment.buildNumber}`;
+    
+    console.log(`🔍 [ARTIFACT-LOADING] 아티팩트 로딩 시작: ${deploymentKey}`);
+    console.log(`🔍 [ARTIFACT-LOADING] deployment 정보:`, deployment);
 
     if (loadingArtifacts.has(deploymentKey)) {
+      console.log(`🔍 [ARTIFACT-LOADING] 이미 로딩 중: ${deploymentKey}`);
       return; // 이미 로딩 중인 경우
     }
 
     setLoadingArtifacts(prev => new Set(prev).add(deploymentKey));
 
     try {
-
+      console.log(`🔍 [ARTIFACT-LOADING] API 호출: loadArtifacts(${deployment.version}, ${deployment.buildNumber})`);
       const response = await loadArtifacts(deployment.version, deployment.buildNumber);
+      console.log(`🔍 [ARTIFACT-LOADING] API 응답:`, response);
 
       if (response.success && onDeploymentUpdate) {
         // 부모 컴포넌트에 업데이트된 아티팩트 정보 전달
@@ -48,6 +53,8 @@ const DeploymentTable = ({
           ...deployment,
           artifacts: response.data.artifacts || [],
         };
+        console.log(`🔍 [ARTIFACT-LOADING] 업데이트된 deployment:`, updatedDeployment);
+        console.log(`🔍 [ARTIFACT-LOADING] artifacts 개수: ${updatedDeployment.artifacts.length}`);
         onDeploymentUpdate(updatedDeployment);
 
       }
@@ -144,7 +151,7 @@ const DeploymentTable = ({
 
   // 통합 다운로드 처리 함수
   const handleDownload = async (artifact, deploymentId) => {
-    const downloadKey = `${deploymentId}-${artifact.fileName}`;
+    const downloadKey = `${deploymentId}-${artifact.filename}`;
 
     if (downloadingFiles.has(downloadKey)) {
       return;
@@ -155,8 +162,8 @@ const DeploymentTable = ({
 
 
       const result = await downloadService.downloadFile(
-        artifact.filePath,
-        artifact.fileName,
+        artifact.filePath || artifact.nasPath,
+        artifact.filename,
         {
           onProgress: (progress) => {
             // 여기서 UI 업데이트 가능 (토스트, 진행바 등)
@@ -414,7 +421,17 @@ const DeploymentTable = ({
                   <td>
                     <div className="flex items-center space-x-1">
                       {/* 아티팩트 관련 버튼 - 지연 로딩 지원 */}
-                      {deployment.hasArtifacts && deployment.artifacts && deployment.artifacts.length === 0 ? (
+                      {(() => {
+                        console.log(`🔍 [RENDER] deployment ${deployment.id}:`, {
+                          hasArtifacts: deployment.hasArtifacts,
+                          artifacts: deployment.artifacts,
+                          artifactsLength: deployment.artifacts?.length || 0,
+                          showLoadButton: deployment.hasArtifacts && deployment.artifacts && deployment.artifacts.length === 0,
+                          showDownloadButton: deployment.artifacts && deployment.artifacts.length > 0
+                        });
+                        return null;
+                      })()}
+                      {!deployment.artifacts || (deployment.artifacts && deployment.artifacts.length === 0) ? (
                         // 아티팩트가 있지만 아직 로딩되지 않은 경우 - 로드 버튼 표시
                         <div className="relative group">
                           <button
@@ -438,12 +455,12 @@ const DeploymentTable = ({
                         <div className="relative group">
                           <button
                             className={`p-1 transition-colors rounded ${
-                              downloadingFiles.has(`${deployment.id}-${deployment.artifacts[0]?.fileName}`)
+                              downloadingFiles.has(`${deployment.id}-${deployment.artifacts[0]?.filename}`)
                                 ? 'text-blue-500 animate-pulse'
                                 : 'bg-green-200 text-green-800 hover:bg-green-300 border border-green-400'
                             }`}
                             title={`${deployment.artifacts.length}개 아티팩트 다운로드`}
-                            disabled={downloadingFiles.has(`${deployment.id}-${deployment.artifacts[0]?.fileName}`)}
+                            disabled={downloadingFiles.has(`${deployment.id}-${deployment.artifacts[0]?.filename}`)}
                             onClick={async (e) => {
                               e.stopPropagation();
 
@@ -466,7 +483,7 @@ const DeploymentTable = ({
                             </span>
                           )}
                           {/* 다운로드 중 표시 */}
-                          {downloadingFiles.has(`${deployment.id}-${deployment.artifacts[0]?.fileName}`) && (
+                          {downloadingFiles.has(`${deployment.id}-${deployment.artifacts[0]?.filename}`) && (
                             <span className="absolute -bottom-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-2 h-2 animate-ping">
                             </span>
                           )}

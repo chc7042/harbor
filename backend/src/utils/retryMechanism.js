@@ -111,7 +111,12 @@ async function withRetry(operation, config = {}, operationName = 'operation') {
 
       // Don't retry on last attempt
       if (attempt === retryConfig.maxRetries) {
-        logger.error(`${operationName} failed after ${attempt + 1} attempts: ${error.message}`);
+        logger.error(`${operationName} failed after ${attempt + 1} attempts: ${error.message}`, {
+          errorType: error.constructor.name,
+          finalAttempt: true,
+          totalAttempts: attempt + 1,
+          operation: operationName
+        });
         break;
       }
 
@@ -129,6 +134,11 @@ async function withRetry(operation, config = {}, operationName = 'operation') {
     }
   }
 
+  // Add operation context to the error before throwing
+  if (lastError) {
+    lastError.operationName = operationName;
+    lastError.totalAttempts = retryConfig.maxRetries + 1;
+  }
   throw lastError;
 }
 
