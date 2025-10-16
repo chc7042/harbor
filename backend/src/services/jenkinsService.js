@@ -1028,6 +1028,8 @@ class JenkinsService {
             downloadFile: mainDownloadFile,
             allFiles: files,
             categorized,
+            directoryVerified: true,
+            downloadFileVerified: !!mainDownloadFile,
           };
 
         } catch (error) {
@@ -1181,6 +1183,8 @@ class JenkinsService {
           return {
             downloadFile: mainDownloadFile,
             allFiles: files,
+            directoryVerified: true,
+            downloadFileVerified: !!mainDownloadFile,
           };
         }
       } catch (nasError) {
@@ -1196,6 +1200,8 @@ class JenkinsService {
         return {
           downloadFile: mainFile,
           allFiles: expectedFiles,
+          directoryVerified: false, // 패턴 기반이므로 실제 검증되지 않음
+          downloadFileVerified: false, // 패턴 기반이므로 실제 검증되지 않음
         };
       }
 
@@ -1351,6 +1357,10 @@ class JenkinsService {
         }
       }
 
+      // 필요한 검증 정보 추가
+      deploymentInfo.directoryVerified = !!deploymentInfo.nasPath;
+      deploymentInfo.downloadFileVerified = !!deploymentInfo.downloadFile;
+
       return deploymentInfo;
 
       } catch (fsError) {
@@ -1363,6 +1373,8 @@ class JenkinsService {
           downloadFile: null,
           allFiles: [],
           deploymentPath: null,
+          directoryVerified: false,
+          downloadFileVerified: false,
         };
       }
 
@@ -1375,6 +1387,8 @@ class JenkinsService {
         downloadFile: null,
         allFiles: [],
         deploymentPath: null,
+        directoryVerified: false,
+        downloadFileVerified: false,
       };
     }
   }

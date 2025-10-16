@@ -19,6 +19,15 @@ router.get('/', async (req, res) => {
 
     jobs.forEach(job => {
       const projectName = job.projectFolder || job.name;
+      const jobName = job.name.toLowerCase();
+
+      // 시스템 작업 제외 (errorcsv, update_scripts, fs_docker)
+      if (jobName.endsWith('_errorcsv') || jobName === 'errorcsv' || 
+          jobName.endsWith('_update_scripts') || jobName === 'update_scripts' ||
+          jobName.endsWith('_docker') || jobName === 'docker') {
+        logger.info(`🔍 프로젝트 필터링: ${job.name} -> 제외됨 (시스템 작업)`);
+        return;
+      }
 
       if (!projectMap.has(projectName)) {
         projectMap.set(projectName, {
@@ -93,10 +102,22 @@ router.get('/:projectName', async (req, res) => {
     const jenkinsService = getJenkinsService();
     const jobs = await jenkinsService.getJobs();
 
-    // 특정 프로젝트의 작업들만 필터링
-    const projectJobs = jobs.filter(job =>
-      job.projectFolder === projectName || job.name === projectName,
-    );
+    // 특정 프로젝트의 작업들만 필터링 (시스템 작업 제외)
+    const projectJobs = jobs.filter(job => {
+      const isProjectMatch = job.projectFolder === projectName || job.name === projectName;
+      if (!isProjectMatch) return false;
+
+      const jobName = job.name.toLowerCase();
+      // 시스템 작업 제외 (errorcsv, update_scripts, fs_docker)
+      if (jobName.endsWith('_errorcsv') || jobName === 'errorcsv' || 
+          jobName.endsWith('_update_scripts') || jobName === 'update_scripts' ||
+          jobName.endsWith('_docker') || jobName === 'docker') {
+        logger.info(`🔍 프로젝트 상세 필터링: ${job.name} -> 제외됨 (시스템 작업)`);
+        return false;
+      }
+
+      return true;
+    });
 
     if (projectJobs.length === 0) {
       return res.status(404).json({
