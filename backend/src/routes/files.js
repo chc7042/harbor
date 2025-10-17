@@ -83,7 +83,7 @@ router.get('/download',
       const finalPath = '/release_version/' + cleanPath;
       const originalFileName = cleanPath.split('/').pop();
 
-      logger.info(`파일 다운로드 요청 - 사용자: ${req.user.username}`);
+      logger.info(`파일 다운로드 요청 - 사용자: ${req.user?.username || 'anonymous'}`);
       logger.info(`원본 경로: ${path}`);
       logger.info(`정리된 경로: ${cleanPath}`);
       logger.info(`최종 NAS 경로: ${finalPath}`);
@@ -279,7 +279,7 @@ router.post('/upload',
       }
 
       logger.info(`파일 업로드 요청: ${file.originalname}, 크기: ${file.size}, 업로드 경로: ${path}`);
-      logger.info(`파일 업로드 사용자: ${req.user.username}`);
+      logger.info(`파일 업로드 사용자: ${req.user?.username || 'anonymous'}`);
 
       // NAS 서비스를 통해 파일 업로드 (경로 검증은 NAS 서비스에서 처리)
       const nasService = getNASService();
