@@ -334,7 +334,7 @@ router.get('/',
           };
         });
 
-        logger.info(`배포 목록 조회 - 사용자: ${req.user.username}, 페이지: ${page}, Jenkins 데이터: ${deployments.length}개`);
+        logger.info(`배포 목록 조회 - 사용자: ${req.user?.username || 'unknown'}, 페이지: ${page}, Jenkins 데이터: ${deployments.length}개`);
 
         res.json({
           success: true,
@@ -505,7 +505,7 @@ router.get('/:id',
       // TODO: 실제 배포 상세 조회 로직 구현
       // const deployment = await deploymentService.getDeploymentById(id);
       
-      logger.info(`배포 상세 조회 - 사용자: ${req.user.username}, 배포 ID: ${id}`);
+      logger.info(`배포 상세 조회 - 사용자: ${req.user?.username || 'unknown'}, 배포 ID: ${id}`);
       
       // 실제 배포 서비스가 구현되지 않음
       throw new AppError('배포 상세 정보 서비스가 아직 구현되지 않았습니다.', 501);
@@ -532,7 +532,7 @@ router.post('/:id/restart',
       // TODO: 실제 배포 재시작 로직 구현
       // const result = await deploymentService.restartDeployment(id, req.user.id);
 
-      logger.info(`배포 재시작 요청 - 사용자: ${req.user.username}, 배포 ID: ${id}`);
+      logger.info(`배포 재시작 요청 - 사용자: ${req.user?.username || 'unknown'}, 배포 ID: ${id}`);
 
       res.json({
         success: true,
@@ -540,7 +540,7 @@ router.post('/:id/restart',
         data: {
           deploymentId: parseInt(id),
           status: 'pending',
-          requestedBy: req.user.username,
+          requestedBy: req.user?.username || 'unknown',
           requestedAt: new Date().toISOString(),
         },
       });
@@ -567,7 +567,7 @@ router.post('/:id/cancel',
       // TODO: 실제 배포 취소 로직 구현
       // const result = await deploymentService.cancelDeployment(id, req.user.id);
 
-      logger.info(`배포 취소 요청 - 사용자: ${req.user.username}, 배포 ID: ${id}`);
+      logger.info(`배포 취소 요청 - 사용자: ${req.user?.username || 'unknown'}, 배포 ID: ${id}`);
 
       res.json({
         success: true,
@@ -575,7 +575,7 @@ router.post('/:id/cancel',
         data: {
           deploymentId: parseInt(id),
           status: 'cancelled',
-          cancelledBy: req.user.username,
+          cancelledBy: req.user?.username || 'unknown',
           cancelledAt: new Date().toISOString(),
         },
       });
@@ -607,7 +607,7 @@ router.get('/logs/*',
         // Jenkins에서 빌드 로그 조회
         const logs = await jenkinsService.getBuildLog(projectName, buildNumber);
 
-        logger.info(`Jenkins 빌드 로그 조회 - 사용자: ${req.user.username}, 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+        logger.info(`Jenkins 빌드 로그 조회 - 사용자: ${req.user?.username || 'unknown'}, 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
 
         res.json({
           success: true,
@@ -1029,7 +1029,7 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
       // 실제 projectName은 version/projectName 조합
       const fullProjectName = `${version}/${projectName}`;
 
-      logger.info(`배포 정보 조회 요청 (3-segment) - 사용자: ${req.user.username}, 버전: ${version}, 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+      logger.info(`배포 정보 조회 요청 (3-segment) - 사용자: ${req.user?.username || 'unknown'}, 버전: ${version}, 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
       logger.info(`Full project name: ${fullProjectName}`);
 
       // 공통 함수 사용
@@ -1377,7 +1377,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
 
       const { projectName, buildNumber } = req.params;
 
-      logger.info(`배포 정보 조회 요청 - 사용자: ${req.user.username}, 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+      logger.info(`배포 정보 조회 요청 - 사용자: ${req.user?.username || 'unknown'}, 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
 
       const jenkinsService = getJenkinsService();
       const nasService = getNASService();
@@ -1978,7 +1978,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
           }
         }
 
-        logger.info(`Jenkins 배포 정보 조회 완료 - 사용자: ${req.user.username}, 프로젝트: ${projectName}, 빌드: ${buildNumber}, 디렉토리 검증: ${deploymentInfo.directoryVerified}`);
+        logger.info(`Jenkins 배포 정보 조회 완료 - 사용자: ${req.user?.username || 'unknown'}, 프로젝트: ${projectName}, 빌드: ${buildNumber}, 디렉토리 검증: ${deploymentInfo.directoryVerified}`);
 
         // 최종 응답 데이터 로깅 (fileInfoMap 포함)
         logger.info('Final deploymentInfo response data:', JSON.stringify({
@@ -2014,7 +2014,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
 router.get('/share/upload',
   async (req, res) => {
     try {
-      logger.info(`Upload 폴더 공유 링크 요청 - 사용자: ${req.user.username}`);
+      logger.info(`Upload 폴더 공유 링크 요청 - 사용자: ${req.user?.username || 'unknown'}`);
 
       const nasService = getNASService();
 
@@ -2306,7 +2306,7 @@ router.get(
       const { version, buildNumber } = req.params;
       const nasService = getNASService();
 
-      logger.info(`아티팩트 조회 요청 - 사용자: ${req.user.username}, 버전: ${version}, 빌드: ${buildNumber}`);
+      logger.info(`아티팩트 조회 요청 - 사용자: ${req.user?.username || 'unknown'}, 버전: ${version}, 빌드: ${buildNumber}`);
 
       // deployment_paths 테이블에서 아티팩트 검색 (NAS 대신 DB 사용)
       let artifacts = [];

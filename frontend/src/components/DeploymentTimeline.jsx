@@ -27,7 +27,24 @@ const DeploymentTimeline = ({ className = '' }) => {
       const response = await api.get(`/deployments/recent?hours=${hours}&limit=20`);
 
       if (response.data.success) {
-        setInitialDeployments(response.data.data || []);
+        const deploymentData = response.data.data || [];
+        
+        // 프론트엔드 형식에 맞게 데이터 변환 (camelCase -> snake_case)
+        const transformedData = deploymentData.map(deployment => ({
+          id: deployment.id,
+          project_name: deployment.projectName,
+          build_number: deployment.buildNumber,
+          status: deployment.status,
+          environment: deployment.environment || 'development',
+          deployed_by: deployment.deployedBy || 'Jenkins',
+          branch: deployment.branch || 'main',
+          created_at: deployment.deployedAt,
+          duration: deployment.duration,
+          description: deployment.commitMessage || `Build ${deployment.buildNumber} deployment`,
+          jenkins_url: deployment.jenkinsUrl
+        }));
+        
+        setInitialDeployments(transformedData);
       } else {
         throw new Error(response.data.error?.message || '배포 이력 조회 실패');
       }
