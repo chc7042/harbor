@@ -1424,10 +1424,26 @@ router.get('/deployment-info/:projectName/:buildNumber',
           logger.error(`DB 연결 정보 (2-segment) - host: ${process.env.DB_HOST}, port: ${process.env.DB_PORT}, db: ${process.env.DB_NAME}, user: ${process.env.DB_USER}`);
         }
 
-        // 2. DB에 데이터가 있으면 즉시 반환 (성능 최적화)
+        // 2. DB에 데이터가 있어도 항상 시놀로지 API로 실시간 조회
         logger.info(`🔍 DB 조회 결과 확인 - deploymentInfo exists: ${!!deploymentInfo}`);
         if (deploymentInfo) {
-          logger.info('📋 캐시된 데이터 발견, 즉시 반환합니다');
+          logger.info('📋 DB 데이터 발견, 시놀로지 API로 실시간 파일 정보 조회 중...');
+
+          // 시놀로지 API로 실시간 파일 정보 조회
+          let fileInfoMap = {};
+          try {
+            const synologyPath = `/release_version${deploymentInfo.nasPath.replace(/\\/g, '/')}`;
+            logger.info(`🔍 시놀로지 API 실시간 파일 정보 조회: ${synologyPath}`);
+            const listResult = await synologyApiService.listDirectoryFiles(synologyPath);
+            if (listResult.success && listResult.fileInfoMap) {
+              fileInfoMap = listResult.fileInfoMap;
+              logger.info(`✅ 시놀로지 API에서 실시간 파일 정보 조회 성공: ${Object.keys(fileInfoMap).length}개 파일`);
+            } else {
+              logger.warn(`⚠️ 시놀로지 API 실시간 파일 정보 조회 실패: ${listResult.error || 'Unknown error'}`);
+            }
+          } catch (fileInfoError) {
+            logger.error(`❌ 시놀로지 API 실시간 파일 정보 조회 중 오류: ${fileInfoError.message}`);
+          }
 
           return res.json({
             success: true,
@@ -1444,9 +1460,10 @@ router.get('/deployment-info/:projectName/:buildNumber',
               downloadFileVerified: deploymentInfo.downloadFileVerified || false,
               buildDate: deploymentInfo.buildDate,
               buildNumber: deploymentInfo.buildNumber,
-              cached: true, // 캐시된 데이터임을 표시
+              fileInfoMap: fileInfoMap, // 시놀로지 API에서 가져온 실시간 파일 정보
+              cached: false, // 실시간 조회 데이터임을 표시
             },
-            message: '캐시된 배포 정보를 조회했습니다.',
+            message: '실시간 배포 정보를 조회했습니다.',
           });
         }
 
@@ -1477,6 +1494,22 @@ router.get('/deployment-info/:projectName/:buildNumber',
           logger.info(`실시간 조회로 발견된 V 파일들: ${JSON.stringify(vFiles)}`);
           
           if (vFiles.length > 0) {
+            // 시놀로지 API로 파일 정보 조회
+            let fileInfoMap = {};
+            try {
+              const synologyPath = `/release_version/${searchPath}`;
+              logger.info(`🔍 실시간 조회 - 시놀로지 API 파일 정보 조회: ${synologyPath}`);
+              const listResult = await synologyApiService.listDirectoryFiles(synologyPath);
+              if (listResult.success && listResult.fileInfoMap) {
+                fileInfoMap = listResult.fileInfoMap;
+                logger.info(`✅ 실시간 조회 - 시놀로지 API에서 파일 정보 조회 성공: ${Object.keys(fileInfoMap).length}개 파일`);
+              } else {
+                logger.warn(`⚠️ 실시간 조회 - 시놀로지 API 파일 정보 조회 실패: ${listResult.error || 'Unknown error'}`);
+              }
+            } catch (fileInfoError) {
+              logger.error(`❌ 실시간 조회 - 시놀로지 API 파일 정보 조회 중 오류: ${fileInfoError.message}`);
+            }
+
             const realTimeData = {
               projectName,
               buildNumber: parseInt(buildNumber),
@@ -1489,6 +1522,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
               directoryVerified: true,
               downloadFileVerified: true,
               buildDate: expectedDate,
+              fileInfoMap: fileInfoMap, // 시놀로지 API에서 가져온 파일 정보 추가
               cached: false, // 실시간 조회 데이터임을 표시
             };
             

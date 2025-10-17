@@ -191,6 +191,15 @@ const DeploymentDetailModal = ({
                 console.log(`artifacts[${key}]:`, value, 'type:', typeof value, 'isArray:', Array.isArray(value));
               });
             }
+            if (data.data.fileInfoMap) {
+              console.log('🔍 fileInfoMap received:', data.data.fileInfoMap);
+              console.log('🔍 fileInfoMap type:', typeof data.data.fileInfoMap);
+              Object.entries(data.data.fileInfoMap || {}).forEach(([fileName, fileInfo]) => {
+                console.log(`🔍 fileInfoMap[${fileName}]:`, fileInfo);
+              });
+            } else {
+              console.log('⚠️ fileInfoMap not found in response');
+            }
             setDeploymentInfo(data.data);
           }
         } else {
@@ -774,6 +783,16 @@ const DeploymentDetailModal = ({
                                       const fileName = typeof representativeFile === 'object' && representativeFile ? 
                                         (representativeFile.name || representativeFile.fileName || representativeFile.originalname || JSON.stringify(representativeFile)) : 
                                         String(representativeFile || '파일명 없음');
+                                      
+                                      // fileInfoMap에서 파일 정보 가져오기
+                                      const fileInfo = deploymentInfo?.fileInfoMap?.[fileName] || {};
+                                      
+                                      const fileSize = fileInfo.size || 
+                                        (typeof representativeFile === 'object' && representativeFile ? 
+                                          (representativeFile.size || representativeFile.fileSize || representativeFile.originalSize || 0) : 0);
+                                      const fileDate = fileInfo.mtime || 
+                                        (typeof representativeFile === 'object' && representativeFile ? 
+                                          (representativeFile.mtime || representativeFile.modifiedTime || representativeFile.lastModified || representativeFile.modified || representativeFile.date) : null);
 
                                       return (
                                         <div key={`${type}-${index}`} className={`border rounded-lg p-4 ${typeInfo.colors.bg} ${typeInfo.colors.border}`}>
@@ -786,7 +805,13 @@ const DeploymentDetailModal = ({
                                                   <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">{fileCount}개 파일</span>
                                                 </p>
                                                 <p className={`text-sm ${typeInfo.colors.subtitle}`}>{fileName}</p>
-                                                <p className={`text-xs ${typeInfo.colors.subtitle}`}>NAS에서 검색됨</p>
+                                                <div className="flex items-center space-x-4 mt-1">
+                                                  <p className={`text-xs ${typeInfo.colors.subtitle}`}>크기: {formatFileSize(fileSize)}</p>
+                                                  {fileDate && (
+                                                    <p className={`text-xs ${typeInfo.colors.subtitle}`}>수정: {formatFileDate(fileDate)}</p>
+                                                  )}
+                                                  <p className={`text-xs ${typeInfo.colors.subtitle}`}>NAS에서 검색됨</p>
+                                                </div>
                                               </div>
                                             </div>
                                             <button 
@@ -819,14 +844,26 @@ const DeploymentDetailModal = ({
                                         const fileName = typeof file === 'object' && file ? 
                                           (file.name || file.fileName || file.originalname || JSON.stringify(file)) : 
                                           String(file);
-                                        const fileSize = typeof file === 'object' && file ? 
-                                          (file.size || file.fileSize || file.originalSize || 0) : 
-                                          0;
+                                        
+                                        // fileInfoMap에서 파일 정보 가져오기
+                                        const fileInfo = deploymentInfo?.fileInfoMap?.[fileName] || {};
+                                        
+                                        const fileSize = fileInfo.size || 
+                                          (typeof file === 'object' && file ? 
+                                            (file.size || file.fileSize || file.originalSize || 0) : 0);
+                                        const fileDate = fileInfo.mtime || 
+                                          (typeof file === 'object' && file ? 
+                                            (file.mtime || file.modifiedTime || file.lastModified || file.modified || file.date) : null);
                                         
                                         return (
                                           <div key={`file-${index}`} className="flex items-center justify-between bg-white p-2 rounded border">
-                                            <span className="text-sm font-mono text-gray-700 truncate">{fileName}</span>
-                                            <span className="text-xs text-gray-500">{formatFileSize(fileSize)}</span>
+                                            <div className="flex-1 min-w-0">
+                                              <span className="text-sm font-mono text-gray-700 truncate block">{fileName}</span>
+                                              {fileDate && (
+                                                <span className="text-xs text-gray-400 block">{formatFileDate(fileDate)}</span>
+                                              )}
+                                            </div>
+                                            <span className="text-xs text-gray-500 ml-2 flex-shrink-0">{formatFileSize(fileSize)}</span>
                                           </div>
                                         );
                                       })}
