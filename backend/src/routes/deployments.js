@@ -1,5 +1,4 @@
 const express = require('express');
-const { authenticateToken } = require('../middleware/authSimple');
 const { body, query, param, validationResult } = require('express-validator');
 const { AppError } = require('../middleware/error');
 const logger = require('../config/logger');
@@ -10,8 +9,7 @@ const { getDeploymentPathService } = require('../services/deploymentPathService'
 const router = express.Router();
 
 
-// 모든 배포 라우트는 인증 필요
-router.use(authenticateToken);
+// 인증 미들웨어 제거됨 - 간소화된 LDAP 인증 사용
 
 /**
  * @swagger
@@ -2054,7 +2052,6 @@ router.get('/deployment-info/:projectName/:buildNumber',
 
 // Upload 폴더 공유 링크 가져오기
 router.get('/share/upload',
-  authenticateToken,
   async (req, res) => {
     try {
       logger.info(`Upload 폴더 공유 링크 요청 - 사용자: ${req.user.username}`);

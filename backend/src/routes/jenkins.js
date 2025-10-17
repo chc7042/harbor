@@ -1,12 +1,10 @@
 const express = require('express');
 const { getJenkinsService } = require('../services/jenkinsService');
-const { authenticateToken } = require('../middleware/authSimple');
 const logger = require('../config/logger');
 
 const router = express.Router();
 
-// Apply authentication middleware to all Jenkins routes
-router.use(authenticateToken);
+// 인증 미들웨어 제거됨 - 간소화된 LDAP 인증 사용
 
 /**
  * @swagger

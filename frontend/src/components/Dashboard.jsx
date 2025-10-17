@@ -368,7 +368,7 @@ const Dashboard = () => {
         {/* 페이지 헤더 */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-primary-900 mb-2">
-            안녕하세요, {user?.name || user?.username}님
+            안녕하세요, {user?.fullName || user?.name || user?.username}님
           </h1>
           <div className="flex items-center justify-between">
             <p className="text-primary-600">

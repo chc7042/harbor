@@ -1,12 +1,10 @@
 const express = require('express');
-const { authenticateToken } = require('../middleware/authSimple');
 const { getJenkinsService } = require('../services/jenkinsService');
 const logger = require('../config/logger');
 
 const router = express.Router();
 
-// 모든 대시보드 라우트는 인증 필요
-router.use(authenticateToken);
+// 인증 미들웨어 제거됨 - 간소화된 LDAP 인증 사용
 
 // 대시보드 메인 데이터 조회
 router.get('/',

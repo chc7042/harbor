@@ -5,10 +5,8 @@ const {
   resetMetrics,
   getHealthWithMetrics,
 } = require('../controllers/metricsController');
-const { authenticateToken } = require('../middleware/authSimple');
 
-// Apply authentication middleware to all routes
-router.use(authenticateToken);
+// 인증 미들웨어 제거됨 - 간소화된 LDAP 인증 사용
 
 // GET /api/metrics - Get metrics summary
 router.get('/', getMetrics);

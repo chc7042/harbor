@@ -179,7 +179,7 @@ const ProjectHierarchy = ({
     }
 
     // 실제 사용자 정보 반환 (name 우선, 없으면 username)
-    const currentUser = user.name || user.username || user.email || 'Unknown User';
+    const currentUser = user.fullName || user.name || user.username || user.email || 'Unknown User';
     return currentUser;
   };
 

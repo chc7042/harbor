@@ -1,6 +1,5 @@
 const express = require('express');
 const multer = require('multer');
-const { authenticateToken } = require('../middleware/authSimple');
 const { getNASService } = require('../services/nasService');
 const downloadService = require('../services/downloadService');
 const logger = require('../config/logger');
@@ -38,8 +37,7 @@ const upload = multer({
   },
 });
 
-// 모든 파일 라우트는 인증 필요
-router.use(authenticateToken);
+// 인증 미들웨어 제거됨 - 간소화된 LDAP 인증 사용
 
 // NAS 파일 다운로드 (Synology API 기반)
 router.get('/download',

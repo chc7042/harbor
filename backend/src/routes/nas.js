@@ -1,5 +1,4 @@
 const express = require('express');
-const { authenticateToken } = require('../middleware/authSimple');
 const { query, param, validationResult } = require('express-validator');
 const { getNASService } = require('../services/nasService');
 const { AppError } = require('../middleware/error');
@@ -7,8 +6,7 @@ const logger = require('../config/logger');
 
 const router = express.Router();
 
-// 모든 NAS 라우트는 인증 필요
-router.use(authenticateToken);
+// 인증 미들웨어 제거됨 - 간소화된 LDAP 인증 사용
 
 /**
  * @swagger
