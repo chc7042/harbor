@@ -378,7 +378,7 @@ class DownloadService {
     if (this.toastManager) {
       switch (type) {
         case 'preparing':
-          this.toastManager.showInfo(`${fileName} 다운로드 준비 중...`, { downloadId });
+          // 준비 중 토스트는 표시하지 않음 (started와 중복)
           break;
         case 'start':
           this.toastManager.showDownloadStart(fileName, { downloadId });

@@ -65,6 +65,10 @@ export const AuthProvider = ({ children }) => {
 
       // 토큰이 있으면 사용자 정보 확인
       const response = await api.get('/auth/me');
+      
+      console.log('🔍 DEBUG: API Response from /auth/me:', JSON.stringify(response.data, null, 2));
+      console.log('🔍 DEBUG: User object:', JSON.stringify(response.data.user, null, 2));
+      console.log('🔍 DEBUG: User name field:', response.data.user?.name);
 
       dispatch({
         type: 'LOGIN_SUCCESS',
@@ -83,6 +87,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (username, password) => {
+    console.log('🚀 LOGIN STARTED:', { username, password: '***' });
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
 
@@ -92,6 +97,10 @@ export const AuthProvider = ({ children }) => {
       });
 
       const { user, token } = response.data;
+      
+      console.log('🔍 DEBUG: Login API Response:', JSON.stringify(response.data, null, 2));
+      console.log('🔍 DEBUG: Login User object:', JSON.stringify(user, null, 2));
+      console.log('🔍 DEBUG: Login User name field:', user?.name);
 
       // 토큰을 로컬 스토리지에 저장
       localStorage.setItem('token', token);

@@ -171,8 +171,14 @@ app.use('/api/health', healthRoutes);
 
 // API 라우트
 if (isRateLimitingDisabled) {
-  app.use('/api/auth', authRoutes);
-  app.use('/auth', authRoutes); // NPM strips /api prefix
+  app.use('/api/auth', (req, res, next) => {
+    console.log('🚨🚨🚨 AUTH REQUEST:', req.method, req.path);
+    next();
+  }, authRoutes);
+  app.use('/auth', (req, res, next) => {
+    console.log('🚨🚨🚨 AUTH REQUEST (NO PREFIX):', req.method, req.path);
+    next();
+  }, authRoutes); // NPM strips /api prefix
 } else {
   app.use('/api/auth', authLimiter, authRoutes);
   app.use('/auth', authLimiter, authRoutes); // NPM strips /api prefix

@@ -196,11 +196,22 @@ class LDAPConfig {
       user.email = `${user.username}@${process.env.LDAP_DEFAULT_EMAIL_DOMAIN}`;
     }
 
-    // fullName이 없으면 username 사용
-    if (!user.fullName && user.username) {
-      user.fullName = user.username.split('.').map(name =>
-        name.charAt(0).toUpperCase() + name.slice(1),
-      ).join(' ');
+    // 특정 사용자명을 한국어로 매핑 (우선적으로 적용)
+    if (user.username) {
+      const usernameToKoreanMap = {
+        'nicolas.choi': '최현창',
+        'admin': '관리자',
+      };
+      
+      if (usernameToKoreanMap[user.username]) {
+        user.fullName = usernameToKoreanMap[user.username];
+        console.log(`🔥 FORCED Korean mapping: ${user.username} -> ${user.fullName}`);
+      } else if (!user.fullName) {
+        // fullName이 없으면 username을 포맷해서 사용
+        user.fullName = user.username.split('.').map(name =>
+          name.charAt(0).toUpperCase() + name.slice(1),
+        ).join(' ');
+      }
     }
 
     // 부서 정보가 없으면 그룹 멤버십을 기반으로 부서 결정
@@ -242,12 +253,15 @@ class LDAPConfig {
       }
     }
 
-    // 빈 값 정리 (username은 필수이므로 제외)
+    // 빈 값 정리 (username과 fullName은 필수이므로 제외)
+    console.log('🔍 DEBUG: Before cleanup, user.fullName:', user.fullName);
     Object.keys(user).forEach(key => {
-      if (key !== 'username' && (user[key] === undefined || user[key] === '')) {
+      if (key !== 'username' && key !== 'fullName' && (user[key] === undefined || user[key] === '')) {
+        console.log(`🗑️ DEBUG: Deleting key '${key}' with value:`, user[key]);
         delete user[key];
       }
     });
+    console.log('🔍 DEBUG: After cleanup, user.fullName:', user.fullName);
 
     return user;
   }
