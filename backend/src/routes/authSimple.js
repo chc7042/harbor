@@ -88,14 +88,67 @@ router.post('/login', async (req, res) => {
         userId: dbUser.id,
         username: dbUser.username,
         email: dbUser.email,
-        fullName: dbUser.full_name,  // DB에서 가져온 값 사용
+        full_name: dbUser.full_name,  // DB에서 가져온 값 사용 (프런트엔드 기대값)
         department: dbUser.department,
       },
+      token: 'dummy-token',  // 임시 토큰 (실제로는 JWT 생성)
       message: '로그인 성공'
     });
 
   } catch (error) {
     console.error('🔥 LOGIN ERROR:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: '서버 오류가 발생했습니다.' }
+    });
+  }
+});
+
+/**
+ * 현재 사용자 정보 조회 (JWT 토큰 기반)
+ */
+router.get('/me', async (req, res) => {
+  try {
+    // 임시로 localStorage에서 전달받은 토큰 기반으로 사용자 조회
+    // 실제로는 JWT 미들웨어에서 처리해야 하지만, 현재는 단순화
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: { message: '인증 토큰이 필요합니다.' }
+      });
+    }
+
+    // 임시로 admin 사용자 정보 반환 (실제로는 토큰에서 사용자 정보 추출)
+    // TODO: JWT 토큰 검증 및 사용자 정보 추출 로직 구현
+    const username = 'nicolas.choi'; // 임시로 하드코딩
+    
+    const findQuery = 'SELECT * FROM users WHERE username = $1';
+    const findResult = await query(findQuery, [username]);
+    
+    if (findResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: '사용자를 찾을 수 없습니다.' }
+      });
+    }
+    
+    const dbUser = findResult.rows[0];
+    
+    res.json({
+      success: true,
+      user: {
+        userId: dbUser.id,
+        username: dbUser.username,
+        email: dbUser.email,
+        full_name: dbUser.full_name,  // full_name으로 전송 (프런트엔드 기대값)
+        department: dbUser.department,
+      }
+    });
+
+  } catch (error) {
+    console.error('🔥 /auth/me ERROR:', error);
     res.status(500).json({
       success: false,
       error: { message: '서버 오류가 발생했습니다.' }
