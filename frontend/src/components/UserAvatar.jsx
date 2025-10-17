@@ -56,7 +56,7 @@ const UserAvatar = ({ user, size = 32, className = "" }) => {
     return (
       <img
         src={avatarUrl}
-        alt={`${user?.name || user?.username} avatar`}
+        alt={`${user?.full_name || user?.name || user?.username} avatar`}
         className={`rounded-full object-cover ${className}`}
         style={{ width: size, height: size }}
         onError={() => {

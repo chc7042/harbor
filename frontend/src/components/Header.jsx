@@ -118,10 +118,10 @@ const Header = () => {
                 <UserAvatar user={user} size={32} />
                 <div className="hidden md:block text-left">
                   <p className="text-primary-900 font-medium">
-                    {user?.name || user?.username}
+                    {user?.full_name || user?.name || user?.username}
                   </p>
                   <p className="text-primary-500 text-xs">
-                    {user?.department || '사용자'}
+                    {user?.department || 'Development'}
                   </p>
                 </div>
                 <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,7 +139,7 @@ const Header = () => {
                   <div className="dropdown-menu z-20">
                     <div className="px-4 py-3 border-b border-primary-200">
                       <p className="text-sm font-medium text-primary-900">
-                        {user?.name || user?.username}
+                        {user?.full_name || user?.name || user?.username}
                       </p>
                       <p className="text-xs text-primary-500">
                         {user?.email}
@@ -202,10 +202,10 @@ const Header = () => {
                 <UserAvatar user={user} size={64} />
                 <div>
                   <h3 className="text-lg font-medium text-primary-900">
-                    {user?.name || user?.username}
+                    {user?.full_name || user?.name || user?.username}
                   </h3>
                   <p className="text-sm text-primary-500">
-                    {user?.department || '사용자'}
+                    {user?.department || 'Development'}
                   </p>
                   <p className="text-sm text-primary-400">
                     {user?.email}
