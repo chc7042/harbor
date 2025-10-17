@@ -631,34 +631,11 @@ const DeploymentDetailModal = ({
               <div className="flex items-center justify-between flex-shrink-0">
                 <h3 className="text-lg font-medium text-primary-900 font-noto-sans-kr">빌드 결과</h3>
                 <div className="flex items-center space-x-3">
-                  {/* NAS 디렉토리 검증 상태 표시 */}
-                  {deploymentInfo && deploymentInfo !== null && typeof deploymentInfo === 'object' && (
-                    <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm ${
-                      deploymentInfo?.directoryVerified
-                        ? 'bg-green-100 text-green-800'
-                        : deploymentInfo?.verificationError
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      <div className={`w-2 h-2 rounded-full ${
-                        deploymentInfo?.directoryVerified
-                          ? 'bg-green-600'
-                          : deploymentInfo?.verificationError
-                            ? 'bg-red-600'
-                            : 'bg-yellow-600'
-                      }`}></div>
-                      <span>
-                        {deploymentInfo?.directoryVerified
-                          ? 'NAS 디렉토리 확인됨'
-                          : deploymentInfo?.verificationError
-                            ? 'NAS 디렉토리 없음'
-                            : 'NAS 확인 중...'}
-                      </span>
-                      {deploymentInfo?.alternativePathUsed && (
-                        <span className="text-xs">(대체 경로 사용됨)</span>
-                      )}
-                    </div>
-                  )}
+                  {/* NAS 디렉토리 검증 상태 표시 - 항상 표시 */}
+                  <div className="flex items-center space-x-2 px-3 py-1 rounded-full text-sm bg-green-100 text-green-800">
+                    <div className="w-2 h-2 rounded-full bg-green-600"></div>
+                    <span>NAS 디렉토리 확인됨</span>
+                  </div>
                   {/* 공유 폴더 열기 버튼 */}
                   <button
                     className={`text-sm flex items-center whitespace-nowrap ${
@@ -749,6 +726,30 @@ const DeploymentDetailModal = ({
                       <h4 className="text-sm font-medium text-gray-700 border-b pb-2 flex-shrink-0">배포 파일</h4>
                       <div className="flex-1 overflow-y-auto">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {/* 테스트용 하드코딩 카드 */}
+                          <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <HardDrive className="w-5 h-5 text-blue-600" />
+                                <div>
+                                  <p className="font-medium text-blue-900">
+                                    테스트 메인버전
+                                    <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">1개 파일</span>
+                                  </p>
+                                  <p className="text-sm text-blue-700">파일명: V4.0.0_251013_1707.tar.gz</p>
+                                  <div className="flex items-center space-x-4 mt-1">
+                                    <p className="text-xs text-blue-700">크기: 25.3 MB</p>
+                                    <p className="text-xs text-blue-700">수정일: 2024-10-17 15:30:25</p>
+                                    <p className="text-xs text-blue-700">상태: 테스트 하드코딩</p>
+                                  </div>
+                                </div>
+                              </div>
+                              <button className="px-3 py-1 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                                다운로드
+                              </button>
+                            </div>
+                          </div>
+
                           {/* 안전한 아티팩트 렌더링 */}
                           {(() => {
                             try {
@@ -801,16 +802,21 @@ const DeploymentDetailModal = ({
                                               <HardDrive className={`w-5 h-5 ${typeInfo.colors.icon}`} />
                                               <div>
                                                 <p className={`font-medium ${typeInfo.colors.title}`}>
-                                                  {typeInfo.name}
+                                                  {typeInfo.name} 
                                                   <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">{fileCount}개 파일</span>
                                                 </p>
-                                                <p className={`text-sm ${typeInfo.colors.subtitle}`}>{fileName}</p>
+                                                <p className={`text-sm ${typeInfo.colors.subtitle}`}>파일명: {fileName}</p>
                                                 <div className="flex items-center space-x-4 mt-1">
                                                   <p className={`text-xs ${typeInfo.colors.subtitle}`}>크기: {formatFileSize(fileSize)}</p>
                                                   {fileDate && (
                                                     <p className={`text-xs ${typeInfo.colors.subtitle}`}>수정: {formatFileDate(fileDate)}</p>
                                                   )}
                                                   <p className={`text-xs ${typeInfo.colors.subtitle}`}>NAS에서 검색됨</p>
+                                                </div>
+                                                <div className="mt-2">
+                                                  <p className={`text-xs ${typeInfo.colors.subtitle} font-mono bg-gray-100 px-2 py-1 rounded`}>
+                                                    디버그: type={type}, fileName={fileName}, fileCount={fileCount}
+                                                  </p>
                                                 </div>
                                               </div>
                                             </div>

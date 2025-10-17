@@ -1432,9 +1432,28 @@ router.get('/deployment-info/:projectName/:buildNumber',
           // 시놀로지 API로 실시간 파일 정보 조회
           let fileInfoMap = {};
           try {
-            const synologyPath = `/release_version${deploymentInfo.nasPath.replace(/\\/g, '/')}`;
-            logger.info(`🔍 시놀로지 API 실시간 파일 정보 조회: ${synologyPath}`);
-            const listResult = await synologyApiService.listDirectoryFiles(synologyPath);
+            // nasPath에서 NAS 호스트 부분 제거하고 /release_version으로 시작하도록 정규화
+            let originalPath = deploymentInfo.nasPath;
+            logger.info(`🔍 Original nasPath: ${originalPath}`);
+            
+            let cleanPath = originalPath.replace(/\\/g, '/');
+            logger.info(`🔍 After replacing backslashes: ${cleanPath}`);
+            
+            // NAS 호스트 경로 패턴 제거 
+            // 예: /nas.roboetech.com/release_version/... -> /release_version/...
+            // 또는 //nas.roboetech.com/release_version/... -> /release_version/...
+            if (cleanPath.includes('nas.roboetech.com')) {
+              // nas.roboetech.com이 포함된 경우, 그 뒤의 /release_version부터 사용
+              cleanPath = cleanPath.replace(/^.*nas\.roboetech\.com\/release_version/, '/release_version');
+            } else if (!cleanPath.startsWith('/release_version')) {
+              // release_version으로 시작하지 않는 경우 추가
+              cleanPath = '/release_version' + (cleanPath.startsWith('/') ? cleanPath : '/' + cleanPath);
+            }
+            
+            logger.info(`🔍 Final cleaned path: ${cleanPath}`);
+            
+            logger.info(`🔍 시놀로지 API 실시간 파일 정보 조회: ${cleanPath}`);
+            const listResult = await synologyApiService.listDirectoryFiles(cleanPath);
             if (listResult.success && listResult.fileInfoMap) {
               fileInfoMap = listResult.fileInfoMap;
               logger.info(`✅ 시놀로지 API에서 실시간 파일 정보 조회 성공: ${Object.keys(fileInfoMap).length}개 파일`);

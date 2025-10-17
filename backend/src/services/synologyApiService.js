@@ -342,6 +342,16 @@ class SynologyApiService {
           logger.info('Sample file structure:', JSON.stringify(files[0], null, 2));
           logger.info('Full response data:', JSON.stringify(response.data, null, 2));
         }
+        // fileInfoMap 생성
+        const fileInfoMap = {};
+        files.forEach(file => {
+          fileInfoMap[file.name] = {
+            size: file.additional?.size || file.size || 0,
+            mtime: file.additional?.time?.mtime || file.time?.mtime || file.mtime || null,
+            type: file.additional?.type || file.type || null,
+          };
+        });
+
         return {
           success: true,
           files: files.map(file => ({
@@ -353,6 +363,7 @@ class SynologyApiService {
             type: file.additional?.type || file.type || null,
             additional: file.additional, // 원본 additional 데이터도 포함
           })),
+          fileInfoMap: fileInfoMap, // 파일 정보 맵 추가
         };
       } else {
         throw new Error(`Failed to list directory files: ${response.data?.error?.code || 'Unknown error'}`);
