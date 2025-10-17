@@ -504,34 +504,11 @@ router.get('/:id',
 
       // TODO: 실제 배포 상세 조회 로직 구현
       // const deployment = await deploymentService.getDeploymentById(id);
-
-      // 임시 데이터
-      const mockDeployment = {
-        id: parseInt(id),
-        projectName: 'jenkins-nas-deployment-history',
-        environment: 'production',
-        version: 'v1.0.0',
-        status: 'success',
-        deployedBy: '홍길동',
-        deployedAt: new Date().toISOString(),
-        duration: 180,
-        buildNumber: 42,
-        commitHash: 'abc123def456',
-        commitMessage: 'feat: Add deployment history feature',
-        jenkinsUrl: 'http://jenkins.internal:8080/job/deploy-nas/42/',
-        logs: [
-          { timestamp: new Date().toISOString(), level: 'INFO', message: '배포 시작' },
-          { timestamp: new Date().toISOString(), level: 'INFO', message: 'Docker 이미지 빌드 중...' },
-          { timestamp: new Date().toISOString(), level: 'SUCCESS', message: '배포 완료' },
-        ],
-      };
-
+      
       logger.info(`배포 상세 조회 - 사용자: ${req.user.username}, 배포 ID: ${id}`);
-
-      res.json({
-        success: true,
-        data: mockDeployment,
-      });
+      
+      // 실제 배포 서비스가 구현되지 않음
+      throw new AppError('배포 상세 정보 서비스가 아직 구현되지 않았습니다.', 501);
     } catch (error) {
       next(error);
     }
@@ -638,27 +615,10 @@ router.get('/logs/*',
         });
 
       } catch (jenkinsError) {
-        logger.error('Jenkins 빌드 로그 조회 실패, mock 데이터 사용:', jenkinsError.message);
-
-        // Jenkins 연결 실패 시 mock 데이터 반환
-        const mockLogs = [
-          { timestamp: '2025-09-29 12:30:01', level: 'INFO', message: `[${projectName}#${buildNumber}] 🚀 Starting Jenkins deployment process...` },
-          { timestamp: '2025-09-29 12:30:03', level: 'INFO', message: `[${projectName}#${buildNumber}] 📥 Fetching code from Git repository` },
-          { timestamp: '2025-09-29 12:30:05', level: 'INFO', message: `[${projectName}#${buildNumber}] 🔍 Checking out mr3.0.0 release branch` },
-          { timestamp: '2025-09-29 12:30:12', level: 'INFO', message: `[${projectName}#${buildNumber}] 🔨 Building mr3.0.0 release package` },
-          { timestamp: '2025-09-29 12:30:25', level: 'INFO', message: `[${projectName}#${buildNumber}] 🧪 Running unit tests for mr3.0.0` },
-          { timestamp: '2025-09-29 12:30:38', level: 'INFO', message: `[${projectName}#${buildNumber}] ✅ All tests passed for mr3.0.0` },
-          { timestamp: '2025-09-29 12:30:42', level: 'INFO', message: `[${projectName}#${buildNumber}] 📦 Creating mr3.0.0 release artifacts` },
-          { timestamp: '2025-09-29 12:30:48', level: 'INFO', message: `[${projectName}#${buildNumber}] 🚀 Deploying mr3.0.0 to production environment` },
-          { timestamp: '2025-09-29 12:30:55', level: 'SUCCESS', message: `[${projectName}#${buildNumber}] 🎉 mr3.0.0 deployment completed successfully!` },
-          { timestamp: '2025-09-29 12:30:56', level: 'INFO', message: '⚠️  NOTE: This is MOCK DATA - Jenkins server is not reachable' },
-        ];
-
-        res.json({
-          success: true,
-          data: mockLogs,
-          warning: 'Jenkins 서버에 연결할 수 없어 mock 데이터를 표시합니다.',
-        });
+        logger.error('Jenkins 빌드 로그 조회 실패:', jenkinsError.message);
+        
+        // Jenkins 연결 실패 시 에러 반환
+        throw new AppError(`Jenkins 빌드 로그를 조회할 수 없습니다: ${jenkinsError.message}`, 503);
       }
     } catch (error) {
       next(error);
