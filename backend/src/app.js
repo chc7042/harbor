@@ -18,6 +18,7 @@ const projectRoutes = require('./routes/projects');
 const fileRoutes = require('./routes/files');
 const metricsRoutes = require('./routes/metrics');
 const jenkinsRoutes = require('./routes/jenkins');
+const cacheRoutes = require('./routes/cache');
 const { errorHandler } = require('./middleware/error');
 const { initializeDatabase } = require('./config/database');
 const logger = require('./config/logger');
@@ -202,6 +203,8 @@ app.use('/api/metrics', metricsRoutes);
 app.use('/metrics', metricsRoutes); // NPM strips /api prefix
 app.use('/api/jenkins', jenkinsRoutes);
 app.use('/jenkins', jenkinsRoutes); // NPM strips /api prefix
+app.use('/api/cache', cacheRoutes);
+app.use('/cache', cacheRoutes); // NPM strips /api prefix
 
 // 404 핸들러
 app.use('*', (req, res) => {

@@ -2,13 +2,17 @@ const crypto = require('crypto');
 const { AppError } = require('../middleware/error');
 const logger = require('../config/logger');
 const { query } = require('../config/database');
+const { getNASService } = require('./nasService');
+const { getPathResolver } = require('./pathResolver');
 
 /**
  * Jenkins Webhook 처리 서비스
  */
 class JenkinsWebhookService {
   constructor() {
-    this.webhookSecret = process.env.JENKINS_WEBHOOK_SECRET || '';
+    this.webhookSecret = process.env.JENKINS_WEBHOOK_SECRET || null;
+    logger.info(`🔧 [JENKINS-WEBHOOK] Webhook secret configured: ${!!this.webhookSecret}`);
+    
     this.supportedEvents = [
       'job.started',
       'job.completed',
@@ -74,7 +78,7 @@ class JenkinsWebhookService {
    */
   verifySignature(payload, signature, secret) {
     if (!secret) {
-      logger.warn('Jenkins webhook secret not configured');
+      logger.warn('Jenkins webhook secret not configured, skipping signature verification');
       return true; // 개발환경에서는 서명 검증 건너뛰기
     }
 
@@ -385,6 +389,85 @@ class JenkinsWebhookService {
   }
 
   /**
+   * 성공한 빌드에 대해 NAS 증분 스캔 트리거
+   */
+  async triggerNASScanForBuild(deploymentData) {
+    try {
+      // 성공한 빌드만 스캔
+      if (deploymentData.status !== 'success') {
+        logger.info(`🔍 [JENKINS-WEBHOOK] Skipping NAS scan for non-successful build: ${deploymentData.project_name} #${deploymentData.build_number} (${deploymentData.status})`);
+        return null;
+      }
+
+      logger.info(`🔍 [JENKINS-WEBHOOK] Triggering NAS scan for successful build: ${deploymentData.project_name} #${deploymentData.build_number}`);
+
+      const pathResolver = getPathResolver();
+      
+      // 프로젝트명에서 버전 추출
+      const version = pathResolver.extractVersion(deploymentData.project_name);
+      if (!version) {
+        logger.warn(`🔍 [JENKINS-WEBHOOK] Could not extract version from project: ${deploymentData.project_name}`);
+        return null;
+      }
+
+      // NAS 서비스를 통해 증분 스캔 실행
+      const nasService = getNASService();
+      
+      // 특정 버전에 대한 증분 스캔 실행 (지난 1시간)
+      const scanOptions = {
+        sinceHours: 1,  // 지난 1시간 내 변경된 파일만
+        saveToDatabase: true,
+        version: version,
+        triggeredBy: 'jenkins-webhook',
+        buildNumber: deploymentData.build_number.toString(),
+        buildDate: this.extractBuildDate(deploymentData)
+      };
+
+      const scanResult = await nasService.incrementalScanAndSave(scanOptions);
+      
+      logger.info(`🔍 [JENKINS-WEBHOOK] NAS scan completed for ${deploymentData.project_name}: found ${scanResult.newFiles} new files, ${scanResult.updatedFiles} updated files`);
+      
+      return {
+        triggered: true,
+        version: version,
+        scanResult: scanResult,
+        buildInfo: {
+          project: deploymentData.project_name,
+          buildNumber: deploymentData.build_number,
+          buildDate: scanOptions.buildDate
+        }
+      };
+
+    } catch (error) {
+      logger.error(`🔍 [JENKINS-WEBHOOK] Failed to trigger NAS scan for ${deploymentData.project_name} #${deploymentData.build_number}:`, error.message);
+      // NAS 스캔 실패가 webhook 처리 전체를 실패시키지 않도록 함
+      return {
+        triggered: false,
+        error: error.message,
+        buildInfo: {
+          project: deploymentData.project_name,
+          buildNumber: deploymentData.build_number
+        }
+      };
+    }
+  }
+
+  /**
+   * 빌드 날짜 추출 (YYMMDD 형식)
+   */
+  extractBuildDate(deploymentData) {
+    const buildTime = deploymentData.completed_at || deploymentData.started_at || new Date();
+    const date = new Date(buildTime);
+    
+    // YYMMDD 형식으로 변환
+    const year = date.getFullYear().toString().slice(-2);
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    
+    return `${year}${month}${day}`;
+  }
+
+  /**
    * Webhook 이벤트 처리
    */
   async processWebhook(payload, signature, headers = {}) {
@@ -418,6 +501,12 @@ class JenkinsWebhookService {
       // 데이터베이스 저장
       const savedDeployment = await this.saveDeployment(deploymentData);
 
+      // 성공한 빌드에 대해 NAS 스캔 트리거
+      let nasScanResult = null;
+      if (eventType.includes('completed') || eventType.includes('finalized')) {
+        nasScanResult = await this.triggerNASScanForBuild(deploymentData);
+      }
+
       // 웹소켓을 통한 실시간 업데이트 (추후 구현)
       // this.notifyClients(savedDeployment);
 
@@ -425,6 +514,7 @@ class JenkinsWebhookService {
         success: true,
         deployment: savedDeployment,
         eventType,
+        nasScan: nasScanResult,
       };
 
     } catch (error) {
@@ -452,15 +542,50 @@ class JenkinsWebhookService {
       const result = await query(statsQuery);
       const stats = result.rows[0];
 
+      // NAS 스캔 통계 추가 (nas_artifacts 테이블에서 Jenkins로 트리거된 스캔 확인)
+      let nasScanStats = {
+        totalScans: 0,
+        recentScans: 0,
+        triggeredByJenkins: 0
+      };
+
+      try {
+        const nasScanQuery = `
+          SELECT
+            COUNT(*) as total_scans,
+            COUNT(CASE WHEN scanned_at > CURRENT_TIMESTAMP - INTERVAL '1 hour' THEN 1 END) as recent_scans,
+            COUNT(CASE WHEN search_path LIKE '%jenkins-webhook%' THEN 1 END) as triggered_by_jenkins
+          FROM nas_artifacts
+          WHERE scanned_at > CURRENT_TIMESTAMP - INTERVAL '24 hours'
+        `;
+        
+        const nasResult = await query(nasScanQuery);
+        if (nasResult.rows[0]) {
+          nasScanStats = {
+            totalScans: parseInt(nasResult.rows[0].total_scans),
+            recentScans: parseInt(nasResult.rows[0].recent_scans),
+            triggeredByJenkins: parseInt(nasResult.rows[0].triggered_by_jenkins)
+          };
+        }
+      } catch (nasError) {
+        logger.warn('Failed to get NAS scan stats:', nasError.message);
+      }
+
       return {
         status: 'active',
         secretConfigured: !!this.webhookSecret,
         supportedEvents: this.supportedEvents,
+        nasIntegration: {
+          enabled: true,
+          autoScanOnSuccess: true,
+          scanWindow: '1 hour'
+        },
         stats: {
           totalWebhooks: parseInt(stats.total_webhooks),
           successfulDeployments: parseInt(stats.successful_deployments),
           failedDeployments: parseInt(stats.failed_deployments),
           recentWebhooks: parseInt(stats.recent_webhooks),
+          nasScan: nasScanStats
         },
         timestamp: new Date().toISOString(),
       };
@@ -471,11 +596,21 @@ class JenkinsWebhookService {
           status: 'active',
           secretConfigured: !!this.webhookSecret,
           supportedEvents: this.supportedEvents,
+          nasIntegration: {
+            enabled: true,
+            autoScanOnSuccess: true,
+            scanWindow: '1 hour'
+          },
           stats: {
             totalWebhooks: 0,
             successfulDeployments: 0,
             failedDeployments: 0,
             recentWebhooks: 0,
+            nasScan: {
+              totalScans: 0,
+              recentScans: 0,
+              triggeredByJenkins: 0
+            }
           },
           timestamp: new Date().toISOString(),
         };

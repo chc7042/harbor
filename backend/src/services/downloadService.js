@@ -1,12 +1,12 @@
 const logger = require('../config/logger');
 
 /**
- * 다운로드 서비스 - Synology API 기반
+ * 다운로드 서비스 - NAS 서비스 기반
  */
 class DownloadService {
   constructor() {
-    const SynologyApiService = require('./synologyApiService');
-    this.synologyApiService = new SynologyApiService();
+    const { getNASService } = require('./nasService');
+    this.nasService = getNASService();
   }
 
   /**
@@ -17,7 +17,7 @@ class DownloadService {
       logger.info(`Creating download URL for: ${filePath}`);
 
       // 1. 원본 파일명으로 시도
-      let directResult = await this.synologyApiService.createDirectDownloadUrl(filePath);
+      let directResult = await this.nasService.createDirectDownloadUrl(filePath);
       if (directResult.success && directResult.directNasUrl) {
         logger.info(`Direct download URL created: ${directResult.directNasUrl}`);
         return {
@@ -34,7 +34,7 @@ class DownloadService {
         const encryptedPath = filePath.replace('.tar.gz', '.enc.tar.gz');
         logger.info(`Original file not found, trying encrypted version: ${encryptedPath}`);
         
-        directResult = await this.synologyApiService.createDirectDownloadUrl(encryptedPath);
+        directResult = await this.nasService.createDirectDownloadUrl(encryptedPath);
         if (directResult.success && directResult.directNasUrl) {
           logger.info(`Direct download URL created with encrypted version: ${directResult.directNasUrl}`);
           return {
@@ -52,7 +52,7 @@ class DownloadService {
           const actualFilePath = await this.findActualFileByPattern(filePath);
           if (actualFilePath) {
             logger.info(`Found actual file: ${actualFilePath}`);
-            directResult = await this.synologyApiService.createDirectDownloadUrl(actualFilePath);
+            directResult = await this.nasService.createDirectDownloadUrl(actualFilePath);
             if (directResult.success && directResult.directNasUrl) {
               logger.info(`Direct download URL created with actual file: ${directResult.directNasUrl}`);
               return {
@@ -69,7 +69,7 @@ class DownloadService {
       }
 
       // 3. 직접 다운로드 실패 시 공유링크 시도
-      const shareResult = await this.synologyApiService.createFileDownloadLink(filePath);
+      const shareResult = await this.nasService.createFileDownloadLink(filePath);
       if (shareResult.success && shareResult.directNasUrl) {
         logger.info(`Share link download URL created: ${shareResult.directNasUrl}`);
         return {
@@ -85,7 +85,7 @@ class DownloadService {
         const encryptedPath = filePath.replace('.tar.gz', '.enc.tar.gz');
         logger.info(`Share link failed, trying encrypted version: ${encryptedPath}`);
         
-        const encryptedShareResult = await this.synologyApiService.createFileDownloadLink(encryptedPath);
+        const encryptedShareResult = await this.nasService.createFileDownloadLink(encryptedPath);
         if (encryptedShareResult.success && encryptedShareResult.directNasUrl) {
           logger.info(`Share link download URL created with encrypted version: ${encryptedShareResult.directNasUrl}`);
           return {
@@ -114,12 +114,27 @@ class DownloadService {
    */
   async findActualFileByPattern(filePath) {
     try {
-      // 파일 경로를 분석해서 디렉토리와 패턴 추출
+      logger.info(`🔍 [SMART-DOWNLOAD] Starting smart file search for: ${filePath}`);
+      
+      // 중앙화된 경로 해결 서비스 사용
+      const { getPathResolver } = require('./pathResolver');
+      const pathResolver = getPathResolver();
+      
+      // 중앙 서비스로 파일 경로 해결
+      const resolvedPath = await pathResolver.resolveFilePath(filePath);
+      
+      if (resolvedPath) {
+        logger.info(`🔍 [SMART-DOWNLOAD] Successfully resolved via central service: ${resolvedPath}`);
+        return resolvedPath;
+      }
+      
+      logger.warn(`🔍 [SMART-DOWNLOAD] Central service could not resolve, trying fallback: ${filePath}`);
+      
+      // 폴백: 기존 방식 (간소화된 버전)
       const pathParts = filePath.split('/');
       const fileName = pathParts.pop();
       const directoryPath = pathParts.join('/');
       
-      // 파일명 패턴 분석 (V1.0.1_250407_1000.tar.gz)
       const fileNameMatch = fileName.match(/^(V\d+\.\d+\.\d+)_(\d{6})_1000(\.tar\.gz)$/);
       if (!fileNameMatch) {
         logger.warn(`Cannot parse filename pattern: ${fileName}`);
@@ -127,34 +142,27 @@ class DownloadService {
       }
       
       const [, versionPrefix, dateStr, extension] = fileNameMatch;
-      logger.info(`Searching for files matching pattern: ${versionPrefix}_${dateStr}_*${extension}`);
+      const normalizedDirectoryPath = this.nasService.normalizePath(directoryPath);
+      const listResult = await this.nasService.listDirectoryFiles(normalizedDirectoryPath);
       
-      // 디렉토리 내 파일 목록 조회 (경로 정규화 적용)
-      const normalizedDirectoryPath = this.synologyApiService.normalizePath(directoryPath);
-      logger.info(`Normalized directory path: ${normalizedDirectoryPath}`);
-      const listResult = await this.synologyApiService.listDirectoryFiles(normalizedDirectoryPath);
       if (!listResult.success || !listResult.files) {
         logger.warn(`Cannot list directory files: ${directoryPath}`);
         return null;
       }
       
-      // 패턴에 맞는 파일 찾기 (V버전 파일 우선)
       const matchingFiles = listResult.files.filter(file => {
         const pattern = new RegExp(`^${versionPrefix}_${dateStr}_\\d{4}${extension.replace('.', '\\.')}$`);
         return pattern.test(file.name);
       });
       
       if (matchingFiles.length > 0) {
-        // 가장 적합한 파일 선택 (이름 순으로 정렬 후 첫 번째)
         matchingFiles.sort((a, b) => a.name.localeCompare(b.name));
         const selectedFile = matchingFiles[0];
         const actualFilePath = `${directoryPath}/${selectedFile.name}`;
-        
         logger.info(`Found ${matchingFiles.length} matching files, selected: ${selectedFile.name}`);
         return actualFilePath;
       }
       
-      logger.warn(`No matching files found for pattern: ${versionPrefix}_${dateStr}_*${extension}`);
       return null;
       
     } catch (error) {
@@ -170,7 +178,7 @@ class DownloadService {
     try {
       logger.info(`Streaming file: ${filePath}`);
 
-      const result = await this.synologyApiService.downloadFile(filePath);
+      const result = await this.nasService.downloadFile(filePath);
       if (result.success && result.data) {
         return {
           success: true,

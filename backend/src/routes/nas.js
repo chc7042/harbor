@@ -1148,4 +1148,215 @@ router.post('/disconnect', async (req, res, next) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/nas/scan/full:
+ *   post:
+ *     tags:
+ *       - NAS
+ *     summary: NAS 전체 제품 스캔 실행
+ *     description: 모든 product 폴더를 스캔하여 아티팩트 정보를 수집
+ *     responses:
+ *       200:
+ *         description: 스캔 성공
+ */
+router.post('/scan/full', async (req, res, next) => {
+  try {
+    const nasService = getNASService();
+    const { saveToDatabase = false } = req.body;
+    
+    logger.info('🔍 [FULL-SCAN] Starting full product scan via API', { saveToDatabase });
+    
+    let scanResult;
+    if (saveToDatabase) {
+      scanResult = await nasService.fullProductScanAndSave();
+    } else {
+      scanResult = await nasService.fullProductScan();
+    }
+    
+    logger.info('🔍 [FULL-SCAN] API scan completed', {
+      success: scanResult.success,
+      totalCount: scanResult.totalCount,
+      scanDuration: scanResult.scanDuration,
+      scannedVersions: scanResult.scannedVersions,
+      errorCount: scanResult.errorCount,
+      savedToDb: !!scanResult.database
+    });
+
+    res.json({
+      success: true,
+      data: scanResult,
+    });
+
+  } catch (error) {
+    logger.error('🔍 [FULL-SCAN] API scan failed:', error.message);
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/nas/scan/incremental:
+ *   post:
+ *     tags:
+ *       - NAS
+ *     summary: NAS 증분 스캔 실행
+ *     description: 최근 변경된 파일만 스캔하여 성능 최적화
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               sinceHours:
+ *                 type: integer
+ *                 default: 24
+ *                 description: 몇 시간 전부터 스캔할지
+ *               specificVersions:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: 특정 버전만 스캔 (예. ["1.2.0", "4.0.0"])
+ *               forceRescan:
+ *                 type: boolean
+ *                 default: false
+ *                 description: 시간 무시하고 강제 스캔
+ *               saveToDatabase:
+ *                 type: boolean
+ *                 default: true
+ *                 description: DB에 자동 저장 여부
+ *     responses:
+ *       200:
+ *         description: 증분 스캔 성공
+ */
+router.post('/scan/incremental', async (req, res, next) => {
+  try {
+    const nasService = getNASService();
+    const { 
+      sinceHours = 24, 
+      specificVersions = null, 
+      forceRescan = false,
+      saveToDatabase = true 
+    } = req.body;
+    
+    logger.info('🔍 [INCREMENTAL-SCAN] Starting incremental scan via API', {
+      sinceHours,
+      specificVersions,
+      forceRescan,
+      saveToDatabase
+    });
+    
+    let scanResult;
+    if (saveToDatabase) {
+      scanResult = await nasService.incrementalScanAndSave({
+        sinceHours,
+        specificVersions,
+        forceRescan
+      });
+    } else {
+      scanResult = await nasService.incrementalScan({
+        sinceHours,
+        specificVersions,
+        forceRescan
+      });
+    }
+    
+    logger.info('🔍 [INCREMENTAL-SCAN] API scan completed', {
+      success: scanResult.success,
+      totalCount: scanResult.totalCount,
+      scanDuration: scanResult.scanDuration,
+      scannedVersions: scanResult.scannedVersions,
+      errorCount: scanResult.errorCount,
+      savedToDb: !!scanResult.database
+    });
+
+    res.json({
+      success: true,
+      data: scanResult,
+    });
+
+  } catch (error) {
+    logger.error('🔍 [INCREMENTAL-SCAN] API scan failed:', error.message);
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/nas/artifacts/database:
+ *   get:
+ *     tags:
+ *       - NAS
+ *     summary: DB에서 아티팩트 조회
+ *     description: 데이터베이스에 저장된 아티팩트 정보 조회
+ *     parameters:
+ *       - in: query
+ *         name: version
+ *         schema:
+ *           type: string
+ *         description: 버전 필터
+ *       - in: query
+ *         name: fileType
+ *         schema:
+ *           type: string
+ *           enum: [main, morrow, fullstack, frontend, backend, other]
+ *         description: 파일 타입 필터
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: 결과 개수 제한
+ *     responses:
+ *       200:
+ *         description: 조회 성공
+ */
+router.get('/artifacts/database', async (req, res, next) => {
+  try {
+    const { version, fileType, limit = 50 } = req.query;
+    const { query } = require('../config/database');
+    
+    let whereClause = 'WHERE is_available = true';
+    const params = [];
+    let paramIndex = 1;
+    
+    if (version) {
+      whereClause += ` AND version = $${paramIndex}`;
+      params.push(version);
+      paramIndex++;
+    }
+    
+    if (fileType) {
+      whereClause += ` AND file_type = $${paramIndex}`;
+      params.push(fileType);
+      paramIndex++;
+    }
+    
+    const dbQuery = `
+      SELECT id, filename, version, file_type, build_date, build_number,
+             file_size, modified_time, scanned_at, nas_path
+      FROM nas_artifacts
+      ${whereClause}
+      ORDER BY version, build_date DESC, build_number DESC
+      LIMIT $${paramIndex}
+    `;
+    params.push(parseInt(limit));
+    
+    const result = await query(dbQuery, params);
+    
+    res.json({
+      success: true,
+      data: {
+        artifacts: result.rows,
+        totalCount: result.rows.length,
+        filters: { version, fileType, limit }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Failed to query artifacts from database:', error.message);
+    next(error);
+  }
+});
+
 module.exports = router;
