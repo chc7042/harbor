@@ -76,6 +76,23 @@ class LDAPService {
     const client = this.createClient();
     
     try {
+      // 연결 대기
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('LDAP connection timeout'));
+        }, 10000);
+
+        client.on('connect', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+
+        client.on('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+      });
+
       // 관리자 바인드
       const bindAsync = promisify(client.bind).bind(client);
       await bindAsync(this.config.bindDN, this.config.bindCredentials);
@@ -201,12 +218,25 @@ class LDAPService {
       connectTimeout: this.config.connectTimeout,
       reconnect: false,
       strictDN: false,
+      bindWhenReady: true,
+      keepAlive: true,
+      keepAliveInitialDelay: 10000,
+      maxConnections: 1,
+      maxIdleTimeout: 30000,
     };
 
     const client = ldap.createClient(clientOptions);
 
     client.on('error', (err) => {
       console.debug('LDAP client error:', err.message);
+    });
+
+    client.on('connect', () => {
+      console.debug('LDAP client connected successfully');
+    });
+
+    client.on('connectError', (err) => {
+      console.error('LDAP client connection error:', err.message);
     });
 
     return client;

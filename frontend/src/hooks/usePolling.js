@@ -338,13 +338,9 @@ export const usePollingStatus = () => {
       const currentPolling = pollingService.getActivePolling();
       
       // 상태가 실제로 변경된 경우에만 업데이트
-      if (currentActive !== isActive || 
-          currentUpdating !== isUpdating || 
-          JSON.stringify(currentPolling) !== JSON.stringify(activePolling)) {
-        setIsActive(currentActive);
-        setIsUpdating(currentUpdating);
-        setActivePolling(currentPolling);
-      }
+      setIsActive(prev => currentActive !== prev ? currentActive : prev);
+      setIsUpdating(prev => currentUpdating !== prev ? currentUpdating : prev);
+      setActivePolling(prev => JSON.stringify(currentPolling) !== JSON.stringify(prev) ? currentPolling : prev);
     }, 10000); // 10초마다
 
     return () => {
@@ -352,7 +348,7 @@ export const usePollingStatus = () => {
       pollingService.off('updating_status_changed', handleUpdatingChange);
       clearInterval(interval);
     };
-  }, [isActive, isUpdating, activePolling]);
+  }, []); // 의존성 배열에서 state 제거
 
   const stopAllPolling = useCallback(() => {
     pollingService.stopAll();
