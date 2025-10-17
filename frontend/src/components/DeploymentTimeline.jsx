@@ -34,30 +34,13 @@ const DeploymentTimeline = ({ className = '' }) => {
     } catch (err) {
       console.error('Failed to fetch deployments:', err);
       setError(err.message);
-      // 개발환경에서 mock 데이터 사용
-      setInitialDeployments(generateMockDeployments());
+      // 목 데이터 사용하지 않고 빈 배열로 설정
+      setInitialDeployments([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const generateMockDeployments = () => {
-    const statuses = ['success', 'failed', 'in_progress', 'pending'];
-    const projects = ['harbor-frontend', 'harbor-backend', 'mobile-app', 'api-gateway'];
-    const users = ['john.doe', 'jane.smith', 'nicolas.choi', 'mike.wilson'];
-
-    return Array.from({ length: 15 }, (_, i) => ({
-      id: i + 1,
-      project_name: projects[Math.floor(Math.random() * projects.length)],
-      status: statuses[Math.floor(Math.random() * statuses.length)],
-      created_at: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(),
-      build_number: Math.floor(Math.random() * 100) + 1,
-      environment: ['production', 'staging', 'development'][Math.floor(Math.random() * 3)],
-      deployed_by: users[Math.floor(Math.random() * users.length)],
-      branch: ['main', 'develop', 'feature/auth', 'hotfix/login'][Math.floor(Math.random() * 4)],
-      duration: Math.floor(Math.random() * 600) + 30 // 30초 ~ 10분
-    }));
-  };
 
   const getStatusIcon = (status) => {
     switch (status) {
