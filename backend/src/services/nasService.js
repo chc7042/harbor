@@ -207,24 +207,28 @@ class NASService {
       const files = await this.listDirectory(searchPath);
       const matchedFiles = [];
 
-      for (const fileName of files) {
+      for (const fileObj of files) {
+        // fileObj는 {name, path, isDir, size, mtime, type} 형태의 객체
+        const fileName = fileObj.name;
+        
         if (pattern && !fileName.toLowerCase().includes(pattern.toLowerCase())) {
           continue;
         }
 
         try {
-          const filePath = path.posix.join(searchPath, fileName);
-          const fileInfo = await this.getFileInfo(filePath);
-
-          if (fileInfo.isFile) {
-            matchedFiles.push({
-              name: fileName,
-              path: filePath,
-              size: fileInfo.size,
-              modified: fileInfo.modified,
-              buildNumber: this.extractBuildNumber(fileName),
-            });
+          // 디렉토리는 건너뛰기
+          if (fileObj.isDir) {
+            continue;
           }
+
+          matchedFiles.push({
+            name: fileName,
+            path: fileObj.path,
+            size: fileObj.size || 0,
+            modified: fileObj.mtime ? new Date(fileObj.mtime * 1000).toISOString() : null,
+            buildNumber: this.extractBuildNumber(fileName),
+            isdir: fileObj.isDir,
+          });
         } catch (error) {
           logger.warn(`Failed to process search file ${fileName}:`, error.message);
         }

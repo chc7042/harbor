@@ -90,8 +90,8 @@ class JenkinsService {
             // mr/fs 버전 폴더 (mr1.1.0, fs2.0.0 등)
             const mrFsVersionPattern = /^(mr|fs)\d+\.\d+\.\d+$/;
             if (mrFsVersionPattern.test(folderName)) {
-              // mr/fs 버전 폴더의 release 작업들만 포함
-              const releasePattern = /^(mr|fs)\d+\.\d+\.\d+_release$/;
+              // mr/fs 버전 폴더의 release 작업들 포함 (be, fe 작업도 포함)
+              const releasePattern = /^(mr|fs|be|fe)\d+\.\d+\.\d+_release$/;
               const isReleaseJob = releasePattern.test(jobName);
               if (isReleaseJob) {
                 logger.info(`🔧 Jenkins: Including release job ${jobName} from mr/fs version folder ${folderName}`);

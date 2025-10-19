@@ -272,4 +272,21 @@ export const searchNASFiles = async (searchPath = 'release_version', pattern = '
   }
 };
 
+// NAS 아티팩트 조회 함수
+export const getNASArtifacts = async (version = '', fileType = '', limit = 100) => {
+  try {
+    const params = new URLSearchParams();
+    if (version) params.append('version', version);
+    if (fileType) params.append('fileType', fileType);
+    if (limit) params.append('limit', limit);
+
+    const response = await api.get(`/nas/artifacts?${params}`);
+    
+    return response.data;
+  } catch (error) {
+    console.error('NAS 아티팩트 조회 실패:', error);
+    throw error;
+  }
+};
+
 export default api;

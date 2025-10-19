@@ -46,19 +46,22 @@ app.use(helmet({
   }
 }));
 
-// Rate limiting - Check if disabled
-const isRateLimitingDisabled = process.env.DISABLE_RATE_LIMITING === 'true';
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15분
-  max: isRateLimitingDisabled ? 999999 : 1000, // 최대 1000 요청 또는 무제한
-  message: '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.',
-  standardHeaders: true,
-  legacyHeaders: false,
-  trustProxy: true, // Required when behind reverse proxy
-});
+// Rate limiting - Disabled in development to avoid trust proxy issues
+const isRateLimitingDisabled = process.env.DISABLE_RATE_LIMITING === 'true' || process.env.NODE_ENV === 'development';
 
 if (!isRateLimitingDisabled) {
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15분
+    max: 1000, // 최대 1000 요청
+    message: '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.',
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => {
+      // Skip rate limiting in development
+      return process.env.NODE_ENV === 'development';
+    }
+  });
+
   app.use(limiter);
 }
 
@@ -72,7 +75,10 @@ const authLimiter = rateLimit({
   message: '로그인 시도 횟수를 초과했습니다. 15분 후 다시 시도해주세요.',
   standardHeaders: true,
   legacyHeaders: false,
-  trustProxy: true, // Required when behind reverse proxy
+  skip: (req) => {
+    // Skip auth rate limiting in development
+    return process.env.NODE_ENV === 'development';
+  }
 });
 
 // CORS 설정

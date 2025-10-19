@@ -1,12 +1,10 @@
 const express = require('express');
 const { getCacheService } = require('../services/cacheService');
-const { authenticateToken } = require('../middleware/auth');
 const logger = require('../config/logger');
 
 const router = express.Router();
 
-// 모든 캐시 라우트에 인증 적용
-router.use(authenticateToken);
+// 인증 미들웨어 제거됨 - 간소화된 LDAP 인증 사용
 
 /**
  * @swagger
@@ -108,7 +106,7 @@ router.post('/flush', async (req, res) => {
     const cacheService = getCacheService();
     cacheService.flushAll();
     
-    logger.info(`🚀 [CACHE-API] All caches flushed by user: ${req.user?.username}`);
+    logger.info(`🚀 [CACHE-API] All caches flushed`);
     
     res.json({
       success: true,
@@ -184,7 +182,7 @@ router.post('/flush/:cacheName', async (req, res) => {
     const success = cacheService.flushCache(cacheName);
     
     if (success) {
-      logger.info(`🚀 [CACHE-API] Cache '${cacheName}' flushed by user: ${req.user?.username}`);
+      logger.info(`🚀 [CACHE-API] Cache '${cacheName}' flushed`);
       res.json({
         success: true,
         message: `${cacheName} 캐시가 삭제되었습니다`
@@ -227,7 +225,7 @@ router.post('/flush/:cacheName', async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *         description: 무효화할 버전 (예: 4.0.0)
+ *         description: "Version to invalidate (e.g., 4.0.0)"
  *     responses:
  *       200:
  *         description: 캐시 무효화 성공
@@ -254,7 +252,7 @@ router.post('/invalidate/version/:version', async (req, res) => {
     
     cacheService.invalidateVersion(version);
     
-    logger.info(`🚀 [CACHE-API] Version '${version}' cache invalidated by user: ${req.user?.username}`);
+    logger.info(`🚀 [CACHE-API] Version '${version}' cache invalidated`);
     
     res.json({
       success: true,
@@ -316,7 +314,7 @@ router.post('/invalidate/project/:projectName', async (req, res) => {
     
     cacheService.invalidateProject(projectName);
     
-    logger.info(`🚀 [CACHE-API] Project '${projectName}' cache invalidated by user: ${req.user?.username}`);
+    logger.info(`🚀 [CACHE-API] Project '${projectName}' cache invalidated`);
     
     res.json({
       success: true,

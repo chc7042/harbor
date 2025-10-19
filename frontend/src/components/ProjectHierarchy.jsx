@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -122,21 +122,21 @@ const ProjectHierarchy = ({
     });
   };
 
-  // 프로젝트의 작업들을 기반으로 배포 버전 카드 생성
+  // 프로젝트의 작업들을 기반으로 배포 버전 카드 생성 (프로젝트당 정확히 1개만)
   const createDeploymentCards = (project) => {
     if (!project.jobs || project.jobs.length === 0) return [];
-
-    const deploymentCards = [];
 
     // 버전 정보 추출 (예: "3.0.0" 또는 "2.0.0")
     const versionMatch = project.name.match(/(\d+\.\d+\.\d+)/);
     const version = versionMatch ? versionMatch[1] : project.name;
 
-    // 1. V 파일 카드 생성 (메인 버전 파일 - 최우선)
+    // 메인 release job 찾기
     const mrJob = project.jobs.find(job => job.name.includes('mr') && job.name.includes('_release'));
+    
+    // 프로젝트당 정확히 1개의 카드만 생성
     if (mrJob && mrJob.lastBuild && mrJob.lastBuild.number) {
       const vFileDeployment = {
-        id: `${project.name}-V${version}-${mrJob.lastBuild.number}`,
+        id: `${project.name}-SINGLE-${mrJob.lastBuild.number}`, // 고유 ID로 중복 방지
         project_name: `${project.name}/mr${version}_release`,
         build_number: mrJob.lastBuild.number,
         status: mrJob.lastBuild.result === 'SUCCESS' ? 'success' :
@@ -152,22 +152,17 @@ const ProjectHierarchy = ({
         version: version
       };
 
-      deploymentCards.push({
+      return [{
         title: `V${version} 메인 버전`,
         subtitle: `빌드 #${mrJob.lastBuild.number}`,
         deployment: vFileDeployment,
         timestamp: mrJob.lastBuild.timestamp,
-        priority: 1, // 최우선
+        priority: 1,
         cardType: 'main'
-      });
+      }];
     }
 
-    // MR, FS 컴포넌트 카드는 제거됨 - 메인 버전만 표시
-
-    // 메인 버전 카드들을 타임스탬프 순으로 정렬
-    return deploymentCards.sort((a, b) => {
-      return new Date(b.timestamp) - new Date(a.timestamp);
-    });
+    return []; // job이 없으면 빈 배열 반환
   };
 
   // 메모 관리 함수들
@@ -290,7 +285,14 @@ const ProjectHierarchy = ({
         </h3>
 
         <div className="space-y-1">
-          {projects.map((project) => {
+          {(() => {
+            // 프로젝트 레벨에서 중복 제거 (name 기준)
+            const uniqueProjects = projects.filter((project, index, array) => {
+              return array.findIndex(p => p.name === project.name) === index;
+            });
+            
+            return uniqueProjects;
+          })().map((project) => {
             const isExpanded = expandedProjects.has(project.name);
             const hasJobs = project.jobs && project.jobs.length > 0;
 
@@ -426,7 +428,16 @@ const ProjectHierarchy = ({
                     <div className="border-t border-gray-200 bg-gray-50 p-4">
                       <h4 className="text-sm font-medium text-gray-900 mb-3">배포 버전</h4>
                       <div className="space-y-4">
-                        {createDeploymentCards(project).map((card, index) => {
+                        {(() => {
+                          const cards = createDeploymentCards(project);
+                          
+                          // 렌더링 단계에서 추가 중복 제거 (deployment.id 기준)
+                          const uniqueRenderCards = cards.filter((card, index, array) => {
+                            return array.findIndex(c => c.deployment.id === card.deployment.id) === index;
+                          });
+                          
+                          return uniqueRenderCards;
+                        })().map((card, index) => {
                           const isMainCard = card.cardType === 'main';
                           const cardStyle = isMainCard
                             ? 'bg-blue-50 border-blue-200 hover:border-blue-400 hover:bg-blue-100'
@@ -438,7 +449,7 @@ const ProjectHierarchy = ({
                           const isEditing = editingMemo === deploymentId;
 
                           return (
-                            <div key={index} className="space-y-3">
+                            <div key={card.deployment.id} className="space-y-3">
                               {/* 배포 카드 */}
                               <div
                                 className={`rounded-lg border p-3 cursor-pointer transition-all duration-200 ${cardStyle}`}

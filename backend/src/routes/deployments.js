@@ -914,10 +914,106 @@ async function getDeploymentInfo(projectName, buildNumber, version = null, req) 
       logger.info(`Found verified deployment data in database for ${projectName}#${buildNumber}`);
       logger.info(`DB allFiles: ${JSON.stringify(dbRecord.all_files)}`);
 
-      // DB에서 데이터를 찾은 경우 Synology API 호출 건너뛰기
-      logger.info('DB에서 데이터를 찾았으므로 빠른 응답 제공');
+      // DB에서 데이터를 찾은 경우에도 Synology 공유 링크 생성
+      logger.info('DB에서 데이터를 찾았음. Synology 공유 링크 생성 중...');
+      
+      // nasPath를 사용해서 Synology 공유 링크 생성
+      if (deploymentInfo.nasPath) {
+        try {
+          const shareResult = await synologyApiService.createShareLink(deploymentInfo.nasPath);
+          if (shareResult.success && shareResult.shareUrl) {
+            deploymentInfo.synologyShareUrl = shareResult.shareUrl;
+            logger.info(`Synology 공유 링크 생성 성공 (DB 데이터): ${shareResult.shareUrl}`);
+          } else {
+            logger.warn(`Synology 공유 링크 생성 실패 (DB 데이터): ${shareResult.error || 'Unknown error'}`);
+          }
+        } catch (shareError) {
+          logger.error(`Synology 공유 링크 생성 중 오류 (DB 데이터):`, shareError);
+        }
+      }
     } else {
       logger.warn(`DB에서 레코드를 찾지 못함 - ${projectName}#${buildNumber}`);
+      
+      // deployment_paths에서 찾지 못한 경우 nas_artifacts 테이블에서 조회
+      logger.info(`nas_artifacts 테이블에서 조회 시도 - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+      
+      // 프로젝트명에서 버전 추출
+      const versionMatch = projectName.match(/(\d+\.\d+\.\d+)/);
+      const extractedVersion = versionMatch ? versionMatch[1] : (version || '1.0.1');
+      logger.info(`추출된 버전: ${extractedVersion} (from ${projectName})`);
+      
+      try {
+        // 먼저 정확한 빌드 번호로 조회
+        let nasArtifactsResult = await query(
+          'SELECT * FROM nas_artifacts WHERE version = $1 AND build_number = $2 ORDER BY scanned_at DESC',
+          [extractedVersion, buildNumber.toString()]
+        );
+        
+        logger.info(`nas_artifacts 정확한 빌드 번호 쿼리 결과 - 행 개수: ${nasArtifactsResult.rows.length}`);
+        
+        // 정확한 빌드 번호가 없으면 해당 버전의 가장 최근 빌드 번호로 조회
+        if (nasArtifactsResult.rows.length === 0) {
+          logger.info(`정확한 빌드 번호(${buildNumber})를 찾지 못함. 가장 최근 빌드로 조회...`);
+          nasArtifactsResult = await query(
+            'SELECT * FROM nas_artifacts WHERE version = $1 ORDER BY CAST(build_number AS INTEGER) DESC, scanned_at DESC LIMIT 10',
+            [extractedVersion]
+          );
+          logger.info(`최근 빌드 쿼리 결과 - 행 개수: ${nasArtifactsResult.rows.length}`);
+          if (nasArtifactsResult.rows.length > 0) {
+            logger.info(`가장 최근 빌드 번호: ${nasArtifactsResult.rows[0].build_number}`);
+          }
+        }
+        
+        if (nasArtifactsResult.rows.length > 0) {
+          // nas_artifacts 데이터를 deployment_paths 형태로 변환
+          const nasFiles = nasArtifactsResult.rows;
+          const mainFile = nasFiles.find(f => f.file_type === 'main');
+          const allFiles = nasFiles.map(f => ({
+            name: f.filename,
+            size: parseInt(f.file_size) || 0,
+            type: f.file_type,
+            path: f.nas_path,
+            fullPath: f.full_path,
+            modifiedTime: f.modified_time
+          }));
+          
+          deploymentInfo = {
+            deploymentPath: mainFile ? mainFile.nas_path.substring(0, mainFile.nas_path.lastIndexOf('/')) : null,
+            nasPath: mainFile ? mainFile.nas_path.substring(0, mainFile.nas_path.lastIndexOf('/')) : null,
+            downloadFile: mainFile ? mainFile.filename : null,
+            allFiles: allFiles,
+            verifiedFiles: allFiles,
+            directoryVerified: true,
+            downloadFileVerified: true,
+            buildDate: nasFiles[0].build_date,
+            buildNumber: buildNumber,
+            source: 'nas_artifacts'
+          };
+          
+          logger.info(`nas_artifacts에서 배포 정보 구성됨 (common function) - 파일 ${allFiles.length}개`);
+          logger.info(`메인 다운로드 파일: ${deploymentInfo.downloadFile}`);
+          logger.info(`NAS 경로: ${deploymentInfo.nasPath}`);
+          
+          // nas_artifacts에서 데이터를 찾은 경우에도 Synology 공유 링크 생성
+          logger.info('nas_artifacts에서 데이터를 찾았음. Synology 공유 링크 생성 중...');
+          
+          if (deploymentInfo.nasPath) {
+            try {
+              const shareResult = await synologyApiService.createShareLink(deploymentInfo.nasPath);
+              if (shareResult.success && shareResult.shareUrl) {
+                deploymentInfo.synologyShareUrl = shareResult.shareUrl;
+                logger.info(`Synology 공유 링크 생성 성공 (nas_artifacts 데이터): ${shareResult.shareUrl}`);
+              } else {
+                logger.warn(`Synology 공유 링크 생성 실패 (nas_artifacts 데이터): ${shareResult.error || 'Unknown error'}`);
+              }
+            } catch (shareError) {
+              logger.error(`Synology 공유 링크 생성 중 오류 (nas_artifacts 데이터):`, shareError);
+            }
+          }
+        }
+      } catch (nasArtifactsError) {
+        logger.error(`nas_artifacts 조회 실패: ${nasArtifactsError.message}`);
+      }
     }
   } catch (dbError) {
     logger.error(`Database query failed: ${dbError.message}`);
@@ -928,6 +1024,23 @@ async function getDeploymentInfo(projectName, buildNumber, version = null, req) 
   if (!deploymentInfo) {
     logger.info(`Jenkins에서 배포 정보 조회 - ${projectName}#${buildNumber}`);
     deploymentInfo = await jenkinsService.extractDeploymentInfo(projectName, parseInt(buildNumber));
+    
+    // Jenkins에서 데이터를 조회한 경우에도 Synology 공유 링크 생성
+    if (deploymentInfo && deploymentInfo.nasPath) {
+      logger.info('Jenkins에서 데이터를 찾았음. Synology 공유 링크 생성 중...');
+      
+      try {
+        const shareResult = await synologyApiService.createOrGetShareLink(deploymentInfo.nasPath);
+        if (shareResult.success && shareResult.shareUrl) {
+          deploymentInfo.synologyShareUrl = shareResult.shareUrl;
+          logger.info(`Synology 공유 링크 생성 성공 (Jenkins 데이터): ${shareResult.shareUrl}`);
+        } else {
+          logger.warn(`Synology 공유 링크 생성 실패 (Jenkins 데이터): ${shareResult.error || 'Unknown error'}`);
+        }
+      } catch (shareError) {
+        logger.error(`Synology 공유 링크 생성 중 오류 (Jenkins 데이터):`, shareError);
+      }
+    }
   }
 
   // allFiles를 파일 타입별로 분류 (안전한 문자열로 변환)
@@ -1219,7 +1332,6 @@ router.get('/deployment-info/:version/:projectName/:buildNumber',
               });
 
               deploymentInfo.allFiles = versionFiles;
-              deploymentInfo.verifiedAllFiles = versionFiles;
 
               logger.info(`Found ${versionFiles.length} deployment files in NAS: ${versionFiles.join(', ')}`);
 
@@ -1377,7 +1489,16 @@ router.get('/deployment-info/:projectName/:buildNumber',
 
       const { projectName, buildNumber } = req.params;
 
+      // 프로젝트명에서 버전 추출 (mr4.0.0-group -> mr4.0.0)
+      let actualProjectName = projectName;
+      const versionMatch = projectName.match(/^(mr\d+\.\d+\.\d+)/);
+      if (versionMatch) {
+        actualProjectName = versionMatch[1];
+        logger.info(`프로젝트명 변환: ${projectName} -> ${actualProjectName}`);
+      }
+
       logger.info(`배포 정보 조회 요청 - 사용자: ${req.user?.username || 'unknown'}, 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+      logger.info(`실제 사용할 프로젝트명: ${actualProjectName}`);
 
       const jenkinsService = getJenkinsService();
       const nasService = getNASService();
@@ -1385,17 +1506,17 @@ router.get('/deployment-info/:projectName/:buildNumber',
       const synologyApiService = new SynologyApiService();
 
       try {
-        logger.info(`배포 정보 조회 시작 (2-segment) - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+        logger.info(`배포 정보 조회 시작 (2-segment) - 프로젝트: ${actualProjectName}, 빌드: ${buildNumber}`);
 
         // 1. 먼저 deployment_paths 테이블에서 기존 검증된 데이터 확인 (최적화됨)
         let deploymentInfo = null;
         try {
-          logger.info(`DB 쿼리 시도 (2-segment) - 프로젝트: ${projectName}, 빌드: ${buildNumber}`);
+          logger.info(`DB 쿼리 시도 (2-segment) - 프로젝트: ${actualProjectName}, 빌드: ${buildNumber}`);
           const { query } = require('../config/database');
 
           const dbResult = await query(
             'SELECT * FROM deployment_paths WHERE project_name = $1 AND build_number = $2',
-            [projectName, parseInt(buildNumber)],
+            [actualProjectName, parseInt(buildNumber)],
           );
 
           logger.info(`DB 쿼리 결과 (2-segment) - 행 개수: ${dbResult.rows.length}`);
@@ -1418,6 +1539,70 @@ router.get('/deployment-info/:projectName/:buildNumber',
             logger.info(`DB allFiles (2-segment): ${JSON.stringify(dbRecord.all_files)}`);
           } else {
             logger.warn(`DB에서 레코드를 찾지 못함 (2-segment) - ${projectName}#${buildNumber}`);
+            
+            // deployment_paths에서 찾지 못한 경우 nas_artifacts 테이블에서 조회
+            logger.info(`nas_artifacts 테이블에서 조회 시도 - 프로젝트: ${actualProjectName}, 빌드: ${buildNumber}`);
+            
+            // 프로젝트명에서 버전 추출
+            const versionMatch = actualProjectName.match(/(\d+\.\d+\.\d+)/);
+            const version = versionMatch ? versionMatch[1] : '1.0.1';
+            logger.info(`추출된 버전: ${version} (from ${actualProjectName})`);
+            
+            try {
+              // 먼저 정확한 빌드 번호로 조회
+              let nasArtifactsResult = await query(
+                'SELECT * FROM nas_artifacts WHERE version = $1 AND build_number = $2 ORDER BY scanned_at DESC',
+                [version, buildNumber.toString()]
+              );
+              
+              logger.info(`nas_artifacts 정확한 빌드 번호 쿼리 결과 - 행 개수: ${nasArtifactsResult.rows.length}`);
+              
+              // 정확한 빌드 번호가 없으면 해당 버전의 가장 최근 빌드 번호로 조회
+              if (nasArtifactsResult.rows.length === 0) {
+                logger.info(`정확한 빌드 번호(${buildNumber})를 찾지 못함. 가장 최근 빌드로 조회...`);
+                nasArtifactsResult = await query(
+                  'SELECT * FROM nas_artifacts WHERE version = $1 ORDER BY CAST(build_number AS INTEGER) DESC, scanned_at DESC LIMIT 10',
+                  [version]
+                );
+                logger.info(`최근 빌드 쿼리 결과 - 행 개수: ${nasArtifactsResult.rows.length}`);
+                if (nasArtifactsResult.rows.length > 0) {
+                  logger.info(`가장 최근 빌드 번호: ${nasArtifactsResult.rows[0].build_number}`);
+                }
+              }
+              
+              if (nasArtifactsResult.rows.length > 0) {
+                // nas_artifacts 데이터를 deployment_paths 형태로 변환
+                const nasFiles = nasArtifactsResult.rows;
+                const mainFile = nasFiles.find(f => f.file_type === 'main');
+                const allFiles = nasFiles.map(f => ({
+                  name: f.filename,
+                  size: parseInt(f.file_size) || 0,
+                  type: f.file_type,
+                  path: f.nas_path,
+                  fullPath: f.full_path,
+                  modifiedTime: f.modified_time
+                }));
+                
+                deploymentInfo = {
+                  deploymentPath: mainFile ? mainFile.nas_path.substring(0, mainFile.nas_path.lastIndexOf('/')) : null,
+                  nasPath: mainFile ? mainFile.nas_path.substring(0, mainFile.nas_path.lastIndexOf('/')) : null,
+                  downloadFile: mainFile ? mainFile.filename : null,
+                  allFiles: allFiles,
+                  verifiedFiles: allFiles,
+                  directoryVerified: true,
+                  downloadFileVerified: true,
+                  buildDate: nasFiles[0].build_date,
+                  buildNumber: buildNumber,
+                  source: 'nas_artifacts'
+                };
+                
+                logger.info(`nas_artifacts에서 배포 정보 구성됨 - 파일 ${allFiles.length}개`);
+                logger.info(`메인 다운로드 파일: ${deploymentInfo.downloadFile}`);
+                logger.info(`NAS 경로: ${deploymentInfo.nasPath}`);
+              }
+            } catch (nasArtifactsError) {
+              logger.error(`nas_artifacts 조회 실패: ${nasArtifactsError.message}`);
+            }
           }
         } catch (dbError) {
           logger.error(`Database query failed (2-segment): ${dbError.message}`);
@@ -1480,9 +1665,10 @@ router.get('/deployment-info/:projectName/:buildNumber',
         logger.info(`캐시된 데이터가 없어 실시간 NAS 조회를 시작합니다`);
         
         try {
-          // 프로젝트명에서 버전 정보 추출
-          const versionMatch = projectName.match(/(\d+\.\d+\.\d+)/);
+          // 실제 프로젝트명에서 버전 정보 추출
+          const versionMatch = actualProjectName.match(/(\d+\.\d+\.\d+)/);
           const version = versionMatch ? versionMatch[1] : '1.0.1';
+          logger.info(`추출된 버전: ${version} (from ${actualProjectName})`);
           
           // 날짜와 빌드번호 기반으로 경로 구성 (1.0.1 -> 250407 매핑)
           const versionDateMap = {
@@ -1736,8 +1922,7 @@ router.get('/deployment-info/:projectName/:buildNumber',
 
               // allFiles 배열의 파일들도 검증하고, NAS에서 실제 배포 파일 찾기
               if (deploymentInfo.allFiles && deploymentInfo.allFiles.length > 0) {
-                deploymentInfo.verifiedAllFiles = deploymentInfo.allFiles.filter(file => files.includes(file));
-                deploymentInfo.allFiles = deploymentInfo.verifiedAllFiles; // 존재하는 파일만 반환
+                deploymentInfo.allFiles = deploymentInfo.allFiles.filter(file => files.includes(file));
               } else {
                 // allFiles가 비어있는 경우, NAS에서 직접 배포 파일 찾기
                 deploymentInfo.allFiles = [];
@@ -1755,7 +1940,6 @@ router.get('/deployment-info/:projectName/:buildNumber',
                   });
 
                   deploymentInfo.allFiles = versionFiles;
-                  deploymentInfo.verifiedAllFiles = versionFiles;
 
                   logger.info(`Found ${versionFiles.length} version-related files in NAS: ${versionFiles.join(', ')}`);
 

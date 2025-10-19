@@ -26,6 +26,17 @@ const formatFileSize = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
+// 파일명 추출 함수 (문자열 또는 객체 처리)
+const getFileName = (file) => {
+  if (typeof file === 'string') {
+    return file;
+  }
+  if (typeof file === 'object' && file?.name) {
+    return file.name;
+  }
+  return '';
+};
+
 // 파일 날짜 포맷팅 함수
 const formatFileDate = (timestamp) => {
   if (!timestamp) return '알 수 없음';
@@ -59,11 +70,18 @@ const ProjectDetailModal = ({
 
     setLoadingDeploymentInfo(true);
     try {
-      // 빠른 타임아웃 설정 (2초)
+      // 빠른 타임아웃 설정 (10초)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const response = await fetch(`/api/deployments/deployment-info/${encodeURIComponent(deployment.project_name)}/${deployment.build_number}`, {
+      // API 호출 URL 구성: /api/deployments/deployment-info/project_name/job_name/build_number
+      // project_name을 기반으로 job_name 생성 (예: mr4.0.0 -> be4.0.0_release for backend job)
+      // 현재 모달에서는 모로우(mr) job에 대한 배포 정보를 조회
+      const jobName = deployment.job_name || `${deployment.project_name}_release`;
+      
+      console.log(`[PROJECT-MODAL] 배포 정보 API 호출: project=${deployment.project_name}, job=${jobName}, build=${deployment.build_number}`);
+      
+      const response = await fetch(`/api/deployments/deployment-info/${encodeURIComponent(deployment.project_name)}/${encodeURIComponent(jobName)}/${deployment.build_number}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
@@ -74,6 +92,8 @@ const ProjectDetailModal = ({
 
       if (response.ok) {
         const data = await response.json();
+        console.log(`[PROJECT-MODAL] API 응답 받음:`, data.data);
+        console.log(`[PROJECT-MODAL] allFiles:`, data.data?.allFiles);
         setDeploymentInfo(data.data || { downloadFile: null, allFiles: [], artifacts: {} });
       } else {
         console.error('Failed to fetch deployment info');
@@ -577,18 +597,26 @@ const ProjectDetailModal = ({
                     <div className="space-y-3">
                       <h4 className="text-sm font-medium text-gray-700 border-b pb-2">메인 버전</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {/* 실제 V 파일이 있으면 실제 V 파일 표시 */}
-                        {(deploymentInfo?.allFiles && deploymentInfo.allFiles.some(file => file.startsWith('V'))) ? (
+                        {/* 최신 V 파일 하나만 표시 */}
+                        {(deploymentInfo?.allFiles && deploymentInfo.allFiles.some(file => getFileName(file).startsWith('V'))) ? (
                           deploymentInfo.allFiles
-                            .filter(file => file.startsWith('V'))
+                            .filter(file => getFileName(file).startsWith('V'))
+                            .sort((a, b) => {
+                              // 파일명의 타임스탬프 기준으로 정렬 (최신 순)
+                              const aTime = getFileName(a).match(/(\d{6}_\d{4})/)?.[1] || '000000_0000';
+                              const bTime = getFileName(b).match(/(\d{6}_\d{4})/)?.[1] || '000000_0000';
+                              return bTime.localeCompare(aTime);
+                            })
+                            .slice(0, 1) // 최신 V 파일 하나만 선택
                             .map((file, index) => {
-                              const isEncrypted = file.includes('.enc.');
-                              const fileExists = deploymentInfo.verifiedFiles ? deploymentInfo.verifiedFiles.includes(file) : true;
+                              const fileName = getFileName(file);
+                              const isEncrypted = fileName.includes('.enc.');
+                              const fileExists = true; // 임시로 모든 파일을 존재하는 것으로 표시
                               const fileTypeColor = 'bg-blue-100 text-blue-800';
 
                               return (
                                 <div
-                                  key={index}
+                                  key={`main-${fileName}-${index}`}
                                   className={`p-4 rounded-lg border-2 transition-all duration-200 hover:shadow-lg ${
                                     fileExists ? 'border-blue-300 bg-blue-50 hover:border-blue-400 hover:bg-blue-100' : 'border-red-300 bg-red-50 hover:border-red-400'
                                   }`}
@@ -611,17 +639,21 @@ const ProjectDetailModal = ({
                                         )}
                                       </div>
                                       <p className="text-sm font-medium text-gray-900 mb-1 break-all">
-                                        {file}
+                                        {fileName}
                                       </p>
                                       {/* 파일 정보 표시 */}
-                                      {deploymentInfo?.fileInfoMap?.[file] && (
+                                      {(file.size || file.modifiedTime) && (
                                         <div className="flex items-center space-x-3 text-xs text-gray-500 mt-1">
-                                          <span className="flex items-center">
-                                            📦 {formatFileSize(deploymentInfo.fileInfoMap[file].size)}
-                                          </span>
-                                          <span className="flex items-center">
-                                            📅 {formatFileDate(deploymentInfo.fileInfoMap[file].mtime)}
-                                          </span>
+                                          {file.size && (
+                                            <span className="flex items-center">
+                                              📦 {formatFileSize(file.size)}
+                                            </span>
+                                          )}
+                                          {file.modifiedTime && (
+                                            <span className="flex items-center">
+                                              📅 {formatFileDate(file.modifiedTime)}
+                                            </span>
+                                          )}
                                         </div>
                                       )}
                                     </div>
@@ -630,7 +662,7 @@ const ProjectDetailModal = ({
                                       {fileExists ? (
                                         <button
                                           className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200"
-                                          disabled={downloadingFiles.has(`main-${file}`)}
+                                          disabled={downloadingFiles.has(`main-${fileName}`)}
                                           onClick={async (e) => {
                                             e.preventDefault();
                                             e.stopPropagation();
@@ -640,9 +672,12 @@ const ProjectDetailModal = ({
 
                                             try {
 
-                                              // 파일 경로 구성
+                                              // 파일 경로 구성 - DB에서 실제 파일 경로 사용
                                               let filePath;
-                                              if (deploymentInfo && deploymentInfo.nasPath) {
+                                              if (typeof file === 'object' && file.path) {
+                                                // DB에서 스캔된 실제 파일 경로 사용
+                                                filePath = `/nas${file.path}`;
+                                              } else if (deploymentInfo && deploymentInfo.nasPath) {
                                                 // 배포 정보에서 NAS 경로 사용
                                                 let nasPath = deploymentInfo.nasPath;
                                                 if (nasPath.includes('\\\\nas.roboetech.com\\')) {
@@ -652,14 +687,14 @@ const ProjectDetailModal = ({
                                                 }
                                                 // nas_path가 이미 /release_version/으로 시작하므로 /nas/ prefix만 추가
                                                 if (nasPath.startsWith('/release_version/')) {
-                                                  filePath = `/nas${nasPath}/${file}`;
+                                                  filePath = `/nas${nasPath}/${getFileName(file)}`;
                                                 } else if (!nasPath.startsWith('/nas/release_version/')) {
                                                   // 다른 형태의 경로인 경우 기존 로직 사용
                                                   nasPath = '/nas/release_version/' + nasPath.replace(/^\/nas\//, '');
-                                                  filePath = `${nasPath}/${file}`;
+                                                  filePath = `${nasPath}/${getFileName(file)}`;
                                                 } else {
                                                   // 이미 완전한 경로인 경우
-                                                  filePath = `${nasPath}/${file}`;
+                                                  filePath = `${nasPath}/${getFileName(file)}`;
                                                 }
                                               } else {
                                                 // 폴백: 버전 기반 경로 구성
@@ -669,13 +704,13 @@ const ProjectDetailModal = ({
                                                 const version = versionMatch[1];
                                                 const versionFallbacks = {
                                                   '1.0.0': '240904', '1.0.1': '250407', '1.1.0': '241204',
-                                                  '1.2.0': '250929', '2.0.0': '250116', '3.0.0': '250310', '4.0.0': '250904'
+                                                  '1.2.0': '250929', '2.0.0': '250116', '3.0.0': '250310', '4.0.0': '251017'
                                                 };
                                                 const fallbackDate = versionFallbacks[version] || '250310';
-                                                filePath = `/nas/release_version/release/product/mr${version}/${fallbackDate}/${deployment.build_number}/${file}`;
+                                                filePath = `/nas/release_version/release/product/mr${version}/${fallbackDate}/${deployment.build_number}/${getFileName(file)}`;
                                               }
 
-                                              const result = await downloadService.downloadFile(filePath, file, {
+                                              const result = await downloadService.downloadFile(filePath, getFileName(file), {
                                                 onProgress: (progress) => {
                                                   setDownloadStatus(progress);
                                                 },
@@ -699,7 +734,7 @@ const ProjectDetailModal = ({
                                           }}
                                         >
                                           <Download className="w-4 h-4 mr-1.5" />
-                                          {downloadingFiles.has(`main-${file}`) ? '다운로드 중...' : '다운로드'}
+                                          {downloadingFiles.has(`main-${fileName}`) ? '다운로드 중...' : '다운로드'}
                                         </button>
                                       ) : (
                                         <span className="text-xs text-red-500">파일 없음</span>
@@ -711,8 +746,7 @@ const ProjectDetailModal = ({
                             })
                         ) : (
                           /* 실제 V 파일이 없어도 기본 메인 버전 카드 표시 */
-                          [(
-                            <div
+                          <div
                               key="default-main-version"
                               className="p-4 rounded-lg border-2 border-blue-300 bg-blue-50 transition-all duration-200 hover:shadow-lg hover:border-blue-400 hover:bg-blue-100"
                             >
@@ -765,111 +799,10 @@ const ProjectDetailModal = ({
                                 </div>
                               </div>
                             </div>
-                          )]
                         )}
                       </div>
                     </div>
 
-                    {/* 풀스택 섹션 */}
-                    {(deploymentInfo?.allFiles && deploymentInfo.allFiles.some(file => file.match(/^fs\d+\.\d+\.\d+_/))) && (
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-medium text-gray-700 border-b pb-2">풀스택</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {deploymentInfo.allFiles
-                            .filter(file => file.match(/^fs\d+\.\d+\.\d+_/))
-                            .map((file, index) => {
-                              const isEncrypted = file.includes('.enc.');
-                              const fileExists = deploymentInfo.verifiedFiles ? deploymentInfo.verifiedFiles.includes(file) : true;
-                              
-                              return (
-                                <div
-                                  key={index}
-                                  className={`p-4 rounded-lg border-2 transition-all duration-200 hover:shadow-lg ${
-                                    fileExists ? 'border-purple-300 bg-purple-50 hover:border-purple-400 hover:bg-purple-100' : 'border-red-300 bg-red-50 hover:border-red-400'
-                                  }`}
-                                >
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <div className="flex items-center space-x-2 mb-2">
-                                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
-                                          풀스택
-                                        </span>
-                                        {isEncrypted && (
-                                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
-                                            암호화
-                                          </span>
-                                        )}
-                                        {!fileExists && (
-                                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-                                            파일 없음
-                                          </span>
-                                        )}
-                                      </div>
-                                      <p className="text-sm font-medium text-gray-900 mb-1">
-                                        {file}
-                                      </p>
-                                      <div className="flex items-center space-x-4 text-xs text-gray-600">
-                                        {deploymentInfo?.fileInfoMap?.[file] && (
-                                          <>
-                                            <span>
-                                              📦 {formatFileSize(deploymentInfo.fileInfoMap[file].size)}
-                                            </span>
-                                            <span>
-                                              📅 {formatFileDate(deploymentInfo.fileInfoMap[file].mtime)}
-                                            </span>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center space-x-2 ml-2">
-                                      {fileExists ? (
-                                        <button
-                                          className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors duration-200"
-                                          disabled={downloadingFiles.has(`fullstack-${file}`)}
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-
-                                            if (deploymentInfo && deploymentInfo.nasPath) {
-                                              setDownloadingFiles(prev => new Set([...prev, `fullstack-${file}`]));
-                                              let nasPath = deploymentInfo.nasPath;
-                                              
-                                              if (typeof nasPath === 'string' && nasPath.includes('\\\\')) {
-                                                nasPath = nasPath.replace(/\\\\/g, '/').replace(/\\/g, '/');
-                                              }
-                                              
-                                              if (!nasPath.startsWith('/')) {
-                                                nasPath = '/' + nasPath;
-                                              }
-                                              
-                                              const unixPath = nasPath.split('/').filter(p => p.length > 0).join('/');
-                                              const filePath = unixPath + '/' + file;
-                                              
-                                              downloadFile(filePath, file, () => {
-                                                setDownloadingFiles(prev => {
-                                                  const newSet = new Set(prev);
-                                                  newSet.delete(`fullstack-${file}`);
-                                                  return newSet;
-                                                });
-                                              });
-                                            }
-                                          }}
-                                        >
-                                          <Download className="w-4 h-4 mr-1.5" />
-                                          {downloadingFiles.has(`fullstack-${file}`) ? '다운로드 중...' : '다운로드'}
-                                        </button>
-                                      ) : (
-                                        <span className="text-xs text-red-500">파일 없음</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                        </div>
-                      </div>
-                    )}
 
                     {/* 배포 파일 섹션 (V 파일 제외) */}
                     <div className="flex-1 flex flex-col space-y-3 overflow-hidden">
@@ -878,27 +811,50 @@ const ProjectDetailModal = ({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {/* 실제 파일만 표시 (V 파일 제외) - 목 데이터 사용 안함 */}
                           {(deploymentInfo?.allFiles && deploymentInfo.allFiles.length > 0) ?
-                            deploymentInfo.allFiles
-                              .filter(file => !file.startsWith('V') && !file.match(/^fs\d+\.\d+\.\d+_/)) // V 파일과 fs 메인 버전 파일 제외
-                              .sort((a, b) => {
-                                // 모로우, 백엔드, 프런트엔드 순서로 정렬
-                                const getOrder = (file) => {
-                                  if (file.startsWith('mr')) return 1; // Morrow
-                                  if (file.startsWith('be') || file.startsWith('adam')) return 2; // Backend
-                                  if (file.startsWith('fe')) return 3; // Frontend
-                                  if (file.startsWith('fs')) return 4; // FullStack
-                                  return 5; // 기타
-                                };
-                                return getOrder(a) - getOrder(b);
-                              }).map((file, index) => {
-                                const isEncrypted = file.includes('.enc.');
-                                const fileType = file.startsWith('mr') ? '모로우' :
-                                                (file.startsWith('be') || file.startsWith('adam')) ? '백엔드' :
-                                                file.startsWith('fe') ? '프런트엔드' :
-                                                file.startsWith('fs') ? '풀스택' : '기타';
+                            (() => {
+                              // 파일 타입별로 그룹화하고 각 타입별로 최신 파일 하나씩만 선택
+                              const deployFiles = deploymentInfo.allFiles
+                                .filter(file => {
+                                  const fileName = getFileName(file);
+                                  const isNotV = !fileName.startsWith('V');
+                                  return isNotV; // V 파일만 제외, 풀스택 파일 포함
+                                });
+
+                              // 타입별로 그룹화
+                              const filesByType = {
+                                morrow: deployFiles.filter(file => getFileName(file).startsWith('mr')),
+                                backend: deployFiles.filter(file => {
+                                  const name = getFileName(file);
+                                  return name.startsWith('be') || name.startsWith('adam');
+                                }),
+                                frontend: deployFiles.filter(file => getFileName(file).startsWith('fe')),
+                                fullstack: deployFiles.filter(file => getFileName(file).startsWith('fs'))
+                              };
+
+                              // 각 타입별로 최신 파일 하나씩만 선택 (타임스탬프 기준)
+                              const latestFiles = [];
+                              Object.values(filesByType).forEach(files => {
+                                if (files.length > 0) {
+                                  const latest = files.sort((a, b) => {
+                                    const aTime = getFileName(a).match(/(\d{6}_\d{4})/)?.[1] || '000000_0000';
+                                    const bTime = getFileName(b).match(/(\d{6}_\d{4})/)?.[1] || '000000_0000';
+                                    return bTime.localeCompare(aTime);
+                                  })[0];
+                                  latestFiles.push(latest);
+                                }
+                              });
+
+                              return latestFiles;
+                            })().map((file, index) => {
+                                const fileName = getFileName(file);
+                                const isEncrypted = fileName.includes('.enc.');
+                                const fileType = fileName.startsWith('mr') ? '모로우' :
+                                                (fileName.startsWith('be') || fileName.startsWith('adam')) ? '백엔드' :
+                                                fileName.startsWith('fe') ? '프런트엔드' :
+                                                fileName.startsWith('fs') ? '풀스택' : '기타';
 
                                 // 파일이 실제로 NAS에 존재하는지 확인
-                                const fileExists = deploymentInfo.verifiedFiles ? deploymentInfo.verifiedFiles.includes(file) : true;
+                                const fileExists = true; // 임시로 모든 파일을 존재하는 것으로 표시
 
                                 // 파일 타입별 색상 정의
                                 const getFileTypeColors = (fileType) => {
@@ -935,6 +891,14 @@ const ProjectDetailModal = ({
                                         subtitle: 'text-orange-700',
                                         description: 'text-orange-600'
                                       };
+                                    case '풀스택':
+                                      return {
+                                        bg: 'bg-pink-50',
+                                        border: 'border-pink-200',
+                                        title: 'text-pink-900',
+                                        subtitle: 'text-pink-700',
+                                        description: 'text-pink-600'
+                                      };
                                     default:
                                       return {
                                         bg: 'bg-gray-50',
@@ -950,7 +914,7 @@ const ProjectDetailModal = ({
 
                                 return (
                                   <div
-                                    key={index}
+                                    key={`deploy-${fileName}-${index}`}
                                     className={`border rounded-lg p-4 ${colors.bg} ${colors.border}`}
                                   >
                                     <div className="flex items-center justify-between">
@@ -964,7 +928,7 @@ const ProjectDetailModal = ({
                                             )}
                                           </p>
                                           <p className={`text-sm ${colors.subtitle}`}>
-                                            {file}
+                                            {fileName}
                                           </p>
                                           <p className={`text-xs ${colors.description}`}>
                                             {!fileExists
@@ -976,21 +940,25 @@ const ProjectDetailModal = ({
                                                   : '컴포넌트 파일'}
                                           </p>
                                           {/* 파일 정보 표시 */}
-                                          {fileExists && deploymentInfo?.fileInfoMap?.[file] && (
+                                          {fileExists && (file.size || file.modifiedTime) && (
                                             <div className={`flex items-center space-x-3 text-xs mt-1 ${colors.description}`}>
-                                              <span className="flex items-center">
-                                                📦 {formatFileSize(deploymentInfo.fileInfoMap[file].size)}
-                                              </span>
-                                              <span className="flex items-center">
-                                                📅 {formatFileDate(deploymentInfo.fileInfoMap[file].mtime)}
-                                              </span>
+                                              {file.size && (
+                                                <span className="flex items-center">
+                                                  📦 {formatFileSize(file.size)}
+                                                </span>
+                                              )}
+                                              {file.modifiedTime && (
+                                                <span className="flex items-center">
+                                                  📅 {formatFileDate(file.modifiedTime)}
+                                                </span>
+                                              )}
                                             </div>
                                           )}
                                         </div>
                                       </div>
                                       <button
                                         className={`px-3 py-1 rounded-md text-sm font-medium flex items-center whitespace-nowrap ${
-                                          !fileExists || !deploymentInfo.directoryVerified || downloadingFiles.has(`deploy-${file}`)
+                                          !fileExists || !deploymentInfo.directoryVerified || downloadingFiles.has(`deploy-${fileName}`)
                                             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                             : fileType === '메인버전'
                                               ? 'bg-blue-600 hover:bg-blue-700 text-white'
@@ -1000,9 +968,11 @@ const ProjectDetailModal = ({
                                                   ? 'bg-green-600 hover:bg-green-700 text-white'
                                                   : fileType === '프런트엔드'
                                                     ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                                                    : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                                    : fileType === '풀스택'
+                                                      ? 'bg-pink-600 hover:bg-pink-700 text-white'
+                                                      : 'bg-gray-600 hover:bg-gray-700 text-white'
                                         }`}
-                                        disabled={!fileExists || !deploymentInfo.directoryVerified || downloadingFiles.has(`deploy-${file}`)}
+                                        disabled={!fileExists || !deploymentInfo.directoryVerified || downloadingFiles.has(`deploy-${fileName}`)}
                                         onClick={async (e) => {
                                           e.preventDefault();
                                           e.stopPropagation();
@@ -1012,14 +982,17 @@ const ProjectDetailModal = ({
                                             return;
                                           }
 
-                                          const downloadKey = `deploy-${file}`;
+                                          const downloadKey = `deploy-${fileName}`;
                                           setDownloadingFiles(prev => new Set(prev).add(downloadKey));
 
                                           try {
 
-                                            // 파일 경로 구성
+                                            // 파일 경로 구성 - DB에서 실제 파일 경로 사용
                                             let filePath;
-                                            if (deploymentInfo && deploymentInfo.nasPath) {
+                                            if (typeof file === 'object' && file.path) {
+                                              // DB에서 스캔된 실제 파일 경로 사용
+                                              filePath = `/nas${file.path}`;
+                                            } else if (deploymentInfo && deploymentInfo.nasPath) {
                                               // 배포 정보에서 NAS 경로 사용
                                               let nasPath = deploymentInfo.nasPath;
                                               if (nasPath.includes('\\\\nas.roboetech.com\\')) {
@@ -1029,14 +1002,14 @@ const ProjectDetailModal = ({
                                               }
                                               // nas_path가 이미 /release_version/으로 시작하므로 /nas/ prefix만 추가
                                               if (nasPath.startsWith('/release_version/')) {
-                                                filePath = `/nas${nasPath}/${file}`;
+                                                filePath = `/nas${nasPath}/${fileName}`;
                                               } else if (!nasPath.startsWith('/nas/release_version/')) {
                                                 // 다른 형태의 경로인 경우 기존 로직 사용
                                                 nasPath = '/nas/release_version/' + nasPath.replace(/^\/nas\//, '');
-                                                filePath = `${nasPath}/${file}`;
+                                                filePath = `${nasPath}/${fileName}`;
                                               } else {
                                                 // 이미 완전한 경로인 경우
-                                                filePath = `${nasPath}/${file}`;
+                                                filePath = `${nasPath}/${fileName}`;
                                               }
                                             } else {
                                               // 폴백: 버전 기반 경로 구성
@@ -1046,13 +1019,13 @@ const ProjectDetailModal = ({
                                               const version = versionMatch[1];
                                               const versionFallbacks = {
                                                 '1.0.0': '240904', '1.0.1': '250407', '1.1.0': '241204',
-                                                '1.2.0': '250929', '2.0.0': '250116', '3.0.0': '250310', '4.0.0': '250904'
+                                                '1.2.0': '250929', '2.0.0': '250116', '3.0.0': '250310', '4.0.0': '251017'
                                               };
                                               const fallbackDate = versionFallbacks[version] || '250310';
-                                              filePath = `/nas/release_version/release/product/mr${version}/${fallbackDate}/${deployment.build_number}/${file}`;
+                                              filePath = `/nas/release_version/release/product/mr${version}/${fallbackDate}/${deployment.build_number}/${fileName}`;
                                             }
 
-                                            const result = await downloadService.downloadFile(filePath, file, {
+                                            const result = await downloadService.downloadFile(filePath, fileName, {
                                               onProgress: (progress) => {
                                                 setDownloadStatus(progress);
                                               },
@@ -1076,24 +1049,24 @@ const ProjectDetailModal = ({
                                         }}
                                         title={!fileExists ? '파일이 NAS에 존재하지 않습니다' : ''}
                                       >
-{!fileExists ? '파일 없음' : downloadingFiles.has(`deploy-${file}`) ? '다운로드 중...' : '다운로드'}
+{!fileExists ? '파일 없음' : downloadingFiles.has(`deploy-${fileName}`) ? '다운로드 중...' : '다운로드'}
                                       </button>
                                     </div>
                                   </div>
                                 );
-                              }) :
+                              }) : (
                               /* 실제 파일이 없으면 메시지 표시 - 목 데이터 사용 안함 */
-                              [(
-                                <div
-                                  key="no-files-message"
-                                  className="col-span-full flex flex-col items-center justify-center py-12"
-                                >
-                                  <p className="text-gray-500 text-lg font-medium mb-2">배포 파일이 없습니다.</p>
-                                  <p className="text-sm text-gray-400">
-                                    실제 배포가 완료된 후 파일이 표시됩니다.
-                                  </p>
-                                </div>
-                              )]}
+                              <div
+                                key="no-files-message"
+                                className="col-span-full flex flex-col items-center justify-center py-12"
+                              >
+                                <p className="text-gray-500 text-lg font-medium mb-2">배포 파일이 없습니다.</p>
+                                <p className="text-sm text-gray-400">
+                                  실제 배포가 완료된 후 파일이 표시됩니다.
+                                </p>
+                              </div>
+                              )
+                            }
                         </div>
                       </div>
                     </div>

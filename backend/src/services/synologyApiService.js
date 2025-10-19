@@ -72,6 +72,17 @@ class SynologyApiService {
   }
 
   /**
+   * 세션 강제 초기화 및 재로그인
+   */
+  async forceReLogin() {
+    logger.info('Forcing session re-login...');
+    this.sessionId = null;
+    this.sessionExpiry = null;
+    await this.login();
+    return this.sessionId;
+  }
+
+  /**
    * 파일/폴더의 공유 링크를 생성
    * @param {string} path - 공유할 파일/폴더 경로 (예: "/release/product/mr3.0.0/250310/26")
    */
@@ -320,19 +331,40 @@ class SynologyApiService {
     try {
       await this.ensureValidSession();
 
-      logger.info(`Listing files in directory: ${folderPath}`);
+      // 경로가 /로 시작하지 않으면 추가
+      const normalizedPath = folderPath.startsWith('/') ? folderPath : `/${folderPath}`;
+      logger.info(`Listing files in directory: ${normalizedPath}`);
 
-      const response = await axios.get(`${this.baseUrl}/webapi/entry.cgi`, {
+      let response = await axios.get(`${this.baseUrl}/webapi/entry.cgi`, {
         params: {
           api: 'SYNO.FileStation.List',
           version: 2,
           method: 'list',
-          folder_path: folderPath,
+          folder_path: normalizedPath,
           additional: '["size","time","type"]',
           _sid: this.sessionId,
         },
         timeout: 10000,
       });
+
+      // 401 에러 시 재로그인 시도
+      if (response.data && !response.data.success && response.data.error?.code === 401) {
+        logger.warn('Session expired, attempting to re-login...');
+        await this.forceReLogin(); // 강제 재로그인
+        
+        // 재로그인 후 다시 요청
+        response = await axios.get(`${this.baseUrl}/webapi/entry.cgi`, {
+          params: {
+            api: 'SYNO.FileStation.List',
+            version: 2,
+            method: 'list',
+            folder_path: normalizedPath,
+            additional: '["size","time","type"]',
+            _sid: this.sessionId,
+          },
+          timeout: 10000,
+        });
+      }
 
       if (response.data && response.data.success) {
         const files = response.data.data.files || [];
