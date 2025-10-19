@@ -338,6 +338,28 @@ class LDAPService {
       user.department = process.env.LDAP_DEFAULT_DEPARTMENT || 'Development';
     }
 
+    // 부서명 한국어 매핑
+    const departmentMap = {
+      'Development': '개발',
+      'Sales': '영업',
+      'Marketing': '마케팅',
+      'HR': '인사',
+      'Finance': '재무',
+      'IT': 'IT',
+      'Operations': '운영',
+      'QA': '품질보증',
+      'Support': '지원',
+      'Management': '경영진',
+      'Engineering': '엔지니어링',
+      'Research': '연구',
+      'Design': '디자인',
+      'Unknown': '미분류'
+    };
+
+    if (departmentMap[user.department]) {
+      user.department = departmentMap[user.department];
+    }
+
     return user;
   }
 
